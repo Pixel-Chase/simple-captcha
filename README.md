@@ -73,7 +73,7 @@
 **1. 拉取镜像**
 
 ```bash
-docker pull aetherlib/simple-captcha:latest
+docker pull ghcr.io/pixel-chase/simple-captcha:latest
 ```
 
 **2. 创建 `docker-compose.yml`**
@@ -81,7 +81,7 @@ docker pull aetherlib/simple-captcha:latest
 ```yaml
 services:
   captcha:
-    image: aetherlib/simple-captcha:latest
+    image: ghcr.io/pixel-chase/simple-captcha:latest
     container_name: simple-captcha
     ports:
       - "3321:3321"
@@ -119,6 +119,21 @@ docker compose up -d
 ```bash
 curl http://localhost:3321/health
 # 返回: {"status":"ok","redis":{"status":"ok"}, ...}
+```
+
+### 镜像发布
+
+后端镜像由 GitHub Actions 直接构建并发布到 GitHub Container Registry：
+
+- 镜像地址：`ghcr.io/pixel-chase/simple-captcha`
+- 推送到默认分支时生成 `latest`、分支名和 `sha-*` 标签
+- 推送 `v*` 版本标签时生成语义化版本标签，并同步更新 `latest`
+- 支持 `linux/amd64` 和 `linux/arm64` 两种架构
+
+私有仓库或私有 Package 拉取前需要登录 GHCR：
+
+```bash
+echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
 ```
 
 ### RESTful API 路由

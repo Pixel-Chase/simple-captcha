@@ -1,7 +1,12 @@
+# syntax=docker/dockerfile:1
+
 # ----------------------------
 # 第一阶段：构建阶段
 # ----------------------------
-FROM golang:1.23.4-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.23.4-alpine AS builder
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
 # 安装必要的工具
 RUN apk add --no-cache git ca-certificates
@@ -17,7 +22,7 @@ RUN go mod download && go mod verify
 COPY . .
 
 # 编译应用程序（优化编译参数）
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -ldflags='-w -s' \
     -trimpath \
     -o simple-captcha .
