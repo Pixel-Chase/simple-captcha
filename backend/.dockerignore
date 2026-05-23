@@ -1,0 +1,46 @@
+# 构建产物
+simple-captcha
+*.exe
+
+# 开发文件
+.env
+env.dev
+.env.*
+*.log
+logs/
+
+# 版本控制
+.git/
+.gitignore
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 测试文件
+*_test.go
+tests/
+coverage.out
+
+# 文档
+README.md
+*.md
+docs/
+
+# 临时文件
+tmp/
+temp/
+.DS_Store
+Thumbs.db
+
+# Docker相关
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 脚本文件
+*.sh
+build*
+deploy*

@@ -1,0 +1,46 @@
+# IDE
+.idea
+.vscode/settings.json
+
+# 编译产物
+simple-captcha
+simple-captcha.exe
+*.exe
+*.so
+*.dylib
+
+# 测试覆盖率
+*.out
+coverage.html
+
+# 日志文件
+*.log
+logs/
+
+# 配置文件（敏感信息）
+config.json
+.env
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
+
+# 依赖缓存
+vendor/
+
+
+/yarn.lock
+/package-lock.json
+/yarn-error.log
+/dist
+/.docz
+sdk/node_modules
+.umi
+.svn
+.idea
+/es
+/docs-dist
+/lib
+.dumi
+sdk/dist

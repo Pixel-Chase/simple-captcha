@@ -1,0 +1,69 @@
+{
+  "private": false,
+  "name": "@aetherlib/g-captcha",
+  "description": "go-captcha集成版",
+  "keywords": [
+    "captcha",
+    "react",
+    "go-captcha"
+  ],
+  "version": "1.0.1",
+  "authors": {
+    "name": "yuegongzi",
+    "email": "yanganfu2012@gmail.com"
+  },
+  "repository": "https://github.com/yuegongzi/simple-captcha.git",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "start": "dumi dev",
+    "docs:build": "dumi build",
+    "docs:deploy": "gh-pages -d docs-dist",
+    "build": "father build",
+    "deploy": "npm run docs:build && npm run docs:deploy",
+    "prettier": "prettier --write \"**/*.{js,jsx,tsx,ts,less,md,json}\"",
+    "test": "umi-test",
+    "test:coverage": "umi-test --coverage"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "!dist/captcha/demo",
+    "README.md"
+  ],
+  "dependencies": {
+    "axios": "^1.7.9"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "4.2.2",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.1",
+    "@umijs/fabric": "4.0.1",
+    "dumi": "2.4.17",
+    "father": "4.5.1",
+    "gh-pages": "6.2.0",
+    "husky": "9.1.7",
+    "lint-staged": "15.2.11",
+    "prettier": "3.4.2",
+    "yorkie": "2.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@swc/core",
+      "core-js",
+      "core-js-pure",
+      "esbuild",
+      "yorkie"
+    ]
+  }
+}
