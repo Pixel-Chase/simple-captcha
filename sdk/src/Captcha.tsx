@@ -17,6 +17,16 @@ import type { RotateData } from './_internal/rotate/rotate.types';
 import type { SlideData } from './_internal/slide/slide.types';
 import type { SlideRegionData } from './_internal/slide-region/slide-region.types';
 
+const DEFAULT_MAX_RETRY_COUNT = 5;
+
+const normalizeMaxRetryCount = (value?: number) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_MAX_RETRY_COUNT;
+  }
+
+  return Math.max(0, Math.floor(value));
+};
+
 const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'theme' | 'api'>>((props, ref) => {
   const {
     onCancel = noop,
@@ -26,11 +36,13 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
     style,
     config,
     type: typeProp = 'auto',
+    maxRetryCount: maxRetryCountProp,
     children,
   } = props;
   const [visible, setVisible] = useState<boolean>(false);
   const { locale } = useCaptchaConfig();
 
+  const maxRetryCount = normalizeMaxRetryCount(maxRetryCountProp);
   const type = useMemo(() => {
     if (typeProp === 'auto') {
       return getRandomType();
@@ -41,6 +53,7 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
 
   const { get, check, data } = useCaptchaRequest({ type, mode: 'dark' });
   const captchaRef = useRef<any>(null);
+  const failCountRef = useRef(0);
 
   const clickData = useMemo<ClickData | null>(() => {
     if (!data?.image || !data.thumb) {
@@ -96,7 +109,7 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
     };
   }, [data]);
 
-  const start = async () => {
+  const loadCaptcha = async () => {
     if (captchaRef.current) {
       captchaRef.current.clear();
     }
@@ -111,7 +124,17 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
     }
   };
 
+  const start = async () => {
+    failCountRef.current = 0;
+    await loadCaptcha();
+  };
+
+  const refresh = async () => {
+    await loadCaptcha();
+  };
+
   const close = () => {
+    failCountRef.current = 0;
     setVisible(false);
     onFail(locale.userCancel!);
     onCancel();
@@ -120,15 +143,26 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
   const confirm = async (rawBody: Record<string, string>) => {
     try {
       const result = await check(rawBody);
+      failCountRef.current = 0;
       setVisible(false);
       onSuccess(result);
     } catch (error) {
-      onFail(error as CaptchaErrorResponse | string);
-      const errorMessage = getCaptchaErrorMessage(error as CaptchaErrorResponse | string);
+      const normalizedError = error as CaptchaErrorResponse | string;
+      const errorMessage = getCaptchaErrorMessage(normalizedError);
       if (errorMessage === locale.userCancel) {
+        onFail(normalizedError);
         return;
       }
-      await start();
+
+      failCountRef.current += 1;
+      if (failCountRef.current >= maxRetryCount) {
+        failCountRef.current = 0;
+        setVisible(false);
+        onFail(normalizedError);
+        return;
+      }
+
+      await refresh().catch(noop);
     }
   };
 
@@ -149,7 +183,7 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
 
   const events = {
     close,
-    refresh: start,
+    refresh,
   };
 
   return (

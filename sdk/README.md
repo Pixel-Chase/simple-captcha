@@ -57,6 +57,7 @@ export default () => {
 | onFail | 校验失败回调 | `(msg: string) => void` | - |
 | onSuccess | 校验成功回调 | `(data: any) => void` | - |
 | onCancel | 用户主动关闭回调 | `() => void` | - |
+| maxRetryCount | 单次验证最多允许的校验失败次数，达到后才触发 `onFail` | `number` | `5` |
 | type | 验证码类型，支持 `auto`、`click-text`、`click-shape`、`slide-text`、`slide-region`、`rotate` | `CaptchaType` | `auto` |
 | api | 当前实例的接口配置覆盖 | `ApiConfig` | - |
 | locale | 当前实例的文案覆盖 | `LocaleTexts` | - |
@@ -87,6 +88,7 @@ export default () => {
         onClick={async () => {
           const data = await verify({
             type: 'auto',
+            maxRetryCount: 5,
             locale: { userCancel: 'Canceled by user' },
             theme: { primaryColor: '#111827' },
           });

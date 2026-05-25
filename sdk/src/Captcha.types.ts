@@ -82,6 +82,7 @@ export interface CaptchaVerifyOptions extends CaptchaInstanceOptions {
   onCancel?: () => void;
   onFail?: (error: CaptchaErrorResponse | string) => void;
   onSuccess?: (data: CaptchaVerifySuccessData) => void;
+  maxRetryCount?: number;
 }
 
 export interface CaptchaRef {
