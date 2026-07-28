@@ -41,6 +41,7 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.SecurityMiddleware())
 	r.Use(middleware.TrustedProxyMiddleware(r))
 	r.Use(middleware.CompressionMiddleware())
+	r.Use(middleware.CORSMiddleware(cfg.CORS))
 
 	// 开发环境特殊中间件
 	if cfg.Server.Environment == "development" {
@@ -51,9 +52,6 @@ func SetupRouter() *gin.Engine {
 	r.GET(cfg.Monitoring.HealthPath, healthCheckHandler)
 	r.GET(cfg.Monitoring.MetricsPath, metricsHandler)
 	r.GET(cfg.Monitoring.StatsPath, statsHandler)
-
-	// 配置跨域中间件 (全量生效或只对api组生效)
-	r.Use(middleware.CORSMiddleware())
 
 	// 验证码API路由组（需要限流保护）
 	api := r.Group("/api/v1/captchas")

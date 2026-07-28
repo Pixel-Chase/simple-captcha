@@ -12,6 +12,7 @@ import (
 // Config 应用配置结构
 type Config struct {
 	Server     ServerConfig
+	CORS       CORSConfig
 	Redis      RedisConfig
 	Captcha    CaptchaConfig
 	Logging    LoggingConfig
@@ -29,6 +30,17 @@ type ServerConfig struct {
 	Environment     string
 	GracefulTimeout time.Duration
 	MaxHeaderBytes  int
+}
+
+// CORSConfig 跨域资源共享配置
+type CORSConfig struct {
+	Enabled          bool
+	AllowOrigins     []string
+	AllowMethods     []string
+	AllowHeaders     []string
+	ExposeHeaders    []string
+	AllowCredentials bool
+	MaxAge           time.Duration
 }
 
 // RedisConfig Redis配置
@@ -152,6 +164,15 @@ func loadFromEnv() *Config {
 			GracefulTimeout: getDurationEnv("SERVER_GRACEFUL_TIMEOUT", 30*time.Second),
 			MaxHeaderBytes:  getIntEnv("SERVER_MAX_HEADER_BYTES", 1<<20),
 		},
+		CORS: CORSConfig{
+			Enabled:          getBoolEnv("CORS_ENABLED", true),
+			AllowOrigins:     getStringSliceEnv("CORS_ALLOW_ORIGINS", []string{"*"}),
+			AllowMethods:     getStringSliceEnv("CORS_ALLOW_METHODS", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+			AllowHeaders:     getStringSliceEnv("CORS_ALLOW_HEADERS", []string{"Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization", "Accept", "Origin", "Cache-Control", "X-Requested-With"}),
+			ExposeHeaders:    getStringSliceEnv("CORS_EXPOSE_HEADERS", []string{}),
+			AllowCredentials: getBoolEnv("CORS_ALLOW_CREDENTIALS", false),
+			MaxAge:           getDurationEnv("CORS_MAX_AGE", 24*time.Hour),
+		},
 		Redis: RedisConfig{
 			Host:         getEnv("REDIS_HOST", "localhost"),
 			Port:         getEnv("REDIS_PORT", "6379"),
@@ -222,6 +243,17 @@ func validateConfig(config *Config) error {
 	}
 	if config.Captcha.ImagePath == "" {
 		return fmt.Errorf("captcha image path cannot be empty")
+	}
+	if config.CORS.Enabled {
+		if len(config.CORS.AllowOrigins) == 0 {
+			return fmt.Errorf("cors allow origins cannot be empty when CORS is enabled")
+		}
+		if len(config.CORS.AllowMethods) == 0 {
+			return fmt.Errorf("cors allow methods cannot be empty when CORS is enabled")
+		}
+		if config.CORS.MaxAge < 0 {
+			return fmt.Errorf("cors max age cannot be negative")
+		}
 	}
 	return nil
 }

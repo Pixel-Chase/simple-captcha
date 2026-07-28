@@ -96,6 +96,10 @@ services:
       - PORT=3321
       - API_KEY=your_secure_api_key_here    # S2S 二次验证鉴权密钥
 
+      # 跨域配置（多个来源使用逗号分隔）
+      - CORS_ALLOW_ORIGINS=https://example.com,https://admin.example.com
+      - CORS_ALLOW_CREDENTIALS=false
+
       # 可选：频率限制
       - CAPTCHA_EXPIRE_TIME=5m
       - CAPTCHA_MAX_ATTEMPTS=5
@@ -361,8 +365,17 @@ curl -X GET \
 | `CAPTCHA_IP_RATE_LIMIT` | 单 IP 频率限制 | `30` |
 | `ENABLE_RATE_LIMIT` | 是否启用频率限制 | `true` |
 | `RATE_LIMIT_REQUESTS` | 全局频率限制 | `100` |
+| `CORS_ENABLED` | 是否启用跨域响应 | `true` |
+| `CORS_ALLOW_ORIGINS` | 允许的来源，多个值用逗号分隔 | `*` |
+| `CORS_ALLOW_METHODS` | 允许的方法，多个值用逗号分隔 | `GET,POST,PUT,DELETE,OPTIONS` |
+| `CORS_ALLOW_HEADERS` | 允许的请求头，多个值用逗号分隔 | `Content-Type,...` |
+| `CORS_EXPOSE_HEADERS` | 向浏览器暴露的响应头，多个值用逗号分隔 | 空 |
+| `CORS_ALLOW_CREDENTIALS` | 是否允许 Cookie 等跨域凭证 | `false` |
+| `CORS_MAX_AGE` | 浏览器缓存预检结果的时长 | `24h` |
 | `ENABLE_METRICS` | 是否启用监控指标 | `true` |
 | `GIN_MODE` | Gin 运行模式 | `release` |
+
+> 生产环境建议将 `CORS_ALLOW_ORIGINS` 配置为明确的 HTTPS 来源。启用 `CORS_ALLOW_CREDENTIALS` 时，中间件会返回具体来源而不是 `*`。
 
 ---
 
