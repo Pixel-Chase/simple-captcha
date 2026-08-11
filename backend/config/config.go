@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
+
+const defaultAPIPrefix = "/api/v1"
 
 // Config 应用配置结构
 type Config struct {
@@ -24,6 +28,7 @@ type Config struct {
 type ServerConfig struct {
 	Port            string
 	Host            string
+	APIPrefix       string
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
 	IdleTimeout     time.Duration
@@ -157,6 +162,7 @@ func loadFromEnv() *Config {
 		Server: ServerConfig{
 			Port:            getEnv("PORT", "8080"),
 			Host:            getEnv("HOST", "0.0.0.0"),
+			APIPrefix:       normalizeAPIPrefix(getEnv("API_PREFIX", defaultAPIPrefix)),
 			ReadTimeout:     getDurationEnv("SERVER_READ_TIMEOUT", 30*time.Second),
 			WriteTimeout:    getDurationEnv("SERVER_WRITE_TIMEOUT", 30*time.Second),
 			IdleTimeout:     getDurationEnv("SERVER_IDLE_TIMEOUT", 60*time.Second),
@@ -231,6 +237,21 @@ func loadFromEnv() *Config {
 			APIKey:          getEnv("API_KEY", ""),
 		},
 	}
+}
+
+// normalizeAPIPrefix 统一 API 路径前缀格式，根路径使用空字符串表示。
+func normalizeAPIPrefix(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return defaultAPIPrefix
+	}
+
+	prefix := path.Clean("/" + strings.TrimLeft(value, "/"))
+	if prefix == "/" {
+		return ""
+	}
+
+	return prefix
 }
 
 // validateConfig 验证配置

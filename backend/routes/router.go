@@ -54,7 +54,7 @@ func SetupRouter() *gin.Engine {
 	r.GET(cfg.Monitoring.StatsPath, statsHandler)
 
 	// 验证码API路由组（需要限流保护）
-	api := r.Group("/api/v1/captchas")
+	api := r.Group(cfg.Server.APIPrefix + "/captchas")
 	api.Use(middleware.RateLimitMiddleware(riskControl))
 	api.Use(middleware.CacheMiddleware(5 * time.Minute)) // 缓存5分钟
 

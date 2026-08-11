@@ -28,7 +28,7 @@ const defaultTheme: ThemeTokens = {
 const defaultConfig: InternalConfig = {
   locale: defaultLocale,
   theme: defaultTheme,
-  api: {},
+  api: { prefix: '/api/v1' },
   zIndex: 9999,
 };
 

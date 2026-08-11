@@ -21,6 +21,7 @@ export interface ThemeTokens {
 
 export interface ApiConfig {
   basePath?: string;
+  prefix?: string;
 }
 
 export interface CaptchaErrorResponse {

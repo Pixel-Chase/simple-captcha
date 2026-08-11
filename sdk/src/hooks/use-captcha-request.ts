@@ -43,13 +43,16 @@ export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
   const [data, setData] = useState<CaptchaChallengeData | null>(null);
   const [error, setError] = useState<CaptchaErrorResponse | null>(null);
   const { api } = useCaptchaConfig();
-  const basePath = api.basePath || '';
+  const basePath = (api.basePath || '').replace(/\/+$/, '');
+  const normalizedPrefix = (api.prefix ?? '/api/v1').trim().replace(/^\/+|\/+$/g, '');
+  const apiPrefix = normalizedPrefix ? `/${normalizedPrefix}` : '';
+  const captchaEndpoint = `${basePath}${apiPrefix}/captchas`;
 
   const get = async (): Promise<CaptchaChallengeData> => {
     setLoading(true);
     setError(null);
     try {
-      const url = `${basePath}/api/v1/captchas/${option.type}?mode=${option.mode || ''}`;
+      const url = `${captchaEndpoint}/${option.type}?mode=${option.mode || ''}`;
       const res = await request.get<CaptchaChallengeData | CaptchaErrorResponse>(url);
       if (isCaptchaErrorResponse(res.data)) {
         setError(res.data);
@@ -74,7 +77,7 @@ export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
     setLoading(true);
     setError(null);
     try {
-      const url = `${basePath}/api/v1/captchas/${option.type}/${data?.key}/attempts`;
+      const url = `${captchaEndpoint}/${option.type}/${data?.key}/attempts`;
       const res = await request.post<CaptchaVerifySuccessData | CaptchaErrorResponse>(url, rawBody);
       if (isCaptchaErrorResponse(res.data)) {
         setError(res.data);

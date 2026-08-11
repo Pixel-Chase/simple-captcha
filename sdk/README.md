@@ -50,6 +50,15 @@ export default () => {
 | theme | 全局主题变量 | `ThemeTokens` | - |
 | zIndex | 弹层层级 | `number` | `9999` |
 
+`ApiConfig` 支持以下配置：
+
+| 属性 | 说明 | 类型 | 默认值 |
+|---|---|---|---|
+| basePath | 验证码后端服务地址 | `string` | `''` |
+| prefix | API 路径前缀，需与后端 `API_PREFIX` 一致 | `string` | `/api/v1` |
+
+后端使用自定义前缀时，可配置为 `api={{ basePath: 'http://foo.com', prefix: '/captcha/api' }}`。使用 `/` 或空字符串可将请求直接挂载到 `/captchas`。
+
 ## Captcha
 
 | 属性 | 说明 | 类型 | 默认值 |
@@ -151,3 +160,5 @@ curl -X GET \
 ```
 
 如果返回 `{"valid": true}` 则代表验证通过，可以放行业务逻辑。
+
+若后端配置了自定义 `API_PREFIX`，此 S2S 地址中的 `/api/v1` 也需替换为相同前缀。

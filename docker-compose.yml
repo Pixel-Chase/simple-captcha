@@ -20,6 +20,7 @@ services:
       - PORT=3321
       - GIN_MODE=release
       - HOST=0.0.0.0
+      - API_PREFIX=/api/v1
       - API_KEY=your_secure_api_key_here
 
       # ===== 业务验证频率以及高可用度配置 =====

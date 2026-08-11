@@ -26,3 +26,29 @@ func TestLoadFromEnv_CORS(t *testing.T) {
 	assert.True(t, cfg.CORS.AllowCredentials)
 	assert.Equal(t, 30*time.Minute, cfg.CORS.MaxAge)
 }
+
+func TestLoadFromEnv_APIPrefix(t *testing.T) {
+	t.Run("使用默认前缀", func(t *testing.T) {
+		t.Setenv("API_PREFIX", "")
+
+		cfg := loadFromEnv()
+
+		assert.Equal(t, "/api/v1", cfg.Server.APIPrefix)
+	})
+
+	t.Run("规范化自定义前缀", func(t *testing.T) {
+		t.Setenv("API_PREFIX", " captcha/api/ ")
+
+		cfg := loadFromEnv()
+
+		assert.Equal(t, "/captcha/api", cfg.Server.APIPrefix)
+	})
+
+	t.Run("允许挂载到根路径", func(t *testing.T) {
+		t.Setenv("API_PREFIX", "/")
+
+		cfg := loadFromEnv()
+
+		assert.Empty(t, cfg.Server.APIPrefix)
+	})
+}

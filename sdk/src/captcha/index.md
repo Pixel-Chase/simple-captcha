@@ -15,6 +15,8 @@
 | theme | 全局主题变量 | `ThemeTokens` | - |
 | zIndex | 弹层层级 | `number` | `9999` |
 
+`ApiConfig.basePath` 用于指定验证码后端地址；`ApiConfig.prefix` 用于指定 API 路径前缀，默认 `/api/v1`，需与后端的 `API_PREFIX` 保持一致。
+
 ## Captcha
 
 | 属性 | 说明 | 类型 | 默认值 |

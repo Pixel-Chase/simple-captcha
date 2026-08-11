@@ -94,6 +94,7 @@ services:
 
       # 服务配置
       - PORT=3321
+      - API_PREFIX=/api/v1                  # API 路径前缀，可选
       - API_KEY=your_secure_api_key_here    # S2S 二次验证鉴权密钥
 
       # 跨域配置（多个来源使用逗号分隔）
@@ -148,6 +149,8 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 | `POST` | `/api/v1/captchas/:type/:key/attempts` | 提交验证答案 | 无 |
 | `GET` | `/api/v1/captchas/states/:key` | 查询验证状态 (S2S) | `Authorization: Bearer <API_KEY>` |
 | `GET` | `/health` | 健康检查 | 无 |
+
+以上验证码接口使用默认的 `API_PREFIX=/api/v1`。例如配置 `API_PREFIX=/captcha/api` 后，获取验证码接口将变为 `/captcha/api/captchas/:type`；配置 `/` 则直接挂载到 `/captchas`。
 
 **支持的验证码类型 (`:type`)**
 
@@ -238,7 +241,7 @@ function App() {
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `api` | `ApiConfig` | — | 全局接口配置，使用 `api.basePath` 指定后端服务地址 |
+| `api` | `ApiConfig` | — | 全局接口配置，`basePath` 指定后端地址，`prefix` 指定 API 路径前缀 |
 | `locale` | `LocaleTexts` | — | 全局文案覆盖 |
 | `theme` | `ThemeTokens` | — | 全局主题配置 |
 | `zIndex` | `number` | `9999` | 弹窗层级 |
@@ -340,6 +343,19 @@ curl -X GET \
 
 > **安全提醒**：`API_KEY` 仅在业务后端使用，**绝不能**暴露到前端代码中。
 
+若后端修改了 `API_PREFIX`，SDK 与业务后端的 S2S 请求也需使用相同前缀：
+
+```tsx
+<CaptchaProvider
+  api={{
+    basePath: 'https://captcha.yourdomain.com',
+    prefix: '/captcha/api',
+  }}
+>
+  <App />
+</CaptchaProvider>
+```
+
 ---
 
 ## 环境变量参考
@@ -356,6 +372,7 @@ curl -X GET \
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `PORT` | 服务监听端口 | `3321` |
+| `API_PREFIX` | 验证码 API 路径前缀；配置 `/` 表示根路径 | `/api/v1` |
 | `REDIS_PORT` | Redis 端口 | `6379` |
 | `REDIS_PASSWORD` | Redis 密码 | 空 |
 | `REDIS_DB` | Redis 数据库编号 | `0` |
