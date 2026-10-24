@@ -11,6 +11,7 @@
 - [后端部署](#后端部署)
 - [前端接入](#前端接入)
 - [API 参考](#api-参考)
+- [安全机制](#安全机制)
 - [二次验证（S2S）](#二次验证s2s)
 - [环境变量参考](#环境变量参考)
 - [本地开发](#本地开发)
@@ -161,6 +162,62 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 | `slide-text` | 滑块验证 |
 | `slide-region` | 区域滑块 |
 | `rotate` | 旋转验证 |
+| `auto` | 由服务端根据该客户端的风险等级自动选择题型（低风险可得到滑块/旋转，高风险只给点选类） |
+
+### 接口字段说明
+
+**`GET /captchas/:type?mode=dark&dpr=2`**
+
+| 查询参数 | 说明 |
+|---|---|
+| `mode` | `light` / `dark`，影响点选文字配色，可选 |
+| `dpr` | 前端 `devicePixelRatio`（1-3），服务端按此倍率出图以适配高清屏，可选，默认 1 |
+
+响应（HTTP 200）：
+
+```json
+{
+  "key": "f3c1…（32 位随机十六进制）",
+  "type": "slide-text",
+  "image": "data:image/jpeg;base64,…",
+  "thumb": "data:image/png;base64,…",
+  "thumbWidth": 110, "thumbHeight": 110, "thumbX": 20, "thumbY": 60,
+  "imageWidth": 600, "imageHeight": 440,
+  "scale": 2,
+  "difficulty": 3,
+  "pow": { "nonce": "…", "difficulty": 14 }
+}
+```
+
+- `imageWidth` / `imageHeight`、`thumb*` 均为位图像素；SDK 以 CSS 像素渲染后，会按 `imageWidth / 渲染宽度` 把坐标换算回位图空间再提交，服务端的容差也在位图空间按倍率放大。
+- `pow` 为工作量证明挑战：客户端需找到 `solution` 使 `SHA-256(nonce + ":" + key + ":" + solution)` 的前导零位数 ≥ `difficulty`。
+
+**`POST /captchas/:type/:key/attempts`**
+
+```json
+{
+  "point": "123,45",
+  "trace": { "points": [[x, y, t], …], "clicks": [[x, y, t]], "pointerType": "mouse", "startedAt": 820, "submittedAt": 2410, "downs": 1, "ups": 1, "moves": 96, "untrusted": 0 },
+  "env":   { "ua": "…", "languages": ["zh-CN"], "screen": [1920, 1080], "viewport": [1440, 900], "dpr": 2, "webdriver": false, "automation": [], "fp": "…" },
+  "pow":   { "nonce": "…", "solution": "48213" }
+}
+```
+
+答案字段按题型取其一：点选 `dots`（`"x1,y1,x2,y2"`）、滑块 `point`（`"x,y"`）、旋转 `angle`。`trace` / `env` / `pow` 由 SDK 自动填充，旧版 SDK 不携带时依旧可以验证，但会计入风险分。
+
+**业务错误码**（HTTP 200 或 4xx，响应体为 `{ "code": …, "error": "…" }`）
+
+| code | 含义 |
+|---|---|
+| `400` | 参数错误 |
+| `429` | 触发频率限制 |
+| `1003` | 答案错误 |
+| `1004` | 验证码不存在 / 已过期 / 已失效 |
+| `1005` | 尝试次数过多 |
+| `1006` | 出题到提交间隔过短（疑似脚本） |
+| `1007` | 提交客户端与出题客户端不一致 |
+| `1008` | 风控评分超过拦截阈值 |
+| `1009` | 工作量证明缺失或无效 |
 
 ---
 
@@ -245,12 +302,14 @@ function App() {
 | `locale` | `LocaleTexts` | — | 全局文案覆盖 |
 | `theme` | `ThemeTokens` | — | 全局主题配置 |
 | `zIndex` | `number` | `9999` | 弹窗层级 |
+| `telemetry` | `'off' \| 'basic' \| 'full'` | `'full'` | 行为/环境采集级别，见[安全机制](#安全机制) |
 
 ### `<Captcha>` Props
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `type` | `CaptchaType` | `'auto'` | 验证码类型，`auto` 随机选择 |
+| `type` | `CaptchaType` | `'auto'` | 验证码类型，`auto` 由服务端按风险等级选择题型（需要后端 ≥ 1.3） |
+| `telemetry` | `TelemetryLevel` | — | 当前实例的采集级别覆盖 |
 | `onSuccess` | `(data) => void` | — | 验证成功回调，`data` 包含 `second_key` |
 | `onFail` | `(msg) => void` | — | 验证失败回调 |
 | `onCancel` | `() => void` | — | 用户取消回调 |
@@ -312,6 +371,28 @@ function App() {
 | `holder` | `ReactNode` | 必须渲染在当前 React 树中的承载节点 |
 
 ---
+
+## 安全机制
+
+| 机制 | 说明 | 相关配置 |
+|---|---|---|
+| 随机 key | 验证码 key 为 128 位加密随机数，与答案无关，无法离线反推 | — |
+| 客户端绑定 | 出题时记录客户端指纹（IP + UA 哈希），提交客户端不一致时题目直接作废 | `CAPTCHA_BIND_CLIENT` |
+| 时间窗口 | 出题到提交间隔低于阈值判定为自动化提交，计入一次失败 | `CAPTCHA_MIN_SOLVE_TIME` |
+| 工作量证明 PoW | 每道题下发 nonce 与难度位数，SDK 在后台用 SHA-256 碰撞；真人无感，批量脚本成本线性上升。难度随客户端风险等级提升 | `CAPTCHA_POW_*` |
+| 难度分级 | 1-5 级，映射到字符数量、干扰强度、拼图尺寸、旋转区间以及校验容差；连续失败或高风险分会自动升级 | `CAPTCHA_DEFAULT_DIFFICULTY` |
+| 服务端选题 | `type=auto` 时由服务端按风险等级决定题型，客户端无法固定选择最易自动化的题型 | — |
+| 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100；达到升级阈值提升后续难度，达到拦截阈值拒绝本次校验 | `RISK_*` |
+| Redis 限流 | 基于有序集合的滑动窗口，多实例共享；Redis 不可用时自动回退进程内限流 | `RATE_LIMIT_BACKEND` |
+| 可信代理 | `X-Forwarded-For` 等头只在直连来源命中 `TRUSTED_PROXIES` 时才被采信 | `TRUSTED_PROXIES` |
+
+**采集级别与隐私**
+
+- `telemetry='full'`（默认）：轨迹 + 环境信号 + WebGL 渲染器 + 设备指纹哈希
+- `telemetry='basic'`：轨迹 + 基础环境信号（UA、语言、屏幕、时区、触控能力）
+- `telemetry='off'`：不采集，仅计算 PoW
+
+采集内容不含任何可直接识别个人的信息；服务端只保存客户端哈希与评分，不落原始 IP / UA。建议在隐私政策中声明验证码会采集交互行为用于人机判别。`RISK_MODE=log` 可先只记录分数不拦截，观察误报率后再切换为 `enforce`。
 
 ## 二次验证（S2S）
 
@@ -393,6 +474,28 @@ curl -X GET \
 | `GIN_MODE` | Gin 运行模式 | `release` |
 
 > 生产环境建议将 `CORS_ALLOW_ORIGINS` 配置为明确的 HTTPS 来源。启用 `CORS_ALLOW_CREDENTIALS` 时，中间件会返回具体来源而不是 `*`。
+
+### 安全与风控
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `CAPTCHA_DEFAULT_DIFFICULTY` | 基础难度等级 1-5 | `3` |
+| `CAPTCHA_MIN_SOLVE_TIME` | 出题到提交的最短间隔，低于则判定为脚本 | `500ms` |
+| `CAPTCHA_BIND_CLIENT` | 是否将题目绑定到客户端（IP + UA 哈希） | `true` |
+| `CAPTCHA_IMAGE_QUALITY` | 主图 JPEG 质量 55-100 | `80` |
+| `CAPTCHA_MAX_SCALE` | 允许的最大出图倍率 1-3 | `3` |
+| `CAPTCHA_POW_ENABLED` | 是否下发工作量证明挑战 | `true` |
+| `CAPTCHA_POW_REQUIRED` | 是否强制要求 PoW（`false` 时旧版 SDK 仍可通过，但计入风险分） | `false` |
+| `CAPTCHA_POW_DIFFICULTY` | PoW 基础难度（前导零位数） | `14` |
+| `CAPTCHA_POW_MAX_DIFFICULTY` | PoW 难度上限 | `20` |
+| `RISK_ENABLED` | 是否启用行为/环境风控评分 | `true` |
+| `RISK_MODE` | `enforce` 按阈值拦截；`log` 仅记录分数 | `enforce` |
+| `RISK_ESCALATE_THRESHOLD` | 达到该分数后提升该客户端后续难度与 PoW 位数 | `55` |
+| `RISK_BLOCK_THRESHOLD` | 达到该分数直接拒绝本次校验 | `85` |
+| `RISK_STATE_TTL` | 客户端风控状态保留时长 | `30m` |
+| `RISK_TELEMETRY_LOG_SIZE` | Redis 中保留的最近遥测记录条数（`captcha:telemetry` 列表），0 表示不保存 | `1000` |
+| `RATE_LIMIT_BACKEND` | `redis` 滑动窗口（多实例共享）或 `memory` | `redis` |
+| `TRUSTED_PROXIES` | 可信代理网段，只有来自这些来源的 `X-Forwarded-For` 等头才会被采信 | 私有网段 |
 
 ---
 
