@@ -106,7 +106,9 @@ func (ctrl *CaptchaController) VerifyCaptchaHandler(c *gin.Context) {
 		return
 	}
 
-	// 行为 / 环境风控评分：enforce 模式下达到拦截阈值直接拒绝，不再比对答案
+	// 行为 / 环境风控评分：enforce 模式下达到拦截阈值时不在此处短路返回，而是交给校验模板
+	// 在答案比对阶段强制判失败。前置检查（次数、绑定、时间窗口、PoW、解析）照常执行并返回
+	// 与未拦截完全一致的响应，"被拦截"这一信号只留在服务端日志
 	evalCtx := &services.EvaluationContext{
 		Type:       req.Type,
 		ClientHash: clientHash,
@@ -117,28 +119,16 @@ func (ctrl *CaptchaController) VerifyCaptchaHandler(c *gin.Context) {
 		Pow:        req.Pow,
 	}
 	riskResult := ctrl.riskEngine.Evaluate(evalCtx)
-	if ctrl.riskEngine.ShouldBlock(riskResult) {
-		ctrl.riskEngine.Record(evalCtx, riskResult, false)
+	blocked := ctrl.riskEngine.ShouldBlock(riskResult)
+	if blocked {
 		log.Printf("风控拦截: type=%s, key=%s, ip=%s, score=%d, reasons=%v", req.Type, req.Key, ip, riskResult.Score, riskResult.Reasons)
-
-		// 拦截同样消耗一次尝试机会，否则同一题目可被无限次用来调参；
-		// 对外返回与答案错误完全一致的响应，不泄露"被风控拦截"这一信号，真实原因只留在服务端日志
-		exhausted, consumeErr := verifyService.ConsumeAttempt(req.Key)
-		switch {
-		case consumeErr != nil:
-			helper.ErrorResponse(c, consumeErr)
-		case exhausted:
-			helper.ErrorResponse(c, helper.NewCaptchaError(helper.ErrCodeTooManyAttempts, "尝试次数过多"))
-		default:
-			helper.ErrorResponse(c, helper.ErrVerifyFailed)
-		}
-		return
 	}
 
 	input := &services.VerifyInput{
-		Key:    req.Key,
-		Answer: ctrl.extractVerifyData(req),
-		Pow:    req.Pow,
+		Key:         req.Key,
+		Answer:      ctrl.extractVerifyData(req),
+		Pow:         req.Pow,
+		RiskBlocked: blocked,
 	}
 	if ctrl.config.Captcha.BindClient {
 		input.ClientHash = clientHash

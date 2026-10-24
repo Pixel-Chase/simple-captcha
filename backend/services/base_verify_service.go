@@ -26,6 +26,7 @@ type AnswerValidator func(userData, correctData interface{}, meta *ChallengeMeta
 
 // VerifyDataTemplate 验证流程模板：
 // 尝试次数 → 客户端绑定 → 时间窗口 → 工作量证明 → 答案比对 → 签发二次验证 key。
+// 风控拦截（in.RiskBlocked）在答案比对阶段生效，此前各步与未拦截时完全一致。
 func (bvs *BaseVerifyService) VerifyDataTemplate(
 	in *VerifyInput,
 	parseUserData func(string) (interface{}, *helper.CaptchaError),
@@ -94,7 +95,11 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 		return false, "验证码数据异常", helper.NewCaptchaError(helper.ErrCodeCacheError, "验证码数据异常")
 	}
 
-	if !validateData(userData, correctData, meta) {
+	// 风控拦截下沉到这一步：前面的尝试次数、客户端绑定、时间窗口、PoW、答案解析全部照常执行，
+	// 响应与未拦截时一致，攻击者无法通过故意触发前置错误来探测自己是否被拦截。
+	// 比对照常执行以保持耗时一致，结果被强制判为失败，同样消耗一次尝试机会
+	answerMatched := validateData(userData, correctData, meta)
+	if in.RiskBlocked || !answerMatched {
 		return bvs.failResult(key, attempts, "验证失败", helper.ErrCodeVerifyFailed)
 	}
 
@@ -129,20 +134,6 @@ func (bvs *BaseVerifyService) failResult(key string, attempts int, message strin
 		return false, "尝试次数过多，请重新获取验证码", helper.NewCaptchaError(helper.ErrCodeTooManyAttempts, "尝试次数过多")
 	}
 	return false, message, helper.NewCaptchaError(code, message)
-}
-
-// ConsumeAttempt 在不比对答案的情况下消耗一次尝试机会（例如风控拦截），
-// 否则攻击者可以对同一题目无限次调整遥测数据直到评分放行。次数耗尽时作废题目。
-func (bvs *BaseVerifyService) ConsumeAttempt(key string) (bool, *helper.CaptchaError) {
-	attempts, err := bvs.IncrementAttempts(key)
-	if err != nil {
-		return false, err
-	}
-	if bvs.config.Captcha.MaxAttempts-attempts <= 0 {
-		bvs.DeleteCaptchaData(key)
-		return true, nil
-	}
-	return false, nil
 }
 
 // ParseClickData 解析点击数据，格式为 "x1,y1,x2,y2,..."

@@ -345,7 +345,7 @@ func TestClientRiskStore_ConcurrentRecordsAreAtomic(t *testing.T) {
 	assert.Equal(t, 0, store.Get(fresh).Fails)
 }
 
-func TestVerify_ConsumeAttemptExhaustsChallenge(t *testing.T) {
+func TestVerify_RiskBlockedFailsOnlyAtAnswerComparison(t *testing.T) {
 	manager := services.GetServiceManager()
 	service, _ := manager.GetCaptchaService("slide-text")
 	verifier, _ := manager.GetVerifyService("slide-text")
@@ -354,23 +354,121 @@ func TestVerify_ConsumeAttemptExhaustsChallenge(t *testing.T) {
 	require.Nil(t, err)
 	answer, meta := slideAnswer(t, data.Key)
 	pow := solvePow(t, data.Key, meta)
-
-	maxAttempts := config.LoadConfig().Captcha.MaxAttempts
-	for i := 1; i < maxAttempts; i++ {
-		exhausted, consumeErr := verifier.ConsumeAttempt(data.Key)
-		require.Nil(t, consumeErr)
-		assert.False(t, exhausted, "第 %d 次", i)
-	}
-
-	exhausted, consumeErr := verifier.ConsumeAttempt(data.Key)
-	require.Nil(t, consumeErr)
-	assert.True(t, exhausted, "最后一次消耗应作废题目")
-
 	waitMinSolveTime()
-	ok, _, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, Pow: pow})
+
+	// 正确答案 + 风控拦截：对外表现与答案错误一致，并消耗一次尝试机会
+	ok, msg, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, Pow: pow, RiskBlocked: true})
 	assert.False(t, ok)
 	require.NotNil(t, verifyErr)
-	assert.Equal(t, helper.ErrCodeExpired, verifyErr.Code, "题目作废后正确答案也无法通过")
+	assert.Equal(t, helper.ErrCodeVerifyFailed, verifyErr.Code)
+	assert.Equal(t, "验证失败", msg)
+
+	record, getErr := services.NewBaseService().GetCaptchaData(data.Key)
+	require.Nil(t, getErr)
+	assert.Equal(t, float64(1), record["attempts"], "拦截应消耗一次尝试机会")
+
+	// 同一答案在未拦截时能通过，证明上一步失败的唯一原因是风控
+	ok, _, verifyErr = verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, Pow: pow})
+	assert.True(t, ok)
+	assert.Nil(t, verifyErr)
+}
+
+// TestVerify_RiskBlockedMatchesNormalPathErrors 被拦截的请求在答案比对之前的每个阶段，
+// 返回值都必须与未拦截时完全一致，否则攻击者可以故意触发前置错误来探测自己是否被拦截
+func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
+	cfg := config.LoadConfig()
+	manager := services.GetServiceManager()
+	service, _ := manager.GetCaptchaService("slide-text")
+	verifier, _ := manager.GetVerifyService("slide-text")
+
+	type outcome struct {
+		ok   bool
+		msg  string
+		code int
+	}
+	run := func(in *services.VerifyInput) outcome {
+		ok, msg, err := verifier.VerifyData(in)
+		o := outcome{ok: ok, msg: msg}
+		if err != nil {
+			o.code = err.Code
+		}
+		return o
+	}
+	fresh := func(t *testing.T, clientHash string) (string, string, *risk.PowSolution) {
+		data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text", ClientHash: clientHash})
+		require.Nil(t, err)
+		answer, meta := slideAnswer(t, data.Key)
+		return data.Key, answer, solvePow(t, data.Key, meta)
+	}
+
+	cases := []struct {
+		name  string
+		skip  bool
+		build func(t *testing.T) *services.VerifyInput
+		want  int
+	}{
+		{
+			name: "未知 key",
+			build: func(t *testing.T) *services.VerifyInput {
+				return &services.VerifyInput{Key: strings.Repeat("0", 32), Answer: "1,1"}
+			},
+			want: helper.ErrCodeExpired,
+		},
+		{
+			name: "提交过快",
+			skip: cfg.Captcha.MinSolveTime <= 0,
+			build: func(t *testing.T) *services.VerifyInput {
+				key, answer, pow := fresh(t, "")
+				return &services.VerifyInput{Key: key, Answer: answer, Pow: pow}
+			},
+			want: helper.ErrCodeTooFast,
+		},
+		{
+			name: "客户端不匹配",
+			skip: !cfg.Captcha.BindClient,
+			build: func(t *testing.T) *services.VerifyInput {
+				key, answer, pow := fresh(t, "client-a")
+				waitMinSolveTime()
+				return &services.VerifyInput{Key: key, Answer: answer, Pow: pow, ClientHash: "client-b"}
+			},
+			want: helper.ErrCodeClientMismatch,
+		},
+		{
+			name: "PoW 无效",
+			build: func(t *testing.T) *services.VerifyInput {
+				key, answer, pow := fresh(t, "")
+				require.NotNil(t, pow, "默认配置应启用 PoW")
+				waitMinSolveTime()
+				return &services.VerifyInput{Key: key, Answer: answer, Pow: &risk.PowSolution{Nonce: pow.Nonce, Solution: "definitely-wrong"}}
+			},
+			want: helper.ErrCodePowInvalid,
+		},
+		{
+			name: "答案格式错误",
+			build: func(t *testing.T) *services.VerifyInput {
+				key, _, pow := fresh(t, "")
+				waitMinSolveTime()
+				return &services.VerifyInput{Key: key, Answer: "not-a-point", Pow: pow}
+			},
+			want: helper.ErrCodeInvalidParam,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.skip {
+				t.Skip("当前配置未启用该检查")
+			}
+			normal := tc.build(t)
+			blocked := tc.build(t)
+			blocked.RiskBlocked = true
+
+			got := run(normal)
+			gotBlocked := run(blocked)
+			assert.Equal(t, tc.want, got.code, "未拦截路径应命中预期的前置错误")
+			assert.Equal(t, got, gotBlocked, "拦截与否的返回值必须一致")
+		})
+	}
 }
 
 func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
@@ -383,26 +481,48 @@ func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
 	service, _ := manager.GetCaptchaService("slide-text")
 	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text"})
 	require.Nil(t, err)
-
+	answer, meta := slideAnswer(t, data.Key)
+	pow := solvePow(t, data.Key, meta)
 	env, trace := botTelemetry()
-	body, _ := json.Marshal(map[string]interface{}{"point": "1,1", "env": env, "trace": trace})
-	req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text/"+data.Key+"/attempts", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	router().ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
-	var resp struct {
-		Code  int    `json:"code"`
-		Error string `json:"error"`
+	post := func(t *testing.T) (int, string) {
+		body, _ := json.Marshal(map[string]interface{}{"point": answer, "pow": pow, "env": env, "trace": trace})
+		req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text/"+data.Key+"/attempts", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router().ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp struct {
+			Code  int    `json:"code"`
+			Error string `json:"error"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		return resp.Code, resp.Error
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, helper.ErrCodeVerifyFailed, resp.Code, "风控拦截对外应与答案错误无法区分")
-	assert.Equal(t, helper.ErrVerifyFailed.Message, resp.Error)
+	attempts := func(t *testing.T) float64 {
+		record, getErr := services.NewBaseService().GetCaptchaData(data.Key)
+		require.Nil(t, getErr)
+		v, _ := record["attempts"].(float64)
+		return v
+	}
 
-	record, getErr := services.NewBaseService().GetCaptchaData(data.Key)
-	require.Nil(t, getErr)
-	assert.Equal(t, float64(1), record["attempts"], "拦截应消耗一次尝试机会")
+	// 被拦截的请求若提交过快，仍应得到与正常路径一致的"提交过快"，而不是提前暴露 1003
+	expectAttempts := float64(0)
+	if cfg.Captcha.MinSolveTime > 0 {
+		code, _ := post(t)
+		assert.Equal(t, helper.ErrCodeTooFast, code, "拦截路径上的前置检查响应必须与正常路径一致")
+		expectAttempts++
+		assert.Equal(t, expectAttempts, attempts(t))
+	}
+
+	// 正确答案 + 机器特征：对外与答案错误无法区分，并消耗一次尝试机会
+	waitMinSolveTime()
+	code, msg := post(t)
+	assert.Equal(t, helper.ErrCodeVerifyFailed, code, "风控拦截对外应与答案错误无法区分")
+	assert.Equal(t, helper.ErrVerifyFailed.Message, msg)
+	expectAttempts++
+	assert.Equal(t, expectAttempts, attempts(t), "拦截应消耗一次尝试机会")
 }
 
 func TestVerifyEndpoint_RejectsOversizedBody(t *testing.T) {
