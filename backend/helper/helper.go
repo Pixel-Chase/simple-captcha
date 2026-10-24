@@ -10,7 +10,6 @@ import (
 	"math/rand" // 添加 math/rand 包
 	"os"
 	"path/filepath"
-	"simple-captcha/config"
 	"strings"
 	"time"
 
@@ -84,14 +83,17 @@ func GenerateRandomString(length int) string {
 	return string(b)
 }
 
-// GetImages 读取配置的素材目录（CAPTCHA_IMAGE_PATH，默认 ./images）下的所有图片文件
-func GetImages() ([]image.Image, error) {
-	return GetImagesFromDir(resolveImageDir(config.LoadConfig().Captcha.ImagePath))
+// supportedImageExts 背景图支持的扩展名（小写）
+var supportedImageExts = []string{".jpeg", ".jpg", ".png"}
+
+// IsSupportedImageFile 按扩展名判断文件是否为受支持的背景图
+func IsSupportedImageFile(name string) bool {
+	return isSupportedImageExt(strings.ToLower(filepath.Ext(name)), supportedImageExts)
 }
 
-// resolveImageDir 解析素材目录：相对路径依次尝试当前工作目录及其上级目录
+// ResolveImageDir 解析素材目录：相对路径依次尝试当前工作目录及其上级目录
 // （go test 以包目录为工作目录，上级目录即项目根目录）
-func resolveImageDir(configured string) string {
+func ResolveImageDir(configured string) string {
 	if configured == "" {
 		configured = "images"
 	}
@@ -113,9 +115,6 @@ func resolveImageDir(configured string) string {
 func GetImagesFromDir(imageDir string) ([]image.Image, error) {
 	var images []image.Image
 
-	// 支持的图片格式
-	supportedExts := []string{".jpeg", ".jpg", ".png"}
-
 	// 读取目录中的所有文件
 	files, err := os.ReadDir(imageDir)
 	if err != nil {
@@ -132,7 +131,7 @@ func GetImagesFromDir(imageDir string) ([]image.Image, error) {
 		fileName := file.Name()
 		ext := strings.ToLower(filepath.Ext(fileName))
 
-		if !isSupportedImageExt(ext, supportedExts) {
+		if !isSupportedImageExt(ext, supportedImageExts) {
 			continue
 		}
 

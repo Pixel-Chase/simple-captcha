@@ -22,30 +22,27 @@ var (
 type ClickTextCaptchaService struct {
 	*BaseService
 	fonts       []*truetype.Font
-	backgrounds *backgroundCache
+	backgrounds *BackgroundStore
 	chars       []string
 	instances   *instanceCache[click.Captcha]
 }
 
 // NewClickTextCaptchaService 创建点击文字验证码服务
-func NewClickTextCaptchaService() *ClickTextCaptchaService {
+func NewClickTextCaptchaService(backgrounds *BackgroundStore) *ClickTextCaptchaService {
 	fonts, err := fzshengsksjw.GetFont()
 	if err != nil {
 		log.Fatalln("加载字体失败:", err)
 	}
 
-	images, err := helper.GetImages()
-	if err != nil {
-		log.Fatalln("加载图片失败:", err)
-	}
-
 	service := &ClickTextCaptchaService{
 		BaseService: NewBaseService(),
 		fonts:       []*truetype.Font{fonts},
-		backgrounds: newBackgroundCache(images),
+		backgrounds: backgrounds,
 		chars:       chars.GetChineseChars(),
 	}
 	service.instances = newInstanceCache(service.build)
+	// 素材热重载后丢弃已构建的生成器实例，下一次出题使用新素材
+	backgrounds.OnReload(service.instances.reset)
 	return service
 }
 
@@ -80,7 +77,7 @@ func (s *ClickTextCaptchaService) build(key instanceKey) click.Captcha {
 	builder.SetResources(
 		click.WithChars(s.chars),
 		click.WithFonts(s.fonts),
-		click.WithBackgrounds(s.backgrounds.get(size.Width, size.Height)),
+		click.WithBackgrounds(s.backgrounds.Get(size.Width, size.Height)),
 	)
 	return builder.Make()
 }

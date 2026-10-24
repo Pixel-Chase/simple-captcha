@@ -8,6 +8,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// BearerToken 从 Authorization 头中提取 Bearer 令牌，格式不符时返回空串
+func BearerToken(c *gin.Context) string {
+	const prefix = "Bearer "
+	header := c.GetHeader("Authorization")
+	if !strings.HasPrefix(header, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
+}
+
 // APIKeyMiddleware S2S API鉴权中间件
 func APIKeyMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -21,12 +31,7 @@ func APIKeyMiddleware() gin.HandlerFunc {
 		}
 
 		// 仅检查标准的 Authorization: Bearer <Token>
-		authHeader := c.GetHeader("Authorization")
-		var apiKey string
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-
+		apiKey := BearerToken(c)
 		if apiKey == "" || apiKey != expectedKey {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Unauthorized: Invalid or missing Bearer token in Authorization header",

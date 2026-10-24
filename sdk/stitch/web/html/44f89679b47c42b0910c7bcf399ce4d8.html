@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Aegis Auth - 旋转图片行为验证规范文档</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@300;400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-primary-fixed": "#130067",
+            "surface-container-low": "#f6f2ff",
+            "inverse-primary": "#c5c0ff",
+            "tertiary-fixed-dim": "#ffb59b",
+            "inverse-surface": "#302f3a",
+            "on-primary": "#ffffff",
+            "ink-mute": "#64748d",
+            "on-tertiary-fixed": "#380d00",
+            "surface-variant": "#e4e0ef",
+            "on-surface": "#1b1a25",
+            "secondary-fixed-dim": "#c0c1ff",
+            "primary-container": "#533afd",
+            "canvas-soft": "#f6f9fc",
+            "surface-container-high": "#eae6f5",
+            "on-surface-variant": "#474556",
+            "surface": "#fcf8ff",
+            "canvas-cream": "#f5e9d4",
+            "canvas": "#ffffff",
+            "primary-fixed-dim": "#c5c0ff",
+            "primary-fixed": "#e3dfff",
+            "ink-secondary": "#273951",
+            "primary": "#3904e7",
+            "on-error": "#ffffff",
+            "tertiary": "#862a00",
+            "hairline": "#e3e8ee",
+            "inverse-on-surface": "#f3eefe",
+            "surface-tint": "#5036fa",
+            "on-error-container": "#93000a",
+            "surface-bright": "#fcf8ff",
+            "on-tertiary-container": "#ffd3c5",
+            "secondary": "#575992",
+            "surface-dim": "#dcd8e7",
+            "on-primary-fixed-variant": "#3600e1",
+            "error": "#ba1a1a",
+            "on-secondary-container": "#494b83",
+            "on-background": "#1b1a25",
+            "surface-container-highest": "#e4e0ef",
+            "tertiary-fixed": "#ffdbcf",
+            "surface-container": "#f0ecfb",
+            "secondary-fixed": "#e1e0ff",
+            "brand-dark-900": "#1c1e54",
+            "outline-variant": "#c8c4da",
+            "hairline-input": "#a8c3de",
+            "primary-press": "#2e2b8c",
+            "primary-deep": "#4434d4",
+            "on-tertiary-fixed-variant": "#812800",
+            "primary-soft": "#665efd",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "on-primary-container": "#ddd9ff",
+            "error-container": "#ffdad6",
+            "on-secondary-fixed-variant": "#3f4178",
+            "background": "#fcf8ff",
+            "on-tertiary": "#ffffff",
+            "tertiary-container": "#ae3900",
+            "ink-mute-2": "#61718a",
+            "on-secondary": "#ffffff",
+            "surface-container-lowest": "#ffffff",
+            "outline": "#777588",
+            "secondary-container": "#bdbefe",
+            "ink": "#0d253d",
+            "on-secondary-fixed": "#12144b"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "24px",
+            "space-sm": "8px",
+            "space-md": "12px",
+            "space-xxl": "32px",
+            "gutter": "16px",
+            "space-huge": "64px",
+            "space-xs": "4px",
+            "margin": "24px",
+            "space-xxs": "2px",
+            "space-lg": "16px"
+          },
+          "fontFamily": {
+            "heading-sm": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "button-md": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"JetBrains Mono\", monospace"],
+            "body-md": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""],
+            "display-xl": ["\"Inter, sans-serif\""],
+            "body-lg": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""],
+            "button-sm": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "display-xxl": ["\"Inter, sans-serif\""],
+            "micro-cap": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }],
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }],
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    /* Subtle background grid pattern reminiscent of high-end financial systems */
+    .bg-financial-grid {
+      background-size: 32px 32px;
+      background-image: 
+        linear-gradient(to right, rgba(227, 232, 238, 0.45) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(227, 232, 238, 0.45) 1px, transparent 1px);
+    }
+    .dial-ticks {
+      background: repeating-conic-gradient(
+        from 0deg,
+        #a8c3de 0deg 0.8deg,
+        transparent 0.8deg 10deg
+      );
+    }
+    .dial-major-ticks {
+      background: repeating-conic-gradient(
+        from 0deg,
+        #533afd 0deg 1.5deg,
+        transparent 1.5deg 45deg
+      );
+    }
+  </style>
+</head>
+<body class="bg-canvas-soft text-ink font-body-md min-h-screen flex flex-col selection:bg-primary-fixed selection:text-primary-deep antialiased bg-financial-grid">
+<!-- ================= TOP NAVIGATION BAR (Anchored from JSON) ================= -->
+<header class="bg-canvas dark:bg-brand-dark-900 border-b border-hairline dark:border-ink-secondary docked full-width top-0 sticky z-40">
+<div class="flex justify-between items-center w-full px-space-xl max-w-7xl mx-auto h-16">
+<!-- Brand Logo / Product Name -->
+<div class="flex items-center gap-space-lg">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary shadow-sm">
+<span class="material-symbols-outlined text-[18px]">shield</span>
+</div>
+<span class="font-heading-md text-heading-md font-bold text-ink dark:text-canvas tracking-tight">Aegis Auth</span>
+</div>
+<span class="h-4 w-px bg-hairline hidden md:block"></span>
+<!-- Navigation Links (Active mapping: Security is closest to Bot Defense / Captcha) -->
+<nav class="hidden md:flex items-center space-x-6">
+<a class="text-primary dark:text-primary-fixed border-b-2 border-primary dark:border-primary-fixed font-button-sm text-button-sm pb-1" href="#">Security</a>
+<a class="text-ink-mute dark:text-outline-variant hover:text-ink dark:hover:text-canvas font-button-sm text-button-sm transition-colors duration-150" href="#">Audit Logs</a>
+<a class="text-ink-mute dark:text-outline-variant hover:text-ink dark:hover:text-canvas font-button-sm text-button-sm transition-colors duration-150" href="#">API Docs</a>
+<a class="text-ink-mute dark:text-outline-variant hover:text-ink dark:hover:text-canvas font-button-sm text-button-sm transition-colors duration-150" href="#">Settings</a>
+</nav>
+</div>
+<!-- Trailing Action Cluster -->
+<div class="flex items-center gap-space-md">
+<!-- Notification & Security Status Icons -->
+<div class="flex items-center space-x-1 text-ink-mute">
+<button class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-canvas-soft dark:hover:bg-surface-variant transition-colors duration-150 active:scale-[0.98]">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-canvas-soft dark:hover:bg-surface-variant transition-colors duration-150 active:scale-[0.98]">
+<span class="material-symbols-outlined text-[20px]">shield</span>
+</button>
+</div>
+<span class="h-4 w-px bg-hairline"></span>
+<button class="text-ink hover:text-primary font-button-sm text-button-sm px-3 py-1.5 transition-colors duration-150">
+          Support
+        </button>
+<button class="bg-primary hover:bg-primary-press text-on-primary font-button-sm text-button-sm px-4 py-2 rounded-full transition-transform active:scale-[0.98] shadow-sm flex items-center gap-1.5">
+<span>Console</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</header>
+<!-- ================= MAIN SPECIFICATION WORKSPACE ================= -->
+<main class="flex-1 max-w-7xl w-full mx-auto px-space-xl py-space-xl">
+<!-- Header Artboard Meta Section -->
+<section class="mb-space-xl">
+<div class="flex flex-wrap items-center justify-between gap-4 border-b border-hairline pb-space-lg">
+<div>
+<!-- Micro Pill Tag -->
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-fixed text-primary font-micro-cap text-micro-cap uppercase tracking-wider mb-2 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+            ENTERPRISE BOT DEFENSE · ROTATION PUZZLE CAPTCHA V4.2
+          </div>
+<h1 class="font-display-lg text-display-lg text-ink font-light tracking-tight">
+            旋转图片行为验证交互规范
+          </h1>
+<p class="font-body-md text-body-md text-ink-mute mt-1.5 max-w-3xl">
+            基于物理角动量惯性模拟与自适应角度咬合风控，毫秒级轨迹采样的零知识人机校验交互组件。
+          </p>
+</div>
+<!-- Specification Meta Badge Group -->
+<div class="flex items-center gap-3">
+<div class="bg-canvas border border-hairline rounded-lg px-3.5 py-2 flex items-center gap-3 shadow-xs">
+<span class="material-symbols-outlined text-ink-mute text-[20px]">architecture</span>
+<div class="text-left">
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase">SPEC VERSION</div>
+<div class="font-body-tabular text-body-tabular text-ink font-medium">v4.2.0-STABLE</div>
+</div>
+</div>
+<div class="bg-canvas border border-hairline rounded-lg px-3.5 py-2 flex items-center gap-3 shadow-xs">
+<span class="material-symbols-outlined text-emerald-600 text-[20px]">verified</span>
+<div class="text-left">
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase">PASS RATIO</div>
+<div class="font-body-tabular text-body-tabular text-ink font-medium">99.98% / 0.4s</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 1: LIVE SIMULATION STAGE (Center Live Interactive Component) -->
+<section class="mb-space-xxl">
+<div class="relative bg-canvas border border-hairline rounded-DEFAULT p-space-xl overflow-hidden shadow-sm">
+<!-- Background atmospheric subtle accents -->
+<div class="absolute -right-24 -top-24 w-96 h-96 bg-primary-fixed opacity-40 rounded-full blur-3xl pointer-events-none"></div>
+<div class="absolute -left-20 -bottom-20 w-80 h-80 bg-surface-container opacity-60 rounded-full blur-2xl pointer-events-none"></div>
+<!-- Stage Header Label -->
+<div class="flex items-center justify-between mb-8 relative z-10">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">view_in_ar</span>
+<span class="font-heading-sm text-heading-sm font-medium text-ink">LIVE SIMULATION · 动态模拟视窗</span>
+<span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-micro font-body-tabular border border-emerald-200">INTERACTIVE READY</span>
+</div>
+<div class="text-caption font-caption text-ink-mute flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary inline-block"></span>
+            实时拖动滑块查看物理角度映射响应
+          </div>
+</div>
+<!-- Center Stage: High Precision Component Specimen (340px Width) -->
+<div class="flex flex-col items-center justify-center py-6 relative z-10">
+<!-- The CAPTCHA Window Card -->
+<div class="w-[340px] bg-canvas rounded-DEFAULT border border-hairline shadow-[0_12px_32px_rgba(13,37,61,0.08)] p-5 relative select-none">
+<!-- Window Top Toolbar -->
+<div class="flex items-center justify-between pb-3.5 border-b border-hairline">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-heading-sm text-heading-sm text-ink font-medium text-[15px]">拖动滑块使图片摆正</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="w-7 h-7 rounded-full flex items-center justify-center text-ink-mute hover:text-ink hover:bg-canvas-soft transition-colors duration-150" title="刷新图像">
+<span class="material-symbols-outlined text-[17px]">refresh</span>
+</button>
+<button class="w-7 h-7 rounded-full flex items-center justify-center text-ink-mute hover:text-ink hover:bg-canvas-soft transition-colors duration-150" title="关闭窗口">
+<span class="material-symbols-outlined text-[17px]">close</span>
+</button>
+</div>
+</div>
+<!-- Central Rotation Visual Area (200px Diameter) -->
+<div class="relative w-[216px] h-[216px] mx-auto my-6 flex items-center justify-center">
+<!-- Outer 360° High Precision Compass Scale Dial Ring -->
+<div class="absolute inset-0 rounded-full border border-hairline dial-ticks pointer-events-none opacity-80"></div>
+<div class="absolute inset-0 rounded-full dial-major-ticks pointer-events-none opacity-40"></div>
+<!-- Electric Indigo Dynamic Progress Arc Indicator (#533afd) -->
+<svg class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none z-10" viewbox="0 0 216 216">
+<!-- Track -->
+<circle cx="108" cy="108" fill="none" r="102" stroke="#e3e8ee" stroke-width="2.5"></circle>
+<!-- Active Angle Arc (default ~58deg) -->
+<circle class="transition-all duration-75" cx="108" cy="108" fill="none" id="liveArcIndicator" r="102" stroke="#533afd" stroke-dasharray="640.88" stroke-dashoffset="537.4" stroke-linecap="round" stroke-width="3"></circle>
+</svg>
+<!-- Alignment Crosshairs / Guide Reticle -->
+<div class="absolute inset-x-0 h-px border-t border-dashed border-primary/25 z-10 pointer-events-none"></div>
+<div class="absolute inset-y-0 w-px border-l border-dashed border-primary/25 z-10 pointer-events-none"></div>
+<!-- Top Calibration Notch Cursor -->
+<div class="absolute -top-1 left-1/2 -translate-x-1/2 w-1.5 h-3 bg-primary-container rounded-full z-20 shadow-xs"></div>
+<!-- Clipped Circular Scenery Image (200px) -->
+<div class="w-[196px] h-[196px] rounded-full overflow-hidden shadow-inner relative border-2 border-canvas z-0 bg-canvas-soft">
+<img class="w-full h-full object-cover origin-center transition-transform duration-75 select-none pointer-events-none" data-alt="A breathtaking aerial view of misty Nordic fjord mountains under clear daylight, sharp alpine ridges and deep azure water reflecting the morning sky, crisp institutional photography with clean geometric horizon, pristine natural beauty suitable for high-security verification imagery." id="liveRotatedImage" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwIPKBkrNYgos7m6v9oJuz5JiHrbQFvVtlvnQMvxC9Kvv0Psl8zOYRJz5vsZGPnrjJJDjPyAc2O3ToDUqjb3Mpn5Z0I_WCK624nLN5c6YjSf4UXmIfOLdM0VckMYuTS--uw7tuBk6bZMGCemE5C_clGBTHx0iZTrilL_AfHN_D2xUBYm2tz-PYKL-G1OVAN21fC2tsn9sc3HTrUjyWZhPN38hvPaTKhuqQrwNDRO4FC33lP8BLb3jPK3nSaoxNKLwOZLJ5UddCDEE" style="transform: rotate(58deg);"/>
+<!-- Center Floating Angle Capsule -->
+<div class="absolute bottom-2.5 left-1/2 -translate-x-1/2 bg-ink/75 backdrop-blur-md text-canvas px-2.5 py-0.5 rounded-full border border-white/20 text-micro font-body-tabular flex items-center gap-1.5 shadow-sm pointer-events-none">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+<span id="liveAngleText">+58.0° · 采样中</span>
+</div>
+</div>
+</div>
+<!-- Slider Track Control Area -->
+<div class="space-y-3">
+<div class="relative w-full h-11 bg-canvas-soft rounded-full border border-hairline-input p-1 flex items-center overflow-hidden">
+<!-- Track Gradient Fill -->
+<div class="absolute left-0 top-0 bottom-0 bg-primary-fixed/60 rounded-full" id="liveTrackProgress" style="width: 28%;"></div>
+<!-- Right Guide Text Prompt -->
+<div class="absolute inset-0 flex items-center justify-end pr-4 pointer-events-none">
+<span class="font-caption text-caption text-ink-mute flex items-center gap-1">
+                    向右拖动滑块旋转
+                    <span class="material-symbols-outlined text-[16px] text-ink-mute-2">chevron_right</span>
+</span>
+</div>
+<!-- Circular Handle (White High-Quality Card with Shadow & Indigo Rotating Arrows) -->
+<div class="relative z-20 w-9 h-9 rounded-full bg-canvas border border-hairline shadow-[0_2px_8px_rgba(13,37,61,0.18)] flex items-center justify-center cursor-grab active:cursor-grabbing hover:scale-105 active:scale-95 transition-transform" id="liveSliderThumb" style="transform: translateX(68px);">
+<span class="material-symbols-outlined text-primary-container text-[20px]">sync</span>
+</div>
+</div>
+<!-- Native Hidden Range for Fallback/Accessibility Simulation -->
+<input aria-label="旋转图片校准滑块" class="sr-only" id="interactiveSlider" max="360" min="0" type="range" value="58"/>
+<!-- Security Risk Engine Footer -->
+<div class="flex items-center justify-between pt-2 border-t border-hairline/80 font-micro text-micro text-ink-mute">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-primary">verified_user</span>
+<span>Aegis Risk Engine · 256-bit TLS</span>
+</div>
+<div class="font-body-tabular text-ink-mute-2 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+<span>RTT: 18ms</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Micro Control Tips -->
+<div class="mt-4 flex items-center gap-4 text-micro text-ink-mute font-body-tabular">
+<span class="flex items-center gap-1">
+<kbd class="px-1.5 py-0.5 rounded bg-canvas border border-hairline shadow-xs">←</kbd>
+<kbd class="px-1.5 py-0.5 rounded bg-canvas border border-hairline shadow-xs">→</kbd>
+              方向键 1° 微调
+            </span>
+<span class="text-hairline">|</span>
+<span class="flex items-center gap-1">
+<kbd class="px-1.5 py-0.5 rounded bg-canvas border border-hairline shadow-xs">Shift</kbd> + 方向键 5° 粗调
+            </span>
+<span class="text-hairline">|</span>
+<span>物理阻尼系数: γ = 0.82</span>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 2: 3-STATE LIFECYCLE MATRIX (3-Column Card Comparison) -->
+<section class="mb-space-xxl">
+<div class="flex items-center justify-between mb-6">
+<div>
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase tracking-wider font-semibold">LIFECYCLE BEHAVIOR SPEC</div>
+<h2 class="font-heading-lg text-heading-lg font-light text-ink">3-State Lifecycle Matrix · 核心生命周期状态对比矩阵</h2>
+</div>
+<div class="text-caption font-caption text-ink-mute">
+          覆盖拖拽采集中、风控判定通过与容错超限三次握手生命周期
+        </div>
+</div>
+<!-- 3 Columns Layout -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- STATE 1: IN_PROGRESS (拖动中) -->
+<div class="bg-canvas border border-hairline rounded-DEFAULT p-5 flex flex-col justify-between hover:border-primary/40 transition-colors shadow-xs">
+<div>
+<!-- Status Badge Header -->
+<div class="flex items-center justify-between pb-3 border-b border-hairline mb-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-fixed text-primary font-caption text-caption font-medium">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-ping"></span>
+                状态 1 · 拖动中 (IN_PROGRESS)
+              </span>
+<span class="font-body-tabular text-micro text-ink-mute">PHASE_02</span>
+</div>
+<!-- Mini Specimen Canvas -->
+<div class="bg-canvas-soft rounded-lg p-4 border border-hairline relative mb-4">
+<div class="relative w-36 h-36 mx-auto flex items-center justify-center">
+<!-- Dial -->
+<div class="absolute inset-0 rounded-full border border-hairline-input dial-ticks"></div>
+<!-- Arc Progress -->
+<svg class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewbox="0 0 144 144">
+<circle cx="72" cy="72" fill="none" r="66" stroke="#e3e8ee" stroke-width="2"></circle>
+<circle cx="72" cy="72" fill="none" r="66" stroke="#533afd" stroke-dasharray="414.6" stroke-dashoffset="260" stroke-linecap="round" stroke-width="2.5"></circle>
+</svg>
+<div class="w-32 h-32 rounded-full overflow-hidden border border-canvas shadow-xs">
+<img class="w-full h-full object-cover" data-alt="A modern architectural concrete building facade with clean linear shadows and geometric angles under high-contrast sunlight, deep indigo and crisp white accents, ultra-fine minimalist industrial design style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9HY90gyKpYDjX6roj8IlGF8Bk2M9wu0_zQFrMNJfvX7daxMR0vUs4MdZmz6VPVmgmXX-hqPT7M_xBryAh2aVZNBfwXfDvokVE63dBRNhzU_0MIVChxF54BrIqO9l5qE22Bl9Zo6KCWKG5OkA3mPwTFb7cpJK9PLCthThNBQrLwoMaWAZa_kGtT1lrBJs71umB843kj3OYj4HxJ_DAp0xxIt0ZB4D1OoHVVztDmFtxgEBDU2qxgdopgb2yy9KeNNWZWYD8ffACiao" style="transform: rotate(134deg);"/>
+</div>
+<div class="absolute -top-1 left-1/2 -translate-x-1/2 w-1.5 h-2.5 bg-primary rounded-full"></div>
+<!-- Floating Realtime Vector -->
+<div class="absolute bottom-1 bg-ink/80 text-canvas font-body-tabular text-micro px-2 py-0.5 rounded-full backdrop-blur-xs">
+                  134.2° · 184°/s
+                </div>
+</div>
+<!-- Track Progress Snapshot -->
+<div class="mt-4 relative h-8 bg-surface-container rounded-full border border-hairline overflow-hidden flex items-center px-1">
+<div class="absolute left-0 top-0 bottom-0 bg-primary-fixed" style="width: 55%;"></div>
+<div class="relative z-10 w-6 h-6 rounded-full bg-canvas shadow-xs flex items-center justify-center" style="transform: translateX(110px);">
+<span class="material-symbols-outlined text-primary text-[14px]">sync</span>
+</div>
+</div>
+</div>
+<!-- Trajectory Telemetry Metrics -->
+<div class="space-y-2 text-caption">
+<div class="flex justify-between py-1 border-b border-hairline/60">
+<span class="text-ink-mute">瞬时角速度 (Angular Vel)</span>
+<span class="font-body-tabular text-ink">184.6° / sec</span>
+</div>
+<div class="flex justify-between py-1 border-b border-hairline/60">
+<span class="text-ink-mute">微颤偏移采样 (Jitter Dev)</span>
+<span class="font-body-tabular text-emerald-600">σ = 0.042 (Normal)</span>
+</div>
+<div class="flex justify-between py-1">
+<span class="text-ink-mute">轨迹贝塞尔拟合 (Bézier Fit)</span>
+<span class="font-body-tabular text-ink">98.4% Confidence</span>
+</div>
+</div>
+</div>
+<p class="font-micro text-micro text-ink-mute mt-4 bg-canvas-soft p-2.5 rounded border border-hairline">
+            说明：滑块拖拽中途，圆形图像依线性角动量方程同步倾斜旋转。外围电光靛蓝弧线实时映射偏角，高频采样微动作生理特征。
+          </p>
+</div>
+<!-- STATE 2: VERIFIED_SUCCESS (验证成功) -->
+<div class="bg-canvas border border-emerald-300 rounded-DEFAULT p-5 flex flex-col justify-between shadow-[0_4px_20px_rgba(16,185,129,0.06)] relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-emerald-100 rounded-bl-full opacity-40 pointer-events-none"></div>
+<div>
+<!-- Status Badge Header -->
+<div class="flex items-center justify-between pb-3 border-b border-hairline mb-4 relative z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-caption text-caption font-medium">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+                状态 2 · 验证成功 (VERIFIED)
+              </span>
+<span class="font-body-tabular text-micro text-emerald-700 font-medium">PASS 0.58s</span>
+</div>
+<!-- Mini Specimen Canvas -->
+<div class="bg-emerald-50/40 rounded-lg p-4 border border-emerald-200 relative mb-4">
+<div class="relative w-36 h-36 mx-auto flex items-center justify-center">
+<!-- Full Emerald Ring -->
+<svg class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewbox="0 0 144 144">
+<circle cx="72" cy="72" fill="none" r="66" stroke="#10b981" stroke-width="3"></circle>
+</svg>
+<div class="w-32 h-32 rounded-full overflow-hidden border-2 border-emerald-400 shadow-sm relative">
+<img class="w-full h-full object-cover filter brightness-105" data-alt="A modern architectural concrete building facade with clean linear shadows and geometric angles, perfectly level and aligned horizontally, crisp daylight with pristine emerald green glow ambient reflection." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwMHzSPgsn3desdHw42bt6WIPwsb-4QunAIEcgQcr8IUj5lMh1eQZUFkTbJQ6tjwvgmzgsbCOsv5fjoxzib2QoFXSEu-00qwtcEhyhpyKsaDFJK-32LXwT0P5-R9q8wtSR3B1DpwzqXgE4h3qDV-xj1dWHAoyGsZwuPDH6MHsv9Ew4wVrdhpe9KTVmq9C5xfV4O3nPAmAjZQI5IhyJWdVCxddzfsf61NhTe5uYcZOUCCrOeHtE66v-YWTeiu1mz_mmLulXjCD3ZBE" style="transform: rotate(0deg);"/>
+<!-- Success Overlay Modal Overlay -->
+<div class="absolute inset-0 bg-emerald-950/40 backdrop-blur-xs flex flex-col items-center justify-center text-canvas">
+<div class="w-10 h-10 rounded-full bg-emerald-500 text-canvas flex items-center justify-center shadow-lg animate-bounce">
+<span class="material-symbols-outlined text-[24px]">check</span>
+</div>
+<span class="font-button-sm text-button-sm font-medium mt-1">验证通过</span>
+<span class="font-body-tabular text-[10px] opacity-80">耗时 0.58s · 偏差 0.4°</span>
+</div>
+</div>
+<div class="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-3 bg-emerald-500 rounded-full"></div>
+</div>
+<!-- Success Track Indicator -->
+<div class="mt-4 relative h-8 bg-emerald-100 rounded-full border border-emerald-300 overflow-hidden flex items-center px-1">
+<div class="absolute inset-0 bg-emerald-500/20"></div>
+<div class="w-full flex items-center justify-center gap-1.5 font-micro text-emerald-800 font-medium">
+<span class="material-symbols-outlined text-[15px]">verified</span>
+                  安全凭证加密生成 (Ticket-Granted)
+                </div>
+</div>
+</div>
+<!-- Proof Token Output -->
+<div class="space-y-2 text-caption">
+<div class="flex justify-between py-1 border-b border-hairline/60">
+<span class="text-ink-mute">最终绝对角偏差 (Angle Err)</span>
+<span class="font-body-tabular text-emerald-600 font-medium">+0.42° (容差 ≤ ±3.0°)</span>
+</div>
+<div class="flex justify-between py-1 border-b border-hairline/60">
+<span class="text-ink-mute">零知识证明签名 (ZKP Proof)</span>
+<span class="font-body-tabular text-ink truncate max-w-[140px]">0x7f4c9a...3e1b</span>
+</div>
+<div class="flex justify-between py-1">
+<span class="text-ink-mute">设备生物指纹评级</span>
+<span class="font-body-tabular text-emerald-600 font-medium">Tier-A (Ultra Safe)</span>
+</div>
+</div>
+</div>
+<p class="font-micro text-micro text-emerald-900 mt-4 bg-emerald-50 p-2.5 rounded border border-emerald-200">
+            说明：图像角度与基准线咬合偏差小于容错阈值。外圈光环呈现翠绿极光扫光动效，自动派发 JWT 校验通行 Token。
+          </p>
+</div>
+<!-- STATE 3: FAILED_RETRY (验证失败) -->
+<div class="bg-canvas border border-error/30 rounded-DEFAULT p-5 flex flex-col justify-between shadow-[0_4px_20px_rgba(186,26,26,0.06)] relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-error-container rounded-bl-full opacity-30 pointer-events-none"></div>
+<div>
+<!-- Status Badge Header -->
+<div class="flex items-center justify-between pb-3 border-b border-hairline mb-4 relative z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container font-caption text-caption font-medium">
+<span class="material-symbols-outlined text-[16px]">error</span>
+                状态 3 · 角度偏差 (FAILED)
+              </span>
+<span class="font-body-tabular text-micro text-error font-medium">RETRY 2/3</span>
+</div>
+<!-- Mini Specimen Canvas -->
+<div class="bg-error-container/20 rounded-lg p-4 border border-error/20 relative mb-4">
+<div class="relative w-36 h-36 mx-auto flex items-center justify-center">
+<!-- Red Alert Ring -->
+<svg class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewbox="0 0 144 144">
+<circle cx="72" cy="72" fill="none" r="66" stroke="#ba1a1a" stroke-dasharray="8 4" stroke-width="2.5"></circle>
+</svg>
+<div class="w-32 h-32 rounded-full overflow-hidden border-2 border-error shadow-sm relative">
+<img class="w-full h-full object-cover filter contrast-125" data-alt="A modern architectural concrete building facade tilted at an unnatural crooked angle under dim moody skies, subtle crimson red glare and warning indicators, sharp industrial minimalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAW6qy72KqWKFwRGwOvZtfyxHXjIjoKhaRPQF1TYTZtuFTB-jIfbJSmOjahHC9UOCUOuqODH0GQHq5S7KWFsBFasSuF5-rBA0PWCQshfjH4SbgnVkOemMgHVEEYHbjkUKJKpgE8VU-1vG5SQQPi2aYRn0n6SzMW1DvZFIrsDFmdnkr5f8rbYIhAT-1_PN3fDY-L8tt_4v4LAsCrjfQwybMev01w_yZpAiDkVdi_nd5GD57aI73SRJzZjcR1RUOPb_ajVWXhznAlTcI" style="transform: rotate(24deg);"/>
+<!-- Failure Modal Warning -->
+<div class="absolute inset-0 bg-ink/65 backdrop-blur-xs flex flex-col items-center justify-center text-canvas p-2 text-center">
+<span class="material-symbols-outlined text-tertiary-fixed text-[26px]">rotate_left</span>
+<span class="font-caption text-caption font-medium text-white mt-1">角度偏差过大</span>
+<span class="font-body-tabular text-[10px] text-tertiary-fixed">超限 +7.8° · 请摆正</span>
+</div>
+</div>
+<div class="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-3 bg-error rounded-full"></div>
+</div>
+<!-- Failure Track Feedback -->
+<div class="mt-4 relative h-8 bg-error-container/40 rounded-full border border-error/30 overflow-hidden flex items-center justify-between px-3">
+<span class="font-micro text-on-error-container flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">history</span>
+                  1.2 秒后自动重置图像
+                </span>
+<button class="font-caption text-caption text-primary font-medium hover:underline">立即重试</button>
+</div>
+</div>
+<!-- Failure Telemetry Metrics -->
+<div class="space-y-2 text-caption">
+<div class="flex justify-between py-1 border-b border-hairline/60">
+<span class="text-ink-mute">角度判定误差 (Angle Offset)</span>
+<span class="font-body-tabular text-error font-medium">+7.82° (超出 4.5° 阈值)</span>
+</div>
+<div class="flex justify-between py-1 border-b border-hairline/60">
+<span class="text-ink-mute">滑动加速度跃迁异常</span>
+<span class="font-body-tabular text-tertiary font-medium">Δa = 12.4g (Bot-like)</span>
+</div>
+<div class="flex justify-between py-1">
+<span class="text-ink-mute">会话风控剩余配额</span>
+<span class="font-body-tabular text-ink">剩余 2 次重试机会</span>
+</div>
+</div>
+</div>
+<p class="font-micro text-micro text-on-error-container mt-4 bg-error-container/30 p-2.5 rounded border border-error/20">
+            说明：释放滑块时偏角超出闭环容忍带。外圈刻度闪烁绯红警示色，触发震颤反馈并重新随机加载混淆扭曲原图。
+          </p>
+</div>
+</div>
+</section>
+<!-- SECTION 3: TECHNICAL PARAMETERS & ACCESSIBILITY SPEC PANEL -->
+<section class="mb-space-xl">
+<div class="mb-4">
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase tracking-wider font-semibold">INFRASTRUCTURE BENCHMARK</div>
+<h2 class="font-heading-lg text-heading-lg font-light text-ink">技术规范与无障碍基准参数</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<!-- Parameter Card 1 -->
+<div class="bg-canvas border border-hairline rounded-lg p-5 shadow-xs">
+<div class="w-10 h-10 rounded-full bg-primary-fixed text-primary flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-[20px]">tune</span>
+</div>
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase">DYNAMIC ACCURACY</div>
+<div class="font-heading-md text-heading-md font-medium text-ink my-1">±3.0° 智能咬合</div>
+<p class="font-caption text-caption text-ink-mute">
+            自适应动态容差网格。根据设备历史信誉分在 ±2.5° 至 ±4.5° 区间自适应浮动，进入 ±1.5° 内触发物理磁吸触感。
+          </p>
+</div>
+<!-- Parameter Card 2 -->
+<div class="bg-canvas border border-hairline rounded-lg p-5 shadow-xs">
+<div class="w-10 h-10 rounded-full bg-primary-fixed text-primary flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-[20px]">timeline</span>
+</div>
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase">MOMENTUM CONVOLUTION</div>
+<div class="font-heading-md text-heading-md font-medium text-ink my-1">阻尼角动量卷积</div>
+<p class="font-caption text-caption text-ink-mute">
+            内置模拟转动惯量 $I = \frac{1}{2}mr^2$ 与空气阻尼衰减系数，有效阻断机械宏脚本与线性梯度下降暴力破解器。
+          </p>
+</div>
+<!-- Parameter Card 3 -->
+<div class="bg-canvas border border-hairline rounded-lg p-5 shadow-xs">
+<div class="w-10 h-10 rounded-full bg-primary-fixed text-primary flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-[20px]">accessibility_new</span>
+</div>
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase">ACCESSIBILITY AA</div>
+<div class="font-heading-md text-heading-md font-medium text-ink my-1">WCAG 2.1 AA 适配</div>
+<p class="font-caption text-caption text-ink-mute">
+            全键盘无障碍支持。支持 <code>Tab</code> 聚焦、左右方向键以 1° 步进微调，<code>Shift</code> + 方向键以 5° 粗调，附带屏幕朗诵旁白。
+          </p>
+</div>
+<!-- Parameter Card 4 -->
+<div class="bg-canvas border border-hairline rounded-lg p-5 shadow-xs">
+<div class="w-10 h-10 rounded-full bg-primary-fixed text-primary flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-[20px]">gavel</span>
+</div>
+<div class="font-micro-cap text-micro-cap text-ink-mute uppercase">FINANCIAL COMPLIANCE</div>
+<div class="font-heading-md text-heading-md font-medium text-ink my-1">PCI-DSS · SOC2</div>
+<p class="font-caption text-caption text-ink-mute">
+            通过金融级安全渗透审计。验证请求全程采用 Ephemeral ECDH 密钥交换，不保留用户生物图像与设备绝对坐标。
+          </p>
+</div>
+</div>
+</section>
+</main>
+<!-- ================= FOOTER (Anchored from JSON) ================= -->
+<footer class="bg-canvas-soft dark:bg-brand-dark-900 border-t border-hairline dark:border-ink-secondary docked full-width bottom mt-auto">
+<div class="flex flex-col md:flex-row justify-between items-center w-full px-space-xl py-space-lg max-w-7xl mx-auto gap-space-md">
+<!-- Brand & Copyright Identity -->
+<div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+<span class="font-heading-sm text-heading-sm text-ink dark:text-canvas font-bold">Aegis Auth</span>
+<span class="hidden sm:inline text-hairline">|</span>
+<span class="font-caption text-caption text-ink-mute-2 dark:text-outline-variant text-center sm:text-left">
+          © 2025 Aegis Financial Infrastructure. Bank-grade cryptographic verification.
+        </span>
+</div>
+<!-- Footer Anchor Links -->
+<nav class="flex flex-wrap items-center justify-center gap-6">
+<a class="text-ink dark:text-canvas font-caption text-caption hover:text-primary dark:hover:text-primary-fixed transition-colors duration-150" href="#">Security Architecture</a>
+<a class="text-ink-mute-2 dark:text-outline-variant hover:text-ink dark:hover:text-canvas font-caption text-caption transition-colors duration-150" href="#">Compliance</a>
+<a class="text-ink-mute-2 dark:text-outline-variant hover:text-ink dark:hover:text-canvas font-caption text-caption transition-colors duration-150" href="#">Privacy Policy</a>
+<a class="text-ink-mute-2 dark:text-outline-variant hover:text-ink dark:hover:text-canvas font-caption text-caption transition-colors duration-150" href="#">Status</a>
+</nav>
+</div>
+</footer>
+<!-- Interactive JavaScript for Live Simulation -->
+<script>
+    (function initRotationCaptchaSpec() {
+      const slider = document.getElementById('interactiveSlider');
+      const thumb = document.getElementById('liveSliderThumb');
+      const trackProgress = document.getElementById('liveTrackProgress');
+      const rotatedImage = document.getElementById('liveRotatedImage');
+      const arcIndicator = document.getElementById('liveArcIndicator');
+      const angleText = document.getElementById('liveAngleText');
+
+      if (!slider || !thumb || !rotatedImage) return;
+
+      const trackTotalWidth = 248; // Max thumb travel distance inside 340px card
+      const circumference = 2 * Math.PI * 102; // ~640.88px
+
+      function updateAngle(degrees) {
+        const normalized = Math.min(Math.max(degrees, 0), 360);
+        
+        // Rotate Image
+        rotatedImage.style.transform = `rotate(${normalized}deg)`;
+
+        // Update Slider Thumb X position
+        const percent = normalized / 360;
+        const translateX = percent * trackTotalWidth;
+        thumb.style.transform = `translateX(${translateX}px)`;
+        trackProgress.style.width = `${Math.max(percent * 100, 8)}%`;
+
+        // Update SVG Arc Indicator
+        const strokeOffset = circumference - (percent * circumference);
+        arcIndicator.style.strokeDashoffset = strokeOffset;
+
+        // Update Angle Capsule Label
+        if (Math.abs(normalized - 0) < 3.0 || Math.abs(normalized - 360) < 3.0) {
+          angleText.innerHTML = `0.0° · 已校准 <span class="material-symbols-outlined text-[13px] text-emerald-400">check</span>`;
+          arcIndicator.setAttribute('stroke', '#10b981');
+        } else {
+          angleText.textContent = `+${normalized.toFixed(1)}° · 采样中`;
+          arcIndicator.setAttribute('stroke', '#533afd');
+        }
+      }
+
+      // Dragging simulation on Thumb
+      let isDragging = false;
+      let startX = 0;
+      let currentVal = 58;
+
+      thumb.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        currentVal = parseFloat(slider.value);
+        document.body.style.cursor = 'grabbing';
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const deltaDeg = (dx / trackTotalWidth) * 360;
+        let newAngle = (currentVal + deltaDeg) % 360;
+        if (newAngle < 0) newAngle += 360;
+        slider.value = newAngle;
+        updateAngle(newAngle);
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          document.body.style.cursor = 'default';
+        }
+      });
+
+      // Keyboard Accessibility (Arrows)
+      window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' && e.target !== slider) return;
+        let angle = parseFloat(slider.value);
+        const step = e.shiftKey ? 5 : 1;
+
+        if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+          angle = (angle + step) % 360;
+          slider.value = angle;
+          updateAngle(angle);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+          angle = (angle - step + 360) % 360;
+          slider.value = angle;
+          updateAngle(angle);
+        }
+      });
+
+      // Initialize default position
+      updateAngle(58);
+    })();
+  </script>
+</body></html>

@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"log"
 	"net/http"
 	"runtime"
 	"simple-captcha/config"
@@ -65,7 +66,31 @@ func SetupRouter() *gin.Engine {
 	// 注册验证码相关路由
 	registerCaptchaRoutes(api)
 
+	// 管理后台路由（默认关闭）：管理员登录 + 背景图管理
+	if cfg.Admin.Enabled {
+		RegisterAdminRoutes(r.Group(cfg.Server.APIPrefix+"/admin"), serviceManager.GetAdminService(), riskControl)
+		log.Printf("管理后台已开启: prefix=%s/admin", cfg.Server.APIPrefix)
+	}
+
 	return r
+}
+
+// RegisterAdminRoutes 注册管理后台路由。
+// 登录接口叠加 IP 限流并以行为验证作为前置；其余接口要求 Bearer 会话令牌。
+// 单独导出以便测试用自定义的 AdminService（如临时素材目录）构建路由。
+func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, riskControl services.RiskControlService) {
+	ctrl := controllers.NewAdminController(admin)
+	rg.Use(middleware.NoCacheMiddleware())
+
+	rg.POST("/login", middleware.RateLimitMiddleware(riskControl), ctrl.LoginHandler)
+
+	authed := rg.Group("", middleware.AdminAuthMiddleware(admin))
+	authed.GET("/session", ctrl.SessionHandler)
+	authed.DELETE("/session", ctrl.LogoutHandler)
+	authed.GET("/backgrounds", ctrl.ListBackgroundsHandler)
+	authed.POST("/backgrounds", ctrl.UploadBackgroundHandler)
+	authed.GET("/backgrounds/:name", ctrl.PreviewBackgroundHandler)
+	authed.DELETE("/backgrounds/:name", ctrl.DeleteBackgroundHandler)
 }
 
 // registerCaptchaRoutes 注册验证码相关路由

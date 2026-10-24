@@ -13,6 +13,7 @@
 - [API 参考](#api-参考)
 - [安全机制](#安全机制)
 - [二次验证（S2S）](#二次验证s2s)
+- [管理后台（登录 + 背景图管理）](#管理后台登录--背景图管理)
 - [环境变量参考](#环境变量参考)
 - [本地开发](#本地开发)
 
@@ -77,7 +78,31 @@
 docker pull ghcr.io/pixel-chase/simple-captcha:latest
 ```
 
-**2. 创建 `docker-compose.yml`**
+**2. 准备配置文件 `.env`**
+
+完整模板见仓库中的 [`backend/.env.example`](backend/.env.example)，最少需要填写 Redis 与 `API_KEY`：
+
+```dotenv
+# Redis 连接（必填，连接到你的业务 Redis）
+REDIS_HOST=your-redis-host
+REDIS_PORT=6379
+REDIS_PASSWORD=your-redis-password
+REDIS_DB=2
+
+# S2S 二次验证鉴权密钥（必填）
+API_KEY=your_secure_api_key_here
+
+# 允许的前端来源，多个用逗号分隔
+CORS_ALLOW_ORIGINS=https://example.com,https://admin.example.com
+
+# 可选：API 路径前缀、频率限制、管理后台……见「环境变量参考」
+API_PREFIX=/api/v1
+CAPTCHA_EXPIRE_TIME=5m
+```
+
+> 含 `$` 的值（如 bcrypt 哈希）必须用单引号包裹，否则会被当作变量展开。
+
+**3. 创建 `docker-compose.yml`**
 
 ```yaml
 services:
@@ -86,26 +111,8 @@ services:
     container_name: simple-captcha
     ports:
       - "3321:3321"
-    environment:
-      # Redis 连接（必填，连接到你的业务 Redis）
-      - REDIS_HOST=your-redis-host
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=your-redis-password
-      - REDIS_DB=2
-
-      # 服务配置
-      - PORT=3321
-      - API_PREFIX=/api/v1                  # API 路径前缀，可选
-      - API_KEY=your_secure_api_key_here    # S2S 二次验证鉴权密钥
-
-      # 跨域配置（多个来源使用逗号分隔）
-      - CORS_ALLOW_ORIGINS=https://example.com,https://admin.example.com
-      - CORS_ALLOW_CREDENTIALS=false
-
-      # 可选：频率限制
-      - CAPTCHA_EXPIRE_TIME=5m
-      - CAPTCHA_MAX_ATTEMPTS=5
-      - ENABLE_RATE_LIMIT=true
+    env_file:
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3321/health"]
@@ -114,13 +121,13 @@ services:
       retries: 3
 ```
 
-**3. 启动服务**
+**4. 启动服务**
 
 ```bash
 docker compose up -d
 ```
 
-**4. 验证部署**
+**5. 验证部署**
 
 ```bash
 curl http://localhost:3321/health
@@ -150,6 +157,12 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 | `POST` | `/api/v1/captchas/:type/:key/attempts` | 提交验证答案 | 无 |
 | `GET` | `/api/v1/captchas/states/:key` | 查询验证状态 (S2S) | `Authorization: Bearer <API_KEY>` |
 | `GET` | `/health` | 健康检查 | 无 |
+| `POST` | `/api/v1/admin/login` | 管理员登录（需携带行为验证 `second_key`） | 无，叠加 IP 限流 |
+| `GET` / `DELETE` | `/api/v1/admin/session` | 查询 / 注销当前管理会话 | `Authorization: Bearer <会话令牌>` |
+| `GET` / `POST` | `/api/v1/admin/backgrounds` | 列出 / 上传背景图 | `Authorization: Bearer <会话令牌>` |
+| `GET` / `DELETE` | `/api/v1/admin/backgrounds/:name` | 预览 / 删除单张背景图 | `Authorization: Bearer <会话令牌>` |
+
+`/admin/*` 路由仅在 `ADMIN_ENABLED=true` 时注册，详见 [管理后台](#管理后台登录--背景图管理)。
 
 以上验证码接口使用默认的 `API_PREFIX=/api/v1`。例如配置 `API_PREFIX=/captcha/api` 后，获取验证码接口将变为 `/captcha/api/captchas/:type`；配置 `/` 则直接挂载到 `/captchas`。
 
@@ -234,7 +247,7 @@ yarn add @aetherlib/g-captcha
 pnpm add @aetherlib/g-captcha
 ```
 
-> **要求**: React >= 19.0.0, React DOM >= 19.0.0
+> **要求**: React >= 18.0.0, React DOM >= 18.0.0（与 `peerDependencies` 一致；演示站与测试基于 React 19）
 
 ### 推荐接法
 
@@ -441,7 +454,78 @@ curl -X GET \
 
 ---
 
+## 管理后台（登录 + 背景图管理）
+
+后端内置一个可选的管理后台，用于在线管理验证码的背景图素材。它默认关闭，开启后不影响任何验证码接口。
+`sdk/playground` 即是它的演示站：登录页用本项目的行为验证码保护，登录后进入背景图管理页；顶栏的「接入文档」页则渲染本 README 的接入章节并提供在线体验。
+
+### 开启
+
+**开发环境**：`backend/.env.development` 已默认开启管理后台（账号 `admin` / `demo123`，明文密码启动时即时哈希），执行 `./run-dev.sh` 即可。
+
+**生产环境**：在 `backend/.env` 中配置，密码只接受 bcrypt 哈希。先生成哈希：
+
+```bash
+cd backend && make hash-password          # 交互输入密码，输出哈希，不进 shell 历史
+# 没有 Go 环境时用镜像生成：
+docker run --rm -i ghcr.io/pixel-chase/simple-captcha ./simple-captcha hash-password
+```
+
+再写入 `.env`（哈希含 `$`，必须单引号包裹）：
+
+```dotenv
+ADMIN_ENABLED=true
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH='$2a$10$...'
+ADMIN_SESSION_TTL=2h
+```
+
+素材目录由 `CAPTCHA_IMAGE_PATH` 决定（默认 `./images`）。上传与删除直接作用于该目录，
+因此容器部署时该目录必须**可写**：`docker-compose.yml` 默认以读写方式挂载 `./backend/images`，
+容器以 uid 1001 运行，宿主机目录需对其可写（例如 `chown -R 1001:1001 backend/images`）。
+
+### 登录流程
+
+```
+前端                                     验证码后端
+ │  useCaptcha().verify()  ──► 完成行为验证，得到 second_key
+ │  POST /admin/login { username, password, captchaKey: second_key }
+ ├────────────────────────────────────────►│ 1. 一次性消费 second_key（无论密码对错）
+ │                                         │ 2. 常量时间比对用户名 + bcrypt 校验密码
+ │  ◄── { token, username, expiresAt }     │ 3. 签发随机会话令牌，仅在 Redis 保存其哈希
+ │  后续请求携带 Authorization: Bearer <token>
+```
+
+每一次登录尝试都必须重新完成一次行为验证，密码暴力猜解的成本因此与过验证码的成本绑定。
+登录接口同时受 `CAPTCHA_IP_RATE_LIMIT` 限流保护。会话令牌有效期由 `ADMIN_SESSION_TTL` 控制，注销即失效。
+
+### 背景图管理
+
+| 操作 | 说明 |
+|------|------|
+| 列表 | 返回文件名、像素尺寸、体积、格式、修改时间，以及当前的上传约束 |
+| 上传 | `multipart/form-data`，字段名 `file`。服务端按真实内容识别格式（仅 JPEG / PNG），校验最小尺寸、像素总数与体积，文件名由服务端重新生成 |
+| 删除 | 拒绝删除最后一张，保证始终有素材可出题 |
+| 预览 | 返回原文件，需携带会话令牌 |
+
+上传或删除成功后，后端会**热重载**素材并丢弃已缓存的生成器实例，所有题型下一次出题即使用新素材，无需重启服务。
+
+**素材尺寸建议**：出图基础尺寸为 300×220，服务端按 `dpr` 最高放大到 3 倍。小于目标尺寸的素材会被等比放大以保证坐标空间正确，但会损失清晰度。
+
+| 出图倍率 | 建议最小尺寸 |
+|---|---|
+| 1x | 300 × 220（硬性下限） |
+| 2x | 600 × 440 |
+| 3x | 900 × 660 |
+
+> 当前实现把素材保存在本地磁盘，适用于单实例部署。多副本部署需挂载共享卷，否则各实例素材不一致。
+
+---
+
 ## 环境变量参考
+
+开发默认值见 [`backend/.env.development`](backend/.env.development)，生产模板见 [`backend/.env.example`](backend/.env.example)；
+`run-dev.sh` 与 `docker-compose.yml` 都从这些文件读取配置，不需要在命令行逐个导出。
 
 ### 必填
 
@@ -502,6 +586,18 @@ curl -X GET \
 | `MAX_REQUEST_SIZE` | 全局请求体上限（字节） | `33554432` |
 | `VERIFY_MAX_BODY_SIZE` | 校验提交接口（`/attempts`）的请求体上限（字节），超出返回 HTTP 413 | `262144` |
 
+### 管理后台
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `ADMIN_ENABLED` | 是否开放 `/admin/*` 管理接口 | `false` |
+| `ADMIN_USERNAME` | 管理员用户名 | `admin` |
+| `ADMIN_PASSWORD_HASH` | 管理员密码的 bcrypt 哈希（推荐） | 空 |
+| `ADMIN_PASSWORD` | 管理员明文密码，仅供本地演示；与 `ADMIN_PASSWORD_HASH` 二选一 | 空 |
+| `ADMIN_SESSION_TTL` | 登录会话有效期 | `2h` |
+| `ADMIN_MAX_UPLOAD_SIZE` | 单张背景图上传体积上限（字节），不能超过 `MAX_REQUEST_SIZE` | `5242880` |
+| `ADMIN_MAX_IMAGE_PIXELS` | 单张背景图像素总数上限，防止解压炸弹 | `24000000` |
+
 ---
 
 ## 本地开发
@@ -515,13 +611,14 @@ simple-captcha/
 │   ├── services/         # 业务逻辑层
 │   ├── middleware/        # 中间件（CORS、鉴权、限流等）
 │   ├── config/           # 环境变量配置
-│   ├── images/           # 验证码素材图片
+│   ├── images/           # 验证码素材图片（管理后台直接读写此目录）
 │   └── Dockerfile
 ├── sdk/                  # React 前端 SDK
 │   ├── src/
 │   │   ├── Captcha.tsx   # 核心组件
 │   │   ├── _internal/    # 内部渲染引擎（点选、滑块、旋转）
 │   │   └── hooks/        # 公共 Hooks
+│   ├── playground/       # 演示站：接入文档 + 行为验证登录 + 背景图管理（直接引用 src，热更新）
 │   └── package.json
 ├── docker-compose.yml    # 本地开发编排
 └── .github/workflows/    # CI/CD 自动发布
@@ -530,18 +627,36 @@ simple-captcha/
 ### 启动后端
 
 ```bash
-docker compose up -d
+cd backend
+./run-dev.sh               # 等价于 make dev
 # 验证：curl http://localhost:3321/health
 ```
 
-### 启动前端文档站
+脚本按优先级加载三层配置：命令行变量（如 `PORT=4000 ./run-dev.sh`）> `.env`（个人覆盖，不入库）> `.env.development`（仓库默认：本机 Redis、管理后台开启、账号 `admin` / `demo123`）。
+
+用 compose 跑生产形态：
 
 ```bash
-cd sdk
+cp backend/.env.example backend/.env       # 填写 Redis、API_KEY、管理员密码哈希
+docker compose up -d
+```
+
+### 启动前端演示站
+
+演示站包含两个页面：「接入文档」渲染本 README 的接入章节并提供五种题型的在线体验；「控制台」是用行为验证码保护的登录页，登录后进入背景图管理页。后端需以管理模式启动：
+
+```bash
+# 后端（位于 backend/，.env.development 已开启管理后台）
+./run-dev.sh
+
+# 前端（位于 sdk/）
 pnpm install
 pnpm start
-# 访问 http://localhost:8000/components/captcha 查看 Demo
+# 控制台 http://localhost:8000 ，账号 admin / demo123
+# 接入文档 http://localhost:8000/#/docs
 ```
+
+演示站默认请求 `http://127.0.0.1:3321`，如需指向其他地址，复制 `sdk/playground/.env.example` 为 `.env` 并修改 `VITE_API_BASE`。
 
 ---
 

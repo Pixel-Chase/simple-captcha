@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Aegis Auth - 行为验证安全验证码</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter,+sans-serif:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-variant": "#e4e0ef",
+            "on-error": "#ffffff",
+            "ink-secondary": "#273951",
+            "outline-variant": "#c8c4da",
+            "canvas-soft": "#f6f9fc",
+            "surface-bright": "#fcf8ff",
+            "outline": "#777588",
+            "on-background": "#1b1a25",
+            "error-container": "#ffdad6",
+            "tertiary": "#862a00",
+            "primary": "#3904e7",
+            "primary-fixed": "#e3dfff",
+            "ink-mute-2": "#61718a",
+            "tertiary-fixed-dim": "#ffb59b",
+            "on-surface-variant": "#474556",
+            "on-tertiary-fixed": "#380d00",
+            "hairline": "#e3e8ee",
+            "surface-container-highest": "#e4e0ef",
+            "ink-mute": "#64748d",
+            "on-tertiary": "#ffffff",
+            "primary-deep": "#4434d4",
+            "primary-press": "#2e2b8c",
+            "inverse-primary": "#c5c0ff",
+            "canvas": "#ffffff",
+            "primary-container": "#533afd",
+            "tertiary-container": "#ae3900",
+            "surface-tint": "#5036fa",
+            "on-primary-container": "#ddd9ff",
+            "on-primary-fixed": "#130067",
+            "on-primary": "#ffffff",
+            "hairline-input": "#a8c3de",
+            "background": "#fcf8ff",
+            "on-primary-fixed-variant": "#3600e1",
+            "surface-container": "#f0ecfb",
+            "surface-dim": "#dcd8e7",
+            "on-surface": "#1b1a25",
+            "ink": "#0d253d",
+            "surface-container-lowest": "#ffffff",
+            "on-tertiary-container": "#ffd3c5",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "on-tertiary-fixed-variant": "#812800",
+            "secondary-container": "#bdbefe",
+            "error": "#ba1a1a",
+            "secondary-fixed": "#e1e0ff",
+            "on-secondary-fixed-variant": "#3f4178",
+            "on-secondary": "#ffffff",
+            "primary-soft": "#665efd",
+            "surface": "#fcf8ff",
+            "primary-fixed-dim": "#c5c0ff",
+            "on-error-container": "#93000a",
+            "brand-dark-900": "#1c1e54",
+            "secondary-fixed-dim": "#c0c1ff",
+            "tertiary-fixed": "#ffdbcf",
+            "canvas-cream": "#f5e9d4",
+            "surface-container-high": "#eae6f5",
+            "surface-container-low": "#f6f2ff",
+            "on-secondary-fixed": "#12144b",
+            "inverse-on-surface": "#f3eefe",
+            "inverse-surface": "#302f3a",
+            "on-secondary-container": "#494b83",
+            "secondary": "#575992"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-lg": "16px",
+            "space-xl": "24px",
+            "margin": "24px",
+            "space-xs": "4px",
+            "gutter": "16px",
+            "space-huge": "64px",
+            "space-md": "12px",
+            "space-xxs": "2px",
+            "space-sm": "8px",
+            "space-xxl": "32px"
+          },
+          "fontFamily": {
+            "display-xxl": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"Inter, sans-serif\""],
+            "micro-cap": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""],
+            "button-sm": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "body-md": ["\"Inter, sans-serif\""],
+            "button-md": ["\"Inter, sans-serif\""],
+            "heading-sm": ["\"Inter, sans-serif\""],
+            "display-xl": ["\"Inter, sans-serif\""],
+            "body-lg": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }],
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .cutout-tab {
+      clip-path: path('M 0,0 L 44,0 A 7,7 0 0 1 44,14 A 7,7 0 0 0 44,28 A 7,7 0 0 1 44,42 L 0,42 Z');
+    }
+    .piece-tab {
+      clip-path: path('M 0,0 L 44,0 A 7,7 0 0 1 44,14 A 7,7 0 0 0 44,28 A 7,7 0 0 1 44,42 L 0,42 Z');
+    }
+    /* Disable default touch scrolling behavior during slider drag */
+    .touch-none-select {
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[#081524] text-ink min-h-screen flex items-center justify-center p-0 m-0 font-body-md antialiased selection:bg-primary selection:text-white">
+<!-- Mobile Viewport Simulation Shell (390px x 844px) -->
+<main class="w-full max-w-[390px] h-[844px] bg-canvas relative overflow-hidden flex flex-col shadow-2xl border border-hairline/20 rounded-[44px]">
+<!-- 1. HOST BACKGROUND: Financial Wire Transfer Review Page -->
+<div class="absolute inset-0 flex flex-col bg-canvas-soft select-none z-0">
+<!-- iOS Status Bar -->
+<div class="h-11 px-7 pt-3 flex justify-between items-center text-ink text-xs font-semibold tracking-tight">
+<span>09:42</span>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">signal_cellular_alt</span>
+<span class="material-symbols-outlined text-[16px]">wifi</span>
+<span class="material-symbols-outlined text-[18px]">battery_full</span>
+</div>
+</div>
+<!-- App Header -->
+<header class="px-5 py-3 flex items-center justify-between border-b border-hairline bg-canvas">
+<button aria-label="返回" class="p-1 -ml-1 text-ink">
+<span class="material-symbols-outlined text-[22px]">arrow_back_ios_new</span>
+</button>
+<span class="font-heading-sm text-heading-sm font-semibold text-ink">大额资金划转确认</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-ink-mute text-[20px]" data-icon="shield">shield</span>
+</div>
+</header>
+<!-- Transfer Summary Content -->
+<div class="flex-1 px-5 pt-4 space-y-4 overflow-hidden opacity-90">
+<!-- Amount Card -->
+<div class="bg-canvas p-5 rounded-2xl border border-hairline shadow-sm text-center">
+<span class="font-caption text-caption text-ink-mute uppercase tracking-wider block mb-1">转账汇款金额 (CNY)</span>
+<div class="font-display-lg text-display-lg font-light text-ink tracking-tight flex items-baseline justify-center gap-1">
+<span class="text-xl font-normal text-ink-mute">¥</span>
+<span class="font-semibold text-ink">80,000.00</span>
+</div>
+<div class="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-100">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            已核准授信头寸 · 即时划拨
+          </div>
+</div>
+<!-- Beneficiary Info -->
+<div class="bg-canvas p-4 rounded-xl border border-hairline space-y-3">
+<div class="flex justify-between items-center text-sm">
+<span class="text-ink-mute font-caption text-caption">收款企业账户</span>
+<span class="font-medium text-ink">上海浦软信息科技发展有限公司</span>
+</div>
+<div class="flex justify-between items-center text-sm border-t border-hairline/60 pt-2.5">
+<span class="text-ink-mute font-caption text-caption">收款银企专网</span>
+<span class="font-body-tabular text-body-tabular text-ink">招商银行 (尾号 9081)</span>
+</div>
+<div class="flex justify-between items-center text-sm border-t border-hairline/60 pt-2.5">
+<span class="text-ink-mute font-caption text-caption">付款凭证序列</span>
+<span class="font-body-tabular text-body-tabular text-ink-mute-2">TXN-2025-0588-4299</span>
+</div>
+</div>
+<!-- Security Warning Notice Card -->
+<div class="bg-amber-50/70 border border-amber-200/60 rounded-xl p-3 flex gap-2.5">
+<span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">verified_user</span>
+<div class="text-xs text-amber-900 leading-relaxed">
+<span class="font-semibold block mb-0.5">高额划款风控触发</span>
+            当前单笔划款超过 ¥50,000 阈值，需进行 Aegis 行为特征动态拼图鉴权以签发指令。
+          </div>
+</div>
+<!-- Ghost Action Button -->
+<div class="pt-2">
+<div class="w-full py-3.5 rounded-full bg-primary-container text-white text-center font-button-md text-button-md font-medium shadow-md opacity-80">
+            立即授权放款
+          </div>
+</div>
+</div>
+</div>
+<!-- 2. HIGH-POLARITY BACKDROP OVERLAY (Brand Navy Glassmorphic Scrim) -->
+<div class="absolute inset-0 bg-[#0d253d]/75 backdrop-blur-[6px] z-20 transition-all duration-300"></div>
+<!-- 3. BOTTOM SLIDE-UP JIGSAW VERIFICATION SHEET -->
+<section aria-label="行为验证拼图抽屉" class="absolute bottom-0 inset-x-0 bg-canvas rounded-t-[32px] pt-3 pb-6 px-5 z-30 shadow-[0_-12px_40px_rgba(13,37,61,0.28)] border-t border-hairline flex flex-col animate-in slide-in-from-bottom duration-300">
+<!-- Top Pill Handle Indicator -->
+<div class="w-10 h-1 bg-outline-variant/60 rounded-full mx-auto mb-3 cursor-grab"></div>
+<!-- Sheet Header Bar -->
+<header class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shadow-sm ring-2 ring-primary/15">
+<span class="material-symbols-outlined text-[20px]" data-icon="shield" style="font-variation-settings: 'FILL' 1;">shield</span>
+</div>
+<div>
+<h2 class="font-heading-sm text-heading-sm font-semibold text-ink leading-tight">
+              拖动滑块完成拼图
+            </h2>
+<p class="font-micro text-micro text-ink-mute mt-0.5">
+              行为特征动态采集保护中 · Aegis Guard v4.8
+            </p>
+</div>
+</div>
+<!-- Trailing Action Icons -->
+<div class="flex items-center gap-1">
+<button aria-label="刷新题目" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-mute hover:text-ink hover:bg-canvas-soft active:scale-95 transition-all duration-150" id="refreshChallengeBtn" title="刷新验证码">
+<span class="material-symbols-outlined text-[19px] transition-transform duration-500" id="refreshIcon">refresh</span>
+</button>
+<button aria-label="关闭" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-mute hover:text-ink hover:bg-canvas-soft active:scale-95 transition-all duration-150" title="关闭验证">
+<span class="material-symbols-outlined text-[19px]">close</span>
+</button>
+</div>
+</header>
+<!-- 4. CANVAS / JIGSAW IMAGE STAGE -->
+<div class="relative w-full h-[184px] rounded-2xl overflow-hidden border border-hairline shadow-inner bg-slate-900 group select-none">
+<!-- Scenic Image Background -->
+<img class="w-full h-full object-cover select-none pointer-events-none" data-alt="Cinematic aerial panoramic view of serene turquoise alpine glacial mountain lake surrounded by majestic snow-covered jagged peaks during crisp golden morning dawn. Soft volumetric sunlight mist reflects off clean glass water, institutional clarity, pristine cinematic photograph in light palette with deep sapphire blue shadows and radiant highlights." id="captchaImage" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALpH70-Lzxwn2j8DY67yp-CLw7iqJpt8MutZnHgZgCNl93RCwa2OWyUmxhr2qKszmo5k72iNStW3avflfWF8gIYzsVou5ortSy-kcmMqw2SE1ADDcrMlFr6TqQxbTsxK4NuD92Ex-atYlYOM8n_2cQBMVW8vJpUUB_VtBHvq0fan0ySkv4tFoDsUAYK5uYEyKj35fMg_f-u7b7RHJvymj3klhHVlS_g_cjXyjjeSGiYgiEQhk0hV8hTFPA7DTb152D1hU2S_zzLtQ"/>
+<!-- Subtle Top Vignette Mesh Gradient -->
+<div class="absolute inset-0 bg-gradient-to-b from-brand-dark-900/40 via-transparent to-brand-dark-900/60 pointer-events-none"></div>
+<!-- Jigsaw Target Cutout Slot (Fixed at ~72% X: ~245px, Y: 46px) -->
+<div class="absolute cutout-tab z-10" id="targetSlot" style="left: 242px; top: 46px; width: 44px; height: 44px;">
+<!-- Dark Inset Recess Simulation -->
+<div class="w-full h-full bg-[#0d253d]/75 backdrop-blur-[2px] border-2 border-white/70 shadow-[inset_0_3px_8px_rgba(0,0,0,0.85)] flex items-center justify-center">
+<!-- Aim Crosshair Reticle -->
+<div class="w-2.5 h-2.5 border-t border-l border-white/40"></div>
+</div>
+<!-- Micro Tolerance Badge -->
+<div class="absolute -top-5 -left-3 whitespace-nowrap bg-brand-dark-900/90 text-white font-micro-cap text-micro-cap px-1.5 py-0.5 rounded shadow-sm border border-white/10 backdrop-blur-md">
+            咬合容差 ±3px
+          </div>
+</div>
+<!-- Jigsaw Draggable Puzzle Piece -->
+<div class="absolute piece-tab z-20 transition-transform duration-75 ease-out shadow-[0_10px_25px_rgba(0,0,0,0.6)] cursor-grab active:cursor-grabbing ring-1 ring-white/90" id="puzzlePiece" style="left: 12px; top: 46px; width: 44px; height: 44px;">
+<!-- Cropped Puzzle View Replica -->
+<div class="relative w-full h-full overflow-hidden bg-slate-800">
+<img class="absolute pointer-events-none max-w-none select-none" data-alt="Cinematic aerial panoramic view of serene turquoise alpine glacial mountain lake surrounded by majestic snow-covered jagged peaks during crisp golden morning dawn. Soft volumetric sunlight mist reflects off clean glass water, institutional clarity, pristine cinematic photograph in light palette with deep sapphire blue shadows and radiant highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcOvGLLfIXwM10V3SEMg5Ng4qBC28lf6HD_gt_036E8cYz53TDIUg4GH6pOJ9S6K8fv1f25GJJqShXGFHDVwKI_GPRi8XAuyKsQBVhJyVStq9fIXHIdnBWxDV1x541Ac4-sUTwuQaFApT68UzlTr5s8BGfShdpjiTxvbIzQYOrWJqieqFmxHbxfvHJrhD9Q_LkJxCZM8i9lKIPBQhavWdlpe5B0nbgUbB7WJwkZgNwb7gmazMEQi8IZbH6Zk6oFrpX658NtN5kXsM" style="left: -242px; top: -46px; width: 350px; height: 184px; object-fit: cover;"/>
+<!-- High-gloss Edge Highlight Layer -->
+<div class="absolute inset-0 bg-gradient-to-tr from-white/20 via-transparent to-primary/30 pointer-events-none"></div>
+</div>
+<!-- Dynamic Telemetry HUD Tag (Floats above the piece) -->
+<div class="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap bg-primary-container/95 text-white font-micro-cap text-micro-cap px-2 py-0.5 rounded-full shadow-lg border border-primary-fixed/30 flex items-center gap-1 backdrop-blur-md pointer-events-none opacity-90 transition-opacity" id="telemetryTag">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+<span id="telemetryDelta">ΔX: +0px</span>
+<span class="text-white/60">|</span>
+<span>120Hz</span>
+</div>
+</div>
+<!-- Image Bottom Security Footer Strip -->
+<div class="absolute bottom-0 inset-x-0 h-6 bg-brand-dark-900/80 backdrop-blur-md border-t border-white/10 px-3 flex items-center justify-between text-white/80 font-micro text-micro">
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span>
+<span class="text-white/90 font-medium">安全协议就绪</span>
+</div>
+<div class="flex items-center gap-1 text-white/60 font-micro-cap text-micro-cap tracking-wider">
+<span class="material-symbols-outlined text-[12px] text-white/70">lock</span>
+<span>零知识防护 · AES-256 GCM</span>
+</div>
+</div>
+</div>
+<!-- 5. SLIDER INTERACTION TRACK -->
+<div class="mt-4 relative">
+<div class="w-full h-[52px] bg-canvas-soft border border-hairline rounded-full relative flex items-center overflow-hidden shadow-inner touch-none-select select-none" id="sliderTrack">
+<!-- Indigo Gradient Progress Fill -->
+<div class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-primary-container via-primary-deep to-primary-soft w-[52px] rounded-l-full transition-all duration-75" id="progressFill"></div>
+<!-- Centered Instruction Prompt -->
+<div class="absolute inset-0 flex items-center justify-center font-button-sm text-button-sm font-medium text-ink-mute pointer-events-none select-none pl-6 tracking-wide transition-opacity duration-200" id="trackPrompt">
+            向右拖动滑块完成拼图
+          </div>
+<!-- Draggable Pill Handle (46px size) -->
+<div aria-label="拼图校准滑块" aria-valuemax="230" aria-valuemin="0" aria-valuenow="0" class="absolute left-[3px] w-[46px] h-[46px] rounded-full bg-canvas shadow-[0_3px_12px_rgba(13,37,61,0.22)] border border-hairline flex items-center justify-center text-primary-container cursor-grab active:cursor-grabbing active:scale-[0.98] transition-transform duration-75 z-10 hover:shadow-[0_4px_16px_rgba(83,58,253,0.3)]" id="sliderHandle" role="slider" tabindex="0">
+<span class="material-symbols-outlined text-[24px] transition-transform group-hover:translate-x-0.5">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- 6. SECONDARY ACTIONS & RISK TELEMETRY FOOTER -->
+<div class="mt-3.5 flex items-center justify-between text-ink-mute font-caption text-caption">
+<!-- Left: Accessibility & Refresh challenge -->
+<div class="flex items-center gap-3">
+<button class="inline-flex items-center gap-1 hover:text-primary transition-colors text-xs text-ink-mute font-medium py-1">
+<span class="material-symbols-outlined text-[16px]">volume_up</span>
+<span>语音验证</span>
+</button>
+<span class="text-hairline">|</span>
+<button class="inline-flex items-center gap-1 hover:text-primary transition-colors text-xs text-ink-mute font-medium py-1" id="textRefreshBtn">
+<span class="material-symbols-outlined text-[16px]">restart_alt</span>
+<span>换一张</span>
+</button>
+</div>
+<!-- Right: Telemetry Latency Stats -->
+<div class="flex items-center gap-1.5 text-xs text-ink-mute-2">
+<span class="material-symbols-outlined text-[14px] text-emerald-600">verified</span>
+<span class="font-body-tabular text-body-tabular">耗时 <span id="timingValue">0.68s</span> · 严格容差</span>
+</div>
+</div>
+<!-- 7. SECURITY ARCHITECTURE COMPLIANCE ENDORSEMENT -->
+<footer class="mt-4 pt-3 border-t border-hairline/70 text-center">
+<p class="font-micro text-micro text-ink-mute leading-normal">
+          Powered by <strong class="text-ink font-semibold">Aegis Risk Engine</strong> · 金融级无感行为特征鉴权
+        </p>
+<div class="flex items-center justify-center gap-2 mt-1 font-micro-cap text-micro-cap text-ink-mute-2">
+<span>PCI-DSS 4.0 认证</span>
+<span>•</span>
+<span>SOC2 Type II 合规</span>
+<span>•</span>
+<span>零数据留存保护</span>
+</div>
+</footer>
+</section>
+</main>
+<!-- Interactive Validation Micro-Interaction Script -->
+<script>
+    (function initJigsawSlider() {
+      const handle = document.getElementById('sliderHandle');
+      const track = document.getElementById('sliderTrack');
+      const progress = document.getElementById('progressFill');
+      const piece = document.getElementById('puzzlePiece');
+      const promptText = document.getElementById('trackPrompt');
+      const deltaText = document.getElementById('telemetryDelta');
+      const refreshBtn = document.getElementById('refreshChallengeBtn');
+      const textRefreshBtn = document.getElementById('textRefreshBtn');
+      const refreshIcon = document.getElementById('refreshIcon');
+      const timingValue = document.getElementById('timingValue');
+
+      if (!handle || !track || !progress || !piece) return;
+
+      const TARGET_OFFSET = 230; // Pixel coordinate of target cutout relative to puzzle piece initial pos (242 - 12)
+      const TOLERANCE = 4;       // Permitted discrepancy in px
+      const maxSlider = track.clientWidth - handle.clientWidth - 6; // ~294px on 350px width track
+
+      let isDragging = false;
+      let startX = 0;
+      let currentX = 0;
+      let startTime = null;
+
+      function updatePositions(x) {
+        // Clamp slider movement
+        const clampedX = Math.max(0, Math.min(x, maxSlider));
+        handle.style.left = `${clampedX + 3}px`;
+        progress.style.width = `${clampedX + 46}px`;
+
+        // Map slider displacement directly to jigsaw piece displacement
+        const pieceDisplacement = (clampedX / maxSlider) * TARGET_OFFSET;
+        piece.style.transform = `translateX(${pieceDisplacement}px)`;
+
+        // Update real-time HUD telemetry
+        if (deltaText) {
+          deltaText.textContent = `ΔX: +${Math.round(pieceDisplacement)}px`;
+        }
+
+        // Fade prompt text as soon as user initiates drag
+        if (promptText) {
+          promptText.style.opacity = Math.max(0, 1 - (clampedX / 40)).toString();
+        }
+      }
+
+      function onStart(e) {
+        isDragging = true;
+        startX = (e.touches ? e.touches[0].clientX : e.clientX) - (currentX || 0);
+        startTime = performance.now();
+        handle.classList.remove('transition-all');
+        piece.classList.remove('transition-transform');
+        progress.classList.remove('transition-all');
+      }
+
+      function onMove(e) {
+        if (!isDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        currentX = clientX - startX;
+        updatePositions(currentX);
+      }
+
+      function onEnd() {
+        if (!isDragging) return;
+        isDragging = false;
+        const endTime = performance.now();
+        const durationSec = ((endTime - (startTime || endTime)) / 1000).toFixed(2);
+        if (timingValue) timingValue.textContent = `${durationSec}s`;
+
+        // Check verification target alignment
+        const clampedX = Math.max(0, Math.min(currentX, maxSlider));
+        const finalPiecePos = (clampedX / maxSlider) * TARGET_OFFSET;
+        const difference = Math.abs(finalPiecePos - TARGET_OFFSET);
+
+        if (difference <= TOLERANCE) {
+          // Success State feedback
+          handle.style.backgroundColor = '#10b981';
+          handle.innerHTML = '<span class="material-symbols-outlined text-white text-[24px]">check</span>';
+          progress.classList.add('from-emerald-500', 'to-teal-500');
+          piece.classList.add('ring-4', 'ring-emerald-400');
+          if (deltaText) deltaText.textContent = '验证通过 · 置信度99.8%';
+          
+          setTimeout(() => {
+            alert('Aegis 安全网关验证通过，已授权转账执行！');
+          }, 250);
+        } else {
+          // Failure Snap-back spring
+          handle.classList.add('transition-all', 'duration-300');
+          piece.classList.add('transition-transform', 'duration-300');
+          progress.classList.add('transition-all', 'duration-300');
+          currentX = 0;
+          updatePositions(0);
+          if (promptText) promptText.style.opacity = '1';
+        }
+      }
+
+      // Drag event listeners
+      handle.addEventListener('mousedown', onStart);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+
+      handle.addEventListener('touchstart', onStart, { passive: true });
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', onEnd);
+
+      // Refresh challenge micro-interaction
+      function triggerRefresh() {
+        refreshIcon.classList.add('rotate-180');
+        currentX = 0;
+        updatePositions(0);
+        setTimeout(() => {
+          refreshIcon.classList.remove('rotate-180');
+        }, 500);
+      }
+
+      if (refreshBtn) refreshBtn.addEventListener('click', triggerRefresh);
+      if (textRefreshBtn) textRefreshBtn.addEventListener('click', triggerRefresh);
+    })();
+  </script>
+</body></html>

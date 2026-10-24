@@ -29,24 +29,21 @@ func loadSlideGraphs() []*slide.GraphImage {
 // SlideTextCaptchaService 滑块拼图验证码服务
 type SlideTextCaptchaService struct {
 	*BaseService
-	backgrounds *backgroundCache
+	backgrounds *BackgroundStore
 	graphs      []*slide.GraphImage
 	instances   *instanceCache[slide.Captcha]
 }
 
 // NewSlideTextCaptchaService 创建滑块拼图验证码服务
-func NewSlideTextCaptchaService() *SlideTextCaptchaService {
-	images, err := helper.GetImages()
-	if err != nil {
-		log.Fatalln("加载图片资源失败:", err)
-	}
-
+func NewSlideTextCaptchaService(backgrounds *BackgroundStore) *SlideTextCaptchaService {
 	service := &SlideTextCaptchaService{
 		BaseService: NewBaseService(),
-		backgrounds: newBackgroundCache(images),
+		backgrounds: backgrounds,
 		graphs:      loadSlideGraphs(),
 	}
 	service.instances = newInstanceCache(service.build)
+	// 素材热重载后丢弃已构建的生成器实例，下一次出题使用新素材
+	backgrounds.OnReload(service.instances.reset)
 	return service
 }
 
@@ -62,7 +59,7 @@ func (s *SlideTextCaptchaService) build(key instanceKey) slide.Captcha {
 	)
 	builder.SetResources(
 		slide.WithGraphImages(s.graphs),
-		slide.WithBackgrounds(s.backgrounds.get(size.Width, size.Height)),
+		slide.WithBackgrounds(s.backgrounds.Get(size.Width, size.Height)),
 	)
 	return builder.Make()
 }

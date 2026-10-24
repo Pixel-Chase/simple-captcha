@@ -27,7 +27,7 @@ simple-captcha/
     │   ├── _internal/           # 内部核心渲染引擎（对外严格保密，处理点选、滑块等视图）
     │   ├── hooks/               # 供用户引用的公共 Hooks (如用以触发请求和弹出框)
     │   └── utils/               # 内部工具函数
-    ├── playground/              # 基于 Vite 的本地演示页（直接引用 src，热更新）
+    ├── playground/              # 基于 Vite 的演示站：接入文档（渲染根目录 README）+ 管理控制台（直接引用 src，热更新）
     └── package.json
 ```
 
@@ -72,5 +72,6 @@ simple-captcha/
 3. **接口约定对齐**: 若后端调整了参数入参或返回值，必须当即去 `sdk/src/hooks/use-captcha-request.ts` 和相关 `types` 中进行同步修复。
 
 > **日常调试指北：**
-> * 启动后端服务 (位于 `backend/`)： `go run main.go` 或执行 `sh run-dev.sh`
+> * 启动后端服务 (位于 `backend/`)： `./run-dev.sh`（依次加载 `.env` 与 `.env.development`，默认开启管理后台 admin / demo123）；生产配置复制 `.env.example` 为 `.env`
 > * 启动前端本地演示页 (位于 `sdk/`，热更新引用 `src` 源码)： `pnpm start`；构建 SDK 产物： `pnpm build`
+> * 接入文档页（`/#/docs`）以 `?raw` 读取仓库根目录 `README.md`，按二级标题切分后用 marked 渲染；展示哪些章节、如何分组见 `sdk/playground/docs/content.ts`。修订接入说明只改 README，不要在 playground 里另写一份；README 二级标题改名时同步更新该清单

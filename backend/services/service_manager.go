@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"simple-captcha/config"
 	"simple-captcha/helper"
 	"sync"
 )
@@ -11,6 +12,8 @@ import (
 type ServiceManagerImpl struct {
 	captchaServices map[string]CaptchaService
 	verifyServices  map[string]VerifyService
+	backgrounds     *BackgroundStore
+	admin           *AdminService
 	riskControl     RiskControlService
 	cache           CacheService
 	clientRisk      *ClientRiskStore
@@ -53,12 +56,25 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	sm.riskEngine = NewRiskEngine(sm.clientRisk)
 	sm.policy = NewChallengePolicy(sm.clientRisk)
 
+	// 背景图仓库：全部题型共用一份解码后的素材，管理接口增删素材后可热重载
+	cfg := config.LoadConfig()
+	backgrounds, err := NewBackgroundStore(helper.ResolveImageDir(cfg.Captcha.ImagePath))
+	if err != nil {
+		log.Fatalln("加载背景图失败:", err)
+	}
+	sm.backgrounds = backgrounds
+
 	// 注册验证码服务
-	sm.captchaServices["click-text"] = NewClickTextCaptchaService()
-	sm.captchaServices["click-shape"] = NewClickShapeCaptchaService()
-	sm.captchaServices["rotate"] = NewRotateCaptchaService()
-	sm.captchaServices["slide-text"] = NewSlideTextCaptchaService()
-	sm.captchaServices["slide-region"] = NewSlideRegionCaptchaService()
+	sm.captchaServices["click-text"] = NewClickTextCaptchaService(backgrounds)
+	sm.captchaServices["click-shape"] = NewClickShapeCaptchaService(backgrounds)
+	sm.captchaServices["rotate"] = NewRotateCaptchaService(backgrounds)
+	sm.captchaServices["slide-text"] = NewSlideTextCaptchaService(backgrounds)
+	sm.captchaServices["slide-region"] = NewSlideRegionCaptchaService(backgrounds)
+
+	// 管理后台（可选）：登录前置验证码由风控服务消费，素材增删作用于同一个仓库
+	if cfg.Admin.Enabled {
+		sm.admin = NewAdminService(cfg.Admin, backgrounds, sm.riskControl)
+	}
 
 	// 注册验证服务
 	sm.verifyServices["click-text"] = NewClickTextVerifyService()
@@ -166,6 +182,22 @@ func (sm *ServiceManagerImpl) GetClientRiskStore() *ClientRiskStore {
 	return sm.clientRisk
 }
 
+// GetBackgroundStore 获取全部题型共用的背景图仓库
+func (sm *ServiceManagerImpl) GetBackgroundStore() *BackgroundStore {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.backgrounds
+}
+
+// GetAdminService 获取管理后台服务；未开启 ADMIN_ENABLED 时返回 nil
+func (sm *ServiceManagerImpl) GetAdminService() *AdminService {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.admin
+}
+
 // GetAllCaptchaServices 获取所有验证码服务
 func (sm *ServiceManagerImpl) GetAllCaptchaServices() map[string]CaptchaService {
 	sm.mutex.RLock()
@@ -239,6 +271,12 @@ func (sm *ServiceManagerImpl) GetServiceStatistics() map[string]interface{} {
 		stats["risk_control"] = riskService.GetStatistics()
 	}
 
+	// 背景素材数量与管理后台开关
+	if sm.backgrounds != nil {
+		stats["background_count"] = sm.backgrounds.Count()
+	}
+	stats["admin_enabled"] = sm.admin != nil
+
 	// 添加服务列表
 	captchaTypes := make([]string, 0, len(sm.captchaServices))
 	for serviceType := range sm.captchaServices {
@@ -265,6 +303,8 @@ func (sm *ServiceManagerImpl) Shutdown() {
 	// 清理资源
 	sm.captchaServices = make(map[string]CaptchaService)
 	sm.verifyServices = make(map[string]VerifyService)
+	sm.backgrounds = nil
+	sm.admin = nil
 	sm.riskControl = nil
 	sm.cache = nil
 	sm.clientRisk = nil

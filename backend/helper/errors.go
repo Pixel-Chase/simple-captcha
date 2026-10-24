@@ -20,6 +20,15 @@ const (
 	ErrCodeClientMismatch  = 1007 // 提交客户端与出题客户端不一致
 	ErrCodeRiskBlocked     = 1008 // 风控评分过高被拦截（仅用于服务端标识；对外统一返回 ErrCodeVerifyFailed，避免成为调参探针）
 	ErrCodePowInvalid      = 1009 // 工作量证明缺失或无效
+
+	// 管理后台错误码（2xxx）
+	ErrCodeUnauthorized       = 2001 // 未登录或会话已过期
+	ErrCodeLoginFailed        = 2002 // 用户名或密码错误
+	ErrCodeCaptchaRequired    = 2003 // 登录前置行为验证缺失或已失效
+	ErrCodeInvalidImage       = 2004 // 上传文件不是受支持的图片或不满足尺寸要求
+	ErrCodeImageTooLarge      = 2005 // 上传体积超限
+	ErrCodeLastBackground     = 2006 // 至少需要保留一张背景图
+	ErrCodeBackgroundNotFound = 2007 // 背景图不存在
 )
 
 // CaptchaError 自定义错误类型
@@ -62,6 +71,12 @@ var (
 	ErrClientMismatch  = NewCaptchaError(ErrCodeClientMismatch, "验证码已失效，请重新获取")
 	ErrRiskBlocked     = NewCaptchaError(ErrCodeRiskBlocked, "验证失败")
 	ErrPowInvalid      = NewCaptchaError(ErrCodePowInvalid, "验证失败，请刷新后重试")
+
+	ErrUnauthorized       = NewCaptchaError(ErrCodeUnauthorized, "未登录或会话已过期")
+	ErrLoginFailed        = NewCaptchaError(ErrCodeLoginFailed, "用户名或密码错误")
+	ErrCaptchaRequired    = NewCaptchaError(ErrCodeCaptchaRequired, "请先完成行为验证")
+	ErrLastBackground     = NewCaptchaError(ErrCodeLastBackground, "至少需要保留一张背景图")
+	ErrBackgroundNotFound = NewCaptchaError(ErrCodeBackgroundNotFound, "背景图不存在")
 )
 
 // HTTPStatusFromError 根据错误码返回HTTP状态码
@@ -73,6 +88,16 @@ func HTTPStatusFromError(err *CaptchaError) int {
 		return http.StatusTooManyRequests
 	case ErrCodeInternalError, ErrCodeCacheError, ErrCodeCaptchaGenError:
 		return http.StatusInternalServerError
+	case ErrCodeUnauthorized, ErrCodeLoginFailed:
+		return http.StatusUnauthorized
+	case ErrCodeCaptchaRequired, ErrCodeInvalidImage:
+		return http.StatusBadRequest
+	case ErrCodeImageTooLarge:
+		return http.StatusRequestEntityTooLarge
+	case ErrCodeLastBackground:
+		return http.StatusConflict
+	case ErrCodeBackgroundNotFound:
+		return http.StatusNotFound
 	default:
 		return http.StatusOK
 	}

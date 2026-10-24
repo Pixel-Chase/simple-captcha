@@ -2,7 +2,7 @@
 
 采用 go-captcha 的 React SDK 封装，提供组件模式与 Hook 模式两种接入方式。
 
-> 本版本要求 `react@19` 与 `react-dom@19`。
+> `peerDependencies` 为 `react >= 18` 与 `react-dom >= 18`，演示站与测试基于 React 19。
 
 ## 推荐用法
 

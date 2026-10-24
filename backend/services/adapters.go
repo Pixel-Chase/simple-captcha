@@ -13,7 +13,7 @@ type ClickTextService struct {
 
 func (s *ClickTextService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
 	if s.service == nil {
-		s.service = NewClickTextCaptchaService()
+		s.service = NewClickTextCaptchaService(GetServiceManager().GetBackgroundStore())
 	}
 	return s.service.GenerateCaptcha(req)
 }
@@ -29,7 +29,7 @@ type ClickShapeService struct {
 
 func (s *ClickShapeService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
 	if s.service == nil {
-		s.service = NewClickShapeCaptchaService()
+		s.service = NewClickShapeCaptchaService(GetServiceManager().GetBackgroundStore())
 	}
 	return s.service.GenerateCaptcha(req)
 }
@@ -45,7 +45,7 @@ type RotateService struct {
 
 func (s *RotateService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
 	if s.service == nil {
-		s.service = NewRotateCaptchaService()
+		s.service = NewRotateCaptchaService(GetServiceManager().GetBackgroundStore())
 	}
 	return s.service.GenerateCaptcha(req)
 }
@@ -61,7 +61,7 @@ type SlideTextService struct {
 
 func (s *SlideTextService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
 	if s.service == nil {
-		s.service = NewSlideTextCaptchaService()
+		s.service = NewSlideTextCaptchaService(GetServiceManager().GetBackgroundStore())
 	}
 	return s.service.GenerateCaptcha(req)
 }
@@ -77,7 +77,7 @@ type SlideRegionService struct {
 
 func (s *SlideRegionService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
 	if s.service == nil {
-		s.service = NewSlideRegionCaptchaService()
+		s.service = NewSlideRegionCaptchaService(GetServiceManager().GetBackgroundStore())
 	}
 	return s.service.GenerateCaptcha(req)
 }

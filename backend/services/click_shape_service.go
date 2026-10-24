@@ -14,28 +14,25 @@ import (
 type ClickShapeCaptchaService struct {
 	*BaseService
 	shapes      map[string]image.Image
-	backgrounds *backgroundCache
+	backgrounds *BackgroundStore
 	instances   *instanceCache[click.Captcha]
 }
 
 // NewClickShapeCaptchaService 创建点击形状验证码服务
-func NewClickShapeCaptchaService() *ClickShapeCaptchaService {
+func NewClickShapeCaptchaService(backgrounds *BackgroundStore) *ClickShapeCaptchaService {
 	shapeMaps, err := shapes.GetShapes()
 	if err != nil {
 		log.Fatalln("加载形状数据失败:", err)
 	}
 
-	images, err := helper.GetImages()
-	if err != nil {
-		log.Fatalln("加载图片资源失败:", err)
-	}
-
 	service := &ClickShapeCaptchaService{
 		BaseService: NewBaseService(),
 		shapes:      shapeMaps,
-		backgrounds: newBackgroundCache(images),
+		backgrounds: backgrounds,
 	}
 	service.instances = newInstanceCache(service.build)
+	// 素材热重载后丢弃已构建的生成器实例，下一次出题使用新素材
+	backgrounds.OnReload(service.instances.reset)
 	return service
 }
 
@@ -59,7 +56,7 @@ func (s *ClickShapeCaptchaService) build(key instanceKey) click.Captcha {
 
 	builder.SetResources(
 		click.WithShapes(s.shapes),
-		click.WithBackgrounds(s.backgrounds.get(size.Width, size.Height)),
+		click.WithBackgrounds(s.backgrounds.Get(size.Width, size.Height)),
 	)
 	return builder.MakeWithShape()
 }

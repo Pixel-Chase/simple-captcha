@@ -8,32 +8,20 @@ services:
       - "3321:3321"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # 全部业务配置来自 backend/.env（不入库）：cp backend/.env.example backend/.env 后按需修改。
+    # 含 $ 的值（如 bcrypt 哈希）要用单引号包裹。
+    env_file:
+      - ./backend/.env
     environment:
-      # ===== 可在业务线根据真实环境独立配置的 Redis 连接节点 =====
-      - REDIS_HOST=host.docker.internal
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - REDIS_DB=2
-      - REDIS_POOL_SIZE=20
-
-      # ===== 基础与安全配置 =====
+      # 与上方端口映射和健康检查绑定，固定写在这里，不放进 .env
       - PORT=3321
-      - GIN_MODE=release
       - HOST=0.0.0.0
-      - API_PREFIX=/api/v1
-      - API_KEY=your_secure_api_key_here
-
-      # ===== 业务验证频率以及高可用度配置 =====
-      - CAPTCHA_EXPIRE_TIME=5m
-      - CAPTCHA_MAX_ATTEMPTS=5
-      - CAPTCHA_IP_RATE_LIMIT=30
-      - ENABLE_RATE_LIMIT=true
-      - RATE_LIMIT_REQUESTS=100
-      - ENABLE_METRICS=true
 
     volumes:
       - ./backend/logs:/app/logs
-      - ./backend/images:/app/images:ro
+      # 背景图目录以读写方式挂载：管理后台的上传 / 删除直接落到宿主机目录
+      # 开启 ADMIN_ENABLED 时需对容器内 uid 1001 可写：chown -R 1001:1001 backend/images
+      - ./backend/images:/app/images
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3321/health" ]

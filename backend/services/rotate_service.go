@@ -1,7 +1,6 @@
 package services
 
 import (
-	"log"
 	"simple-captcha/helper"
 
 	"github.com/wenlng/go-captcha/v2/rotate"
@@ -13,22 +12,19 @@ var baseRotateThumbSizes = []int{140, 150, 160, 170}
 // RotateCaptchaService 旋转验证码服务
 type RotateCaptchaService struct {
 	*BaseService
-	backgrounds *backgroundCache
+	backgrounds *BackgroundStore
 	instances   *instanceCache[rotate.Captcha]
 }
 
 // NewRotateCaptchaService 创建旋转验证码服务
-func NewRotateCaptchaService() *RotateCaptchaService {
-	images, err := helper.GetImages()
-	if err != nil {
-		log.Fatalln("加载图片资源失败:", err)
-	}
-
+func NewRotateCaptchaService(backgrounds *BackgroundStore) *RotateCaptchaService {
 	service := &RotateCaptchaService{
 		BaseService: NewBaseService(),
-		backgrounds: newBackgroundCache(images),
+		backgrounds: backgrounds,
 	}
 	service.instances = newInstanceCache(service.build)
+	// 素材热重载后丢弃已构建的生成器实例，下一次出题使用新素材
+	backgrounds.OnReload(service.instances.reset)
 	return service
 }
 
@@ -43,7 +39,7 @@ func (s *RotateCaptchaService) build(key instanceKey) rotate.Captcha {
 		rotate.WithRangeAnglePos(profile.RotateAngles),
 	)
 	builder.SetResources(
-		rotate.WithImages(s.backgrounds.get(square, square)),
+		rotate.WithImages(s.backgrounds.Get(square, square)),
 	)
 	return builder.Make()
 }

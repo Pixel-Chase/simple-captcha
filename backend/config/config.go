@@ -23,6 +23,7 @@ type Config struct {
 	Monitoring MonitoringConfig
 	Security   SecurityConfig
 	Risk       RiskConfig
+	Admin      AdminConfig
 }
 
 // ServerConfig 服务器配置
@@ -94,6 +95,18 @@ type RiskConfig struct {
 	BlockThreshold    int           // 达到该分数直接拒绝本次校验（enforce 模式）
 	StateTTL          time.Duration // 客户端风控状态在 Redis 中的保留时间
 	TelemetryLogSize  int           // Redis 中保留的最近遥测记录条数，0 表示不落 Redis
+}
+
+// AdminConfig 管理后台配置（管理员登录 + 背景图管理），默认关闭。
+// 关闭时相关路由完全不注册，纯验证码部署不受任何影响。
+type AdminConfig struct {
+	Enabled        bool          // 是否开放管理接口
+	Username       string        // 管理员用户名
+	Password       string        // 管理员明文密码：仅便于本地演示，启动时即时转为 bcrypt 哈希
+	PasswordHash   string        // 管理员密码的 bcrypt 哈希，生产环境应使用此项
+	SessionTTL     time.Duration // 登录会话有效期
+	MaxUploadSize  int64         // 单张背景图上传体积上限（字节）
+	MaxImagePixels int           // 单张背景图像素总数上限，防止解压炸弹
 }
 
 // LoggingConfig 日志配置
@@ -279,6 +292,15 @@ func loadFromEnv() *Config {
 			APIKey:            getEnv("API_KEY", ""),
 			RateLimitBackend:  strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_BACKEND", "redis"))),
 		},
+		Admin: AdminConfig{
+			Enabled:        getBoolEnv("ADMIN_ENABLED", false),
+			Username:       getEnv("ADMIN_USERNAME", "admin"),
+			Password:       getEnv("ADMIN_PASSWORD", ""),
+			PasswordHash:   getEnv("ADMIN_PASSWORD_HASH", ""),
+			SessionTTL:     getDurationEnv("ADMIN_SESSION_TTL", 2*time.Hour),
+			MaxUploadSize:  getInt64Env("ADMIN_MAX_UPLOAD_SIZE", 5<<20), // 5MB
+			MaxImagePixels: getIntEnv("ADMIN_MAX_IMAGE_PIXELS", 24_000_000),
+		},
 	}
 }
 
@@ -347,6 +369,23 @@ func validateConfig(config *Config) error {
 	}
 	if config.Security.RateLimitBackend != "redis" && config.Security.RateLimitBackend != "memory" {
 		return fmt.Errorf("RATE_LIMIT_BACKEND must be redis or memory")
+	}
+	if config.Admin.Enabled {
+		if strings.TrimSpace(config.Admin.Username) == "" {
+			return fmt.Errorf("ADMIN_USERNAME cannot be empty when ADMIN_ENABLED=true")
+		}
+		if config.Admin.Password == "" && config.Admin.PasswordHash == "" {
+			return fmt.Errorf("ADMIN_PASSWORD_HASH (or ADMIN_PASSWORD) must be set when ADMIN_ENABLED=true")
+		}
+		if config.Admin.SessionTTL <= 0 {
+			return fmt.Errorf("ADMIN_SESSION_TTL must be positive")
+		}
+		if config.Admin.MaxUploadSize <= 0 || config.Admin.MaxUploadSize > config.Security.MaxRequestSize {
+			return fmt.Errorf("ADMIN_MAX_UPLOAD_SIZE must be between 1 and MAX_REQUEST_SIZE (%d)", config.Security.MaxRequestSize)
+		}
+		if config.Admin.MaxImagePixels <= 0 {
+			return fmt.Errorf("ADMIN_MAX_IMAGE_PIXELS must be positive")
+		}
 	}
 	return nil
 }

@@ -38,3 +38,10 @@ func (c *instanceCache[T]) get(level, scale int, mode string) T {
 	c.items[key] = inst
 	return inst
 }
+
+// reset 丢弃全部已构建实例；背景素材热重载后调用，下一次 get 会用新素材重建
+func (c *instanceCache[T]) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = make(map[instanceKey]T)
+}

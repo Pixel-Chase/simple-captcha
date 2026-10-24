@@ -45,9 +45,13 @@ run:
 	$(GOBUILD) -o $(BINARY_NAME) -v ./...
 	./$(BINARY_NAME)
 
-# Run with hot reload (requires air)
+# 本地开发：加载 .env.development 与 .env 后 go run（见 run-dev.sh）
 dev:
-	air
+	./run-dev.sh
+
+# 生成管理员密码的 bcrypt 哈希（交互式输入，不进 shell 历史）
+hash-password:
+	$(GOCMD) run . hash-password
 
 # Format code
 fmt:
@@ -84,7 +88,8 @@ help:
 	@echo "  build-linux   - Cross compile for Linux"
 	@echo "  deps          - Install dependencies"
 	@echo "  run           - Build and run the application"
-	@echo "  dev           - Run with hot reload"
+	@echo "  dev           - Run locally with .env.development + .env (run-dev.sh)"
+	@echo "  hash-password - Generate bcrypt hash for ADMIN_PASSWORD_HASH"
 	@echo "  fmt           - Format code"
 	@echo "  lint          - Lint code"
 	@echo "  security      - Run security checks"
@@ -93,4 +98,4 @@ help:
 	@echo "  docker-run    - Run Docker container"
 	@echo "  help          - Show this help"
 
-.PHONY: build clean test test-coverage benchmark build-linux deps run dev fmt lint security docs docker-build docker-run help
+.PHONY: build clean test test-coverage benchmark build-linux deps run dev hash-password fmt lint security docs docker-build docker-run help
