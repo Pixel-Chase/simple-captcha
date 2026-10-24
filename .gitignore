@@ -34,13 +34,9 @@ vendor/
 /package-lock.json
 /yarn-error.log
 /dist
-/.docz
-sdk/node_modules
-.umi
-.svn
-.idea
 /es
-/docs-dist
 /lib
-.dumi
+.svn
+sdk/node_modules
 sdk/dist
+sdk/playground-dist

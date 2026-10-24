@@ -3,17 +3,43 @@ import { encodeUtf8, sha256, toHex } from './sha256';
 
 /** 常见自动化框架在 window / document 上留下的痕迹 */
 const WINDOW_MARKERS = [
-  '__webdriver_evaluate', '__selenium_evaluate', '__webdriver_script_function', '__webdriver_script_func',
-  '__webdriver_script_fn', '__fxdriver_evaluate', '__driver_unwrapped', '__webdriver_unwrapped',
-  '__driver_evaluate', '__selenium_unwrapped', '__fxdriver_unwrapped', '_Selenium_IDE_Recorder',
-  '_selenium', 'calledSelenium', '__nightmare', '_phantom', 'callPhantom', '__phantomas',
-  'domAutomation', 'domAutomationController', '__playwright', '__pw_manual', '__puppeteer_evaluation_script__',
-  'Cypress', 'awesomium', '__lastWatirAlert', '__lastWatirConfirm', '__lastWatirPrompt',
+  '__webdriver_evaluate',
+  '__selenium_evaluate',
+  '__webdriver_script_function',
+  '__webdriver_script_func',
+  '__webdriver_script_fn',
+  '__fxdriver_evaluate',
+  '__driver_unwrapped',
+  '__webdriver_unwrapped',
+  '__driver_evaluate',
+  '__selenium_unwrapped',
+  '__fxdriver_unwrapped',
+  '_Selenium_IDE_Recorder',
+  '_selenium',
+  'calledSelenium',
+  '__nightmare',
+  '_phantom',
+  'callPhantom',
+  '__phantomas',
+  'domAutomation',
+  'domAutomationController',
+  '__playwright',
+  '__pw_manual',
+  '__puppeteer_evaluation_script__',
+  'Cypress',
+  'awesomium',
+  '__lastWatirAlert',
+  '__lastWatirConfirm',
+  '__lastWatirPrompt',
 ];
 
 const DOCUMENT_MARKERS = [
-  '__webdriver_evaluate', '__selenium_evaluate', '__driver_evaluate', '__webdriver_script_fn',
-  '$cdc_asdjflasutopfhvcZLmcfl_', '$chrome_asyncScriptInfo',
+  '__webdriver_evaluate',
+  '__selenium_evaluate',
+  '__driver_evaluate',
+  '__webdriver_script_fn',
+  '$cdc_asdjflasutopfhvcZLmcfl_',
+  '$chrome_asyncScriptInfo',
 ];
 
 const CDC_PATTERN = /^\$?cdc_/;
@@ -82,7 +108,8 @@ export function detectAutomation(): string[] {
 function webglRenderer(): string | undefined {
   return safe(() => {
     const canvas = document.createElement('canvas');
-    const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+    const gl = (canvas.getContext('webgl') ||
+      canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
     if (!gl) {
       return undefined;
     }
@@ -96,8 +123,16 @@ function webglRenderer(): string | undefined {
 
 function fingerprint(env: CaptchaEnv): string {
   const raw = [
-    env.ua, env.platform, (env.languages || []).join(','), (env.screen || []).join('x'),
-    env.dpr, env.tz, env.cores, env.memory, env.webgl, env.touchPoints,
+    env.ua,
+    env.platform,
+    (env.languages || []).join(','),
+    (env.screen || []).join('x'),
+    env.dpr,
+    env.tz,
+    env.cores,
+    env.memory,
+    env.webgl,
+    env.touchPoints,
   ].join('|');
   return toHex(sha256(encodeUtf8(raw))).slice(0, 32);
 }

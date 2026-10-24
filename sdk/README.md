@@ -49,6 +49,7 @@ export default () => {
 | locale | 全局多语言文案 | `LocaleTexts` | - |
 | theme | 全局主题变量 | `ThemeTokens` | - |
 | zIndex | 弹层层级 | `number` | `9999` |
+| telemetry | 行为/环境采集级别：`off` 不采集，`basic` 轨迹 + 基础环境，`full` 额外采集 WebGL 渲染器与指纹哈希 | `TelemetryLevel` | `full` |
 
 `ApiConfig` 支持以下配置：
 
@@ -59,6 +60,12 @@ export default () => {
 
 后端使用自定义前缀时，可配置为 `api={{ basePath: 'http://foo.com', prefix: '/captcha/api' }}`。使用 `/` 或空字符串可将请求直接挂载到 `/captchas`。
 
+SDK 会自动完成以下工作，无需业务侧干预：
+
+1. 按 `devicePixelRatio` 请求 1x/2x/3x 高清题图，并把点击/拖动坐标换算回位图像素再提交
+2. 在题目加载后于后台计算工作量证明（PoW），提交时一并携带
+3. 按 `telemetry` 级别采集指针轨迹与环境信号，供服务端做人机判别
+
 ## Captcha
 
 | 属性 | 说明 | 类型 | 默认值 |
@@ -67,7 +74,8 @@ export default () => {
 | onSuccess | 校验成功回调 | `(data: any) => void` | - |
 | onCancel | 用户主动关闭回调 | `() => void` | - |
 | maxRetryCount | 单次验证最多允许的校验失败次数，达到后才触发 `onFail` | `number` | `5` |
-| type | 验证码类型，支持 `auto`、`click-text`、`click-shape`、`slide-text`、`slide-region`、`rotate` | `CaptchaType` | `auto` |
+| type | 验证码类型，支持 `auto`、`click-text`、`click-shape`、`slide-text`、`slide-region`、`rotate`；`auto` 由服务端按客户端风险等级选择题型 | `CaptchaType` | `auto` |
+| telemetry | 当前实例的采集级别覆盖 | `TelemetryLevel` | - |
 | api | 当前实例的接口配置覆盖 | `ApiConfig` | - |
 | locale | 当前实例的文案覆盖 | `LocaleTexts` | - |
 | theme | 当前实例的主题覆盖 | `ThemeTokens` | - |
@@ -162,3 +170,16 @@ curl -X GET \
 如果返回 `{"valid": true}` 则代表验证通过，可以放行业务逻辑。
 
 若后端配置了自定义 `API_PREFIX`，此 S2S 地址中的 `/api/v1` 也需替换为相同前缀。
+
+## 本地开发
+
+```bash
+pnpm install
+pnpm start             # 启动 Vite 演示页（playground/，直接引用 src 源码，热更新）
+pnpm build             # tsdown 打包：dist/index.js (ESM) + dist/index.cjs (CJS) + 类型声明
+pnpm typecheck         # tsc 类型检查
+pnpm lint              # Biome lint + 格式检查（pnpm lint:fix 自动修复）
+pnpm test              # Vitest
+```
+
+演示页默认请求 `http://127.0.0.1:3321` 的后端服务，请先在仓库 `backend/` 目录启动服务。

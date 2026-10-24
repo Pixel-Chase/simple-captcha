@@ -10,25 +10,29 @@ import type {
 import { useCaptchaConfig } from '../CaptchaProvider';
 
 export interface GetCaptchaOption {
-  type: CaptchaType
-  mode?: 'light' | 'dark'
+  type: CaptchaType;
+  mode?: 'light' | 'dark';
 }
 
 export interface GetCaptchaResult {
-  get: () => Promise<CaptchaChallengeData>
-  loading: boolean
-  data: CaptchaChallengeData | null
-  error: CaptchaErrorResponse | null
-  check: (body: CaptchaVerifyPayload | Record<string, unknown>) => Promise<CaptchaVerifySuccessData>
+  get: () => Promise<CaptchaChallengeData>;
+  loading: boolean;
+  data: CaptchaChallengeData | null;
+  error: CaptchaErrorResponse | null;
+  check: (
+    body: CaptchaVerifyPayload | Record<string, unknown>,
+  ) => Promise<CaptchaVerifySuccessData>;
 }
 
 export function isCaptchaErrorResponse(value: unknown): value is CaptchaErrorResponse {
-  return !!value
-    && typeof value === 'object'
-    && 'code' in value
-    && 'error' in value
-    && typeof (value as CaptchaErrorResponse).code === 'number'
-    && typeof (value as CaptchaErrorResponse).error === 'string';
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'code' in value &&
+    'error' in value &&
+    typeof (value as CaptchaErrorResponse).code === 'number' &&
+    typeof (value as CaptchaErrorResponse).error === 'string'
+  );
 }
 
 export function getCaptchaErrorMessage(error: CaptchaErrorResponse | string): string {
@@ -89,7 +93,9 @@ export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
     }
   };
 
-  const check = async (body: CaptchaVerifyPayload | Record<string, unknown>): Promise<CaptchaVerifySuccessData> => {
+  const check = async (
+    body: CaptchaVerifyPayload | Record<string, unknown>,
+  ): Promise<CaptchaVerifySuccessData> => {
     setLoading(true);
     setError(null);
     try {

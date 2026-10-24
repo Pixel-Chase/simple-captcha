@@ -60,98 +60,123 @@ export function useBehaviorTrace(enabled: boolean): BehaviorTraceHandle {
 
   const relative = useCallback((): number => now() - stateRef.current.loadedAt, []);
 
-  const pushPoint = useCallback((event: PointerEvent, element: HTMLElement, force: boolean) => {
-    const state = stateRef.current;
-    const t = relative();
-    if (!force && t - state.lastPointAt < state.minInterval) {
-      return;
-    }
-    state.lastPointAt = t;
-
-    const rect = element.getBoundingClientRect();
-    state.points.push([round1(event.clientX - rect.left), round1(event.clientY - rect.top), Math.round(t)]);
-
-    if (state.points.length > MAX_POINTS) {
-      state.points = state.points.filter((_, index) => index % 2 === 0);
-      state.minInterval *= 2;
-    }
-  }, [relative]);
-
-  const attach = useCallback((element: HTMLElement | null) => {
-    if (cleanupRef.current) {
-      cleanupRef.current();
-      cleanupRef.current = null;
-    }
-    if (!element || !enabled || typeof window === 'undefined' || !('PointerEvent' in window)) {
-      return;
-    }
-
-    const onDown = (event: PointerEvent) => {
+  const pushPoint = useCallback(
+    (event: PointerEvent, element: HTMLElement, force: boolean) => {
       const state = stateRef.current;
-      state.downs += 1;
-      if (!event.isTrusted) {
-        state.untrusted += 1;
+      const t = relative();
+      if (!force && t - state.lastPointAt < state.minInterval) {
+        return;
       }
-      if (!state.startedAt) {
-        state.startedAt = relative();
-        state.pointerType = event.pointerType || 'unknown';
+      state.lastPointAt = t;
+
+      const rect = element.getBoundingClientRect();
+      state.points.push([
+        round1(event.clientX - rect.left),
+        round1(event.clientY - rect.top),
+        Math.round(t),
+      ]);
+
+      if (state.points.length > MAX_POINTS) {
+        state.points = state.points.filter((_, index) => index % 2 === 0);
+        state.minInterval *= 2;
       }
-      pushPoint(event, element, true);
-    };
+    },
+    [relative],
+  );
 
-    const onMove = (event: PointerEvent) => {
-      const state = stateRef.current;
-      state.moves += 1;
-      if (!event.isTrusted) {
-        state.untrusted += 1;
+  const attach = useCallback(
+    (element: HTMLElement | null) => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
       }
-      pushPoint(event, element, false);
-    };
-
-    const onUp = (event: PointerEvent) => {
-      const state = stateRef.current;
-      state.ups += 1;
-      if (!event.isTrusted) {
-        state.untrusted += 1;
+      if (!element || !enabled || typeof window === 'undefined' || !('PointerEvent' in window)) {
+        return;
       }
-      pushPoint(event, element, true);
-    };
 
-    // 脚本常用 dispatchEvent 合成 mouse/touch 事件而非 pointer 事件，这里只统计其可信度，不参与采样
-    const onLegacy = (event: Event) => {
-      if (!event.isTrusted) {
-        stateRef.current.untrusted += 1;
-      }
-    };
-    const legacyEvents = ['mousedown', 'mousemove', 'mouseup', 'touchstart', 'touchmove', 'touchend', 'click'];
+      const onDown = (event: PointerEvent) => {
+        const state = stateRef.current;
+        state.downs += 1;
+        if (!event.isTrusted) {
+          state.untrusted += 1;
+        }
+        if (!state.startedAt) {
+          state.startedAt = relative();
+          state.pointerType = event.pointerType || 'unknown';
+        }
+        pushPoint(event, element, true);
+      };
 
-    const options: AddEventListenerOptions = { capture: true, passive: true };
-    element.addEventListener('pointerdown', onDown, options);
-    element.addEventListener('pointermove', onMove, options);
-    element.addEventListener('pointerup', onUp, options);
-    element.addEventListener('pointercancel', onUp, options);
-    legacyEvents.forEach((name) => element.addEventListener(name, onLegacy, options));
+      const onMove = (event: PointerEvent) => {
+        const state = stateRef.current;
+        state.moves += 1;
+        if (!event.isTrusted) {
+          state.untrusted += 1;
+        }
+        pushPoint(event, element, false);
+      };
 
-    cleanupRef.current = () => {
-      element.removeEventListener('pointerdown', onDown, options);
-      element.removeEventListener('pointermove', onMove, options);
-      element.removeEventListener('pointerup', onUp, options);
-      element.removeEventListener('pointercancel', onUp, options);
-      legacyEvents.forEach((name) => element.removeEventListener(name, onLegacy, options));
-    };
-  }, [enabled, pushPoint, relative]);
+      const onUp = (event: PointerEvent) => {
+        const state = stateRef.current;
+        state.ups += 1;
+        if (!event.isTrusted) {
+          state.untrusted += 1;
+        }
+        pushPoint(event, element, true);
+      };
+
+      // 脚本常用 dispatchEvent 合成 mouse/touch 事件而非 pointer 事件，这里只统计其可信度，不参与采样
+      const onLegacy = (event: Event) => {
+        if (!event.isTrusted) {
+          stateRef.current.untrusted += 1;
+        }
+      };
+      const legacyEvents = [
+        'mousedown',
+        'mousemove',
+        'mouseup',
+        'touchstart',
+        'touchmove',
+        'touchend',
+        'click',
+      ];
+
+      const options: AddEventListenerOptions = { capture: true, passive: true };
+      element.addEventListener('pointerdown', onDown, options);
+      element.addEventListener('pointermove', onMove, options);
+      element.addEventListener('pointerup', onUp, options);
+      element.addEventListener('pointercancel', onUp, options);
+      legacyEvents.forEach((name) => {
+        element.addEventListener(name, onLegacy, options);
+      });
+
+      cleanupRef.current = () => {
+        element.removeEventListener('pointerdown', onDown, options);
+        element.removeEventListener('pointermove', onMove, options);
+        element.removeEventListener('pointerup', onUp, options);
+        element.removeEventListener('pointercancel', onUp, options);
+        legacyEvents.forEach((name) => {
+          element.removeEventListener(name, onLegacy, options);
+        });
+      };
+    },
+    [enabled, pushPoint, relative],
+  );
 
   const markLoaded = useCallback(() => {
     stateRef.current = createState();
   }, []);
 
-  const recordClick = useCallback((x: number, y: number) => {
-    const state = stateRef.current;
-    if (state.clicks.length >= MAX_CLICKS) {
-      return;
-    }
-    state.clicks.push([round1(x), round1(y), Math.round(relative())]);
-  }, [relative]);
+  const recordClick = useCallback(
+    (x: number, y: number) => {
+      const state = stateRef.current;
+      if (state.clicks.length >= MAX_CLICKS) {
+        return;
+      }
+      state.clicks.push([round1(x), round1(y), Math.round(relative())]);
+    },
+    [relative],
+  );
 
   const snapshot = useCallback((): CaptchaTrace => {
     const state = stateRef.current;

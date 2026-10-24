@@ -1,6 +1,12 @@
 import { createContext, useContext, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type { CaptchaGlobalConfig, LocaleTexts, ThemeTokens, ApiConfig, TelemetryLevel } from './Captcha.types';
+import type {
+  CaptchaGlobalConfig,
+  LocaleTexts,
+  ThemeTokens,
+  ApiConfig,
+  TelemetryLevel,
+} from './Captcha.types';
 
 export interface InternalConfig {
   locale: LocaleTexts;
@@ -41,16 +47,26 @@ export interface CaptchaProviderProps extends CaptchaGlobalConfig {
   children: ReactNode;
 }
 
-export const CaptchaProvider = ({ locale, theme, api, zIndex, telemetry, children }: CaptchaProviderProps) => {
+export const CaptchaProvider = ({
+  locale,
+  theme,
+  api,
+  zIndex,
+  telemetry,
+  children,
+}: CaptchaProviderProps) => {
   const parentConfig = useContext(CaptchaConfigContext);
 
-  const value = useMemo<InternalConfig>(() => ({
-    locale: { ...parentConfig.locale, ...locale },
-    theme: { ...parentConfig.theme, ...theme },
-    api: { ...parentConfig.api, ...api },
-    zIndex: zIndex ?? parentConfig.zIndex,
-    telemetry: telemetry ?? parentConfig.telemetry,
-  }), [api, locale, parentConfig, telemetry, theme, zIndex]);
+  const value = useMemo<InternalConfig>(
+    () => ({
+      locale: { ...parentConfig.locale, ...locale },
+      theme: { ...parentConfig.theme, ...theme },
+      api: { ...parentConfig.api, ...api },
+      zIndex: zIndex ?? parentConfig.zIndex,
+      telemetry: telemetry ?? parentConfig.telemetry,
+    }),
+    [api, locale, parentConfig, telemetry, theme, zIndex],
+  );
 
   return <CaptchaConfigContext.Provider value={value}>{children}</CaptchaConfigContext.Provider>;
 };

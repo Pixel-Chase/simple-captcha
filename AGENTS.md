@@ -27,7 +27,7 @@ simple-captcha/
     │   ├── _internal/           # 内部核心渲染引擎（对外严格保密，处理点选、滑块等视图）
     │   ├── hooks/               # 供用户引用的公共 Hooks (如用以触发请求和弹出框)
     │   └── utils/               # 内部工具函数
-    ├── docs/                    # 基于 dumi 的文档与演示站点目录
+    ├── playground/              # 基于 Vite 的本地演示页（直接引用 src，热更新）
     └── package.json
 ```
 
@@ -50,7 +50,7 @@ simple-captcha/
 *   **核心框架**: React 19, 原生 DOM API (`react-dom`)
 *   **开发语言**: TypeScript
 *   **样式方案**: 原生 CSS-in-JS / 内联样式配置 (`React.CSSProperties`)
-*   **构建工具**: Umi / Father
+*   **构建工具**: tsdown（库构建，ESM + CJS + d.ts）、Vite（本地演示页）、Vitest（测试）、Biome（lint / 格式化）
 
 ### 4.2 架构与编码准则 (Agent 必读)
 1. **隔离性原则**: 位于 `sdk/src/_internal/` 下的组件、Hook 或类型，**绝对禁止**被导出到 `sdk/src/index.tsx` 或对外暴露。它们仅为 `Captcha.tsx` 提供底层支持引擎。
@@ -60,7 +60,7 @@ simple-captcha/
     *   ✅ 使用解构导入 `import { useState, useCallback, memo } from 'react'`，类型一律使用 `import type`。
     *   ❌ 绝不使用传统的 `e.cancelBubble = true` 。
     *   ✅ **必须使用**现代 DOM API 处理事件防冒泡与阻止默认行为：`e.stopPropagation()` 和 `e.preventDefault()`。
-4. **极简依赖**: 构建目标 SDK 时，`sdk/package.json` 中的 `pnpm.onlyBuiltDependencies` 等勿随意更动，保持产物轻量纯净，规避引入臃肿的第三方 UI 库。
+4. **极简依赖**: 构建目标 SDK 时，`sdk/pnpm-workspace.yaml` 中的 `allowBuilds` 构建脚本白名单勿随意扩充（pnpm 10+ 不再读取 package.json 的 `pnpm` 字段），保持产物轻量纯净，规避引入臃肿的第三方 UI 库。
 
 ## 5. 开发流程与联调任务池
 
@@ -73,4 +73,4 @@ simple-captcha/
 
 > **日常调试指北：**
 > * 启动后端服务 (位于 `backend/`)： `go run main.go` 或执行 `sh run-dev.sh`
-> * 启动前端文档及 SDK 热更新器 (位于 `sdk/`)： `pnpm start`
+> * 启动前端本地演示页 (位于 `sdk/`，热更新引用 `src` 源码)： `pnpm start`；构建 SDK 产物： `pnpm build`

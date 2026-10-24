@@ -46,7 +46,10 @@ const toCss = (value: number, ratio: number) => Math.round(value / ratio);
 /** CSS 像素 → 图像像素 */
 const toImage = (value: number, ratio: number) => Math.round(value * ratio);
 
-const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'theme' | 'api' | 'telemetry'>>((props, ref) => {
+const CaptchaInternal = forwardRef<
+  CaptchaRef,
+  Omit<CaptchaProps, 'locale' | 'theme' | 'api' | 'telemetry'>
+>((props, ref) => {
   const {
     onCancel = noop,
     onSuccess = noop as (data: CaptchaVerifySuccessData) => void,
@@ -65,7 +68,8 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
 
   // auto 由服务端按风险等级解析为具体题型，响应中的 type 即实际题型
   const { get, check, data } = useCaptchaRequest({ type: typeProp, mode: 'dark' });
-  const resolvedType: ResolvedCaptchaType = data?.type || (typeProp === 'auto' ? 'click-text' : typeProp);
+  const resolvedType: ResolvedCaptchaType =
+    data?.type || (typeProp === 'auto' ? 'click-text' : typeProp);
 
   const captchaRef = useRef<any>(null);
   const failCountRef = useRef(0);
@@ -93,9 +97,12 @@ const CaptchaInternal = forwardRef<CaptchaRef, Omit<CaptchaProps, 'locale' | 'th
       : Promise.resolve(null);
   }, [data, markLoaded, telemetry, telemetryEnabled]);
 
-  useEffect(() => () => {
-    powCancelRef.current.current = true;
-  }, []);
+  useEffect(
+    () => () => {
+      powCancelRef.current.current = true;
+    },
+    [],
+  );
 
   // ---------- 坐标归一化：服务端按位图像素校验，SDK 按 CSS 像素渲染 ----------
   const ratio = useMemo<Ratio>(() => {

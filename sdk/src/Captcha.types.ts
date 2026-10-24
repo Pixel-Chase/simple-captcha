@@ -1,6 +1,12 @@
 import type { ReactNode, CSSProperties } from 'react';
 
-export type CaptchaType = 'auto' | 'click-text' | 'click-shape' | 'slide-text' | 'slide-region' | 'rotate';
+export type CaptchaType =
+  | 'auto'
+  | 'click-text'
+  | 'click-shape'
+  | 'slide-text'
+  | 'slide-region'
+  | 'rotate';
 
 /** 服务端实际下发的具体题型（auto 解析后的结果） */
 export type ResolvedCaptchaType = Exclude<CaptchaType, 'auto'>;

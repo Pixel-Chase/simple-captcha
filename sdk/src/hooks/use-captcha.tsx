@@ -29,26 +29,35 @@ export function useCaptcha(): UseCaptchaReturn {
     setActiveOptions(null);
   }, []);
 
-  const handleSuccess = useCallback((data: CaptchaVerifySuccessData) => {
-    activeOptions?.onSuccess?.(data);
-    pendingRef.current?.resolve(data);
-    resetPending();
-  }, [activeOptions, resetPending]);
+  const handleSuccess = useCallback(
+    (data: CaptchaVerifySuccessData) => {
+      activeOptions?.onSuccess?.(data);
+      pendingRef.current?.resolve(data);
+      resetPending();
+    },
+    [activeOptions, resetPending],
+  );
 
-  const handleFail = useCallback((error: CaptchaErrorResponse | string) => {
-    activeOptions?.onFail?.(error);
-    pendingRef.current?.reject(error);
-    resetPending();
-  }, [activeOptions, resetPending]);
+  const handleFail = useCallback(
+    (error: CaptchaErrorResponse | string) => {
+      activeOptions?.onFail?.(error);
+      pendingRef.current?.reject(error);
+      resetPending();
+    },
+    [activeOptions, resetPending],
+  );
 
   const handleCancel = useCallback(() => {
     activeOptions?.onCancel?.();
   }, [activeOptions]);
 
-  const handleStartupError = useCallback((reason: CaptchaErrorResponse | string) => {
-    pendingRef.current?.reject(reason);
-    resetPending();
-  }, [resetPending]);
+  const handleStartupError = useCallback(
+    (reason: CaptchaErrorResponse | string) => {
+      pendingRef.current?.reject(reason);
+      resetPending();
+    },
+    [resetPending],
+  );
 
   const verify = useCallback((options?: CaptchaVerifyOptions) => {
     if (pendingRef.current) {
@@ -88,7 +97,12 @@ export function useCaptcha(): UseCaptchaReturn {
       return null;
     }
 
-    const { onCancel: _onCancel, onFail: _onFail, onSuccess: _onSuccess, ...captchaProps } = activeOptions;
+    const {
+      onCancel: _onCancel,
+      onFail: _onFail,
+      onSuccess: _onSuccess,
+      ...captchaProps
+    } = activeOptions;
 
     return (
       <Captcha

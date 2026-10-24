@@ -4,7 +4,8 @@ import { useCaptchaConfig } from './CaptchaProvider';
 export const CaptchaStyle = () => {
   const { theme } = useCaptchaConfig();
 
-  const css = useMemo(() => `
+  const css = useMemo(
+    () => `
     .gc-wrapper {
       --gc-text: ${theme.textColor || '#333'};
       --gc-bg: ${theme.backgroundColor || '#fff'};
@@ -357,8 +358,10 @@ export const CaptchaStyle = () => {
         opacity: 0;
       }
     }
-  `, [theme]);
+  `,
+    [theme],
+  );
 
   // Injecting directly as style block since they are small enough
   return <style>{css}</style>;
-}
+};

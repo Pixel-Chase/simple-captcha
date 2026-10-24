@@ -27,141 +27,147 @@ export const useRotateHandler = (
     setThumbAngle(data.angle || 0);
   }, [data.angle, setDragLeft, setThumbAngle]);
 
-  const dragEvent = useCallback((e: Event | any) => {
-    if (!checkTargetFather(dragBarRef.current, e)) {
-      return;
-    }
-
-    const touch = e.touches && e.touches[0];
-
-    const offsetLeft = dragBlockRef.current.offsetLeft;
-    const width = dragBarRef.current.offsetWidth;
-    const blockWidth = dragBlockRef.current.offsetWidth;
-    const maxWidth = width - blockWidth;
-    const maxAngle = 360;
-    const p = (maxAngle - data.angle! || 0) / maxWidth;
-
-    let angle = 0;
-    let isMoving = false;
-    let tmpLeaveDragEvent: Event | any = null;
-    let startX = 0;
-    let currentAngle = 0;
-    if (touch) {
-      startX = touch.pageX - offsetLeft;
-    } else {
-      startX = e.clientX - offsetLeft;
-    }
-
-    const moveEvent = (e: Event | any) => {
-      isMoving = true;
-      const mTouche = e.touches && e.touches[0];
-
-      let left = 0;
-      if (mTouche) {
-        left = mTouche.pageX - startX;
-      } else {
-        left = e.clientX - startX;
-      }
-
-      angle = (data.angle! || 0) + (left * p);
-
-      if (left >= maxWidth) {
-        setDragLeft(maxWidth);
-        currentAngle = maxAngle;
-        setThumbAngle(currentAngle);
-        return;
-      }
-
-      if (left <= 0) {
-        setDragLeft(0);
-        currentAngle = data.angle || 0;
-        setThumbAngle(currentAngle);
-        return;
-      }
-
-      setDragLeft(left);
-      currentAngle = angle;
-      setThumbAngle(angle);
-
-      event.rotate && event.rotate(angle);
-
-      e.stopPropagation();
-      e.preventDefault();
-    };
-
-    const upEvent = (e: Event | any) => {
+  const dragEvent = useCallback(
+    (e: Event | any) => {
       if (!checkTargetFather(dragBarRef.current, e)) {
         return;
       }
 
-      clearEvent();
+      const touch = e.touches && e.touches[0];
 
-      if (!isMoving) {
-        return;
+      const offsetLeft = dragBlockRef.current.offsetLeft;
+      const width = dragBarRef.current.offsetWidth;
+      const blockWidth = dragBlockRef.current.offsetWidth;
+      const maxWidth = width - blockWidth;
+      const maxAngle = 360;
+      const p = (maxAngle - data.angle! || 0) / maxWidth;
+
+      let angle = 0;
+      let isMoving = false;
+      let tmpLeaveDragEvent: Event | any = null;
+      let startX = 0;
+      let currentAngle = 0;
+      if (touch) {
+        startX = touch.pageX - offsetLeft;
+      } else {
+        startX = e.clientX - offsetLeft;
       }
 
-      isMoving = false;
+      const moveEvent = (e: Event | any) => {
+        isMoving = true;
+        const mTouche = e.touches && e.touches[0];
 
-      if (currentAngle < 0) {
-        return;
-      }
+        let left = 0;
+        if (mTouche) {
+          left = mTouche.pageX - startX;
+        } else {
+          left = e.clientX - startX;
+        }
 
-      event.confirm && event.confirm(parseInt(currentAngle.toString()), () => {
-        resetData();
-      });
+        angle = (data.angle! || 0) + left * p;
 
-      e.stopPropagation();
-      e.preventDefault();
-    };
+        if (left >= maxWidth) {
+          setDragLeft(maxWidth);
+          currentAngle = maxAngle;
+          setThumbAngle(currentAngle);
+          return;
+        }
 
-    const leaveDragBlockEvent = (e: Event | any) => {
-      tmpLeaveDragEvent = e;
-    };
+        if (left <= 0) {
+          setDragLeft(0);
+          currentAngle = data.angle || 0;
+          setThumbAngle(currentAngle);
+          return;
+        }
 
-    const enterDragBlockEvent = () => {
-      tmpLeaveDragEvent = null;
-    };
+        setDragLeft(left);
+        currentAngle = angle;
+        setThumbAngle(angle);
 
-    const leaveUpEvent = (_: Event | any) => {
-      if (!tmpLeaveDragEvent) {
-        return;
-      }
+        event.rotate && event.rotate(angle);
 
-      upEvent(tmpLeaveDragEvent);
-      clearEvent();
-    };
+        e.stopPropagation();
+        e.preventDefault();
+      };
 
-    const scope = config.scope;
-    const dragDom = scope ? rootRef.current : dragBarRef.current;
-    const scopeDom = scope ? rootRef.current : document.body;
+      const upEvent = (e: Event | any) => {
+        if (!checkTargetFather(dragBarRef.current, e)) {
+          return;
+        }
 
-    const clearEvent = () => {
-      scopeDom.removeEventListener('mousemove', moveEvent, false);
-      scopeDom.removeEventListener('touchmove', moveEvent, { passive: false } as EventListenerOptions);
+        clearEvent();
 
-      dragDom.removeEventListener('mouseup', upEvent, false);
-      dragDom.removeEventListener('mouseenter', enterDragBlockEvent, false);
-      dragDom.removeEventListener('mouseleave', leaveDragBlockEvent, false);
-      dragDom.removeEventListener('touchend', upEvent, false);
+        if (!isMoving) {
+          return;
+        }
 
-      scopeDom.removeEventListener('mouseleave', upEvent, false);
-      scopeDom.removeEventListener('mouseup', leaveUpEvent, false);
+        isMoving = false;
 
-      setIsFreeze(false);
-    };
-    setIsFreeze(true);
+        if (currentAngle < 0) {
+          return;
+        }
 
-    scopeDom.addEventListener('mousemove', moveEvent, false);
-    scopeDom.addEventListener('touchmove', moveEvent, { passive: false });
+        event.confirm &&
+          event.confirm(parseInt(currentAngle.toString(), 10), () => {
+            resetData();
+          });
 
-    dragDom.addEventListener('mouseup', upEvent, false);
-    dragDom.addEventListener('mouseenter', enterDragBlockEvent, false);
-    dragDom.addEventListener('mouseleave', leaveDragBlockEvent, false);
-    dragDom.addEventListener('touchend', upEvent, false);
+        e.stopPropagation();
+        e.preventDefault();
+      };
 
-    scopeDom.addEventListener('mouseleave', upEvent, false);
-    scopeDom.addEventListener('mouseup', leaveUpEvent, false);
-  }, [rootRef, dragBlockRef, dragBarRef, config, data, event, resetData]);
+      const leaveDragBlockEvent = (e: Event | any) => {
+        tmpLeaveDragEvent = e;
+      };
+
+      const enterDragBlockEvent = () => {
+        tmpLeaveDragEvent = null;
+      };
+
+      const leaveUpEvent = (_: Event | any) => {
+        if (!tmpLeaveDragEvent) {
+          return;
+        }
+
+        upEvent(tmpLeaveDragEvent);
+        clearEvent();
+      };
+
+      const scope = config.scope;
+      const dragDom = scope ? rootRef.current : dragBarRef.current;
+      const scopeDom = scope ? rootRef.current : document.body;
+
+      const clearEvent = () => {
+        scopeDom.removeEventListener('mousemove', moveEvent, false);
+        scopeDom.removeEventListener('touchmove', moveEvent, {
+          passive: false,
+        } as EventListenerOptions);
+
+        dragDom.removeEventListener('mouseup', upEvent, false);
+        dragDom.removeEventListener('mouseenter', enterDragBlockEvent, false);
+        dragDom.removeEventListener('mouseleave', leaveDragBlockEvent, false);
+        dragDom.removeEventListener('touchend', upEvent, false);
+
+        scopeDom.removeEventListener('mouseleave', upEvent, false);
+        scopeDom.removeEventListener('mouseup', leaveUpEvent, false);
+
+        setIsFreeze(false);
+      };
+      setIsFreeze(true);
+
+      scopeDom.addEventListener('mousemove', moveEvent, false);
+      scopeDom.addEventListener('touchmove', moveEvent, { passive: false });
+
+      dragDom.addEventListener('mouseup', upEvent, false);
+      dragDom.addEventListener('mouseenter', enterDragBlockEvent, false);
+      dragDom.addEventListener('mouseleave', leaveDragBlockEvent, false);
+      dragDom.addEventListener('touchend', upEvent, false);
+
+      scopeDom.addEventListener('mouseleave', upEvent, false);
+      scopeDom.addEventListener('mouseup', leaveUpEvent, false);
+    },
+    [rootRef, dragBlockRef, dragBarRef, config, data, event, resetData],
+  );
 
   const clearData = useCallback(() => {
     resetData();
@@ -178,19 +184,25 @@ export const useRotateHandler = (
     resetData();
   }, [event, resetData]);
 
-  const closeEvent = useCallback((e: React.MouseEvent) => {
-    close();
-    e.stopPropagation();
-    e.preventDefault();
-    return false;
-  }, [close]);
+  const closeEvent = useCallback(
+    (e: React.MouseEvent) => {
+      close();
+      e.stopPropagation();
+      e.preventDefault();
+      return false;
+    },
+    [close],
+  );
 
-  const refreshEvent = useCallback((e: React.MouseEvent) => {
-    refresh();
-    e.stopPropagation();
-    e.preventDefault();
-    return false;
-  }, [refresh]);
+  const refreshEvent = useCallback(
+    (e: React.MouseEvent) => {
+      refresh();
+      e.stopPropagation();
+      e.preventDefault();
+      return false;
+    },
+    [refresh],
+  );
 
   const getState = useCallback(() => {
     return {

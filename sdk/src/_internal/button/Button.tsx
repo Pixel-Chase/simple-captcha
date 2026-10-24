@@ -14,7 +14,10 @@ export interface ButtonProps extends React.HTMLAttributes<HTMLElement> {
 
 const Button = (props: ButtonProps) => {
   const { locale } = useCaptchaConfig();
-  const [localConfig, setLocalConfig] = useState<ButtonConfig>({ ...defaultButtonConfig(), ...(props.config || {}) });
+  const [localConfig, setLocalConfig] = useState<ButtonConfig>({
+    ...defaultButtonConfig(),
+    ...(props.config || {}),
+  });
 
   useEffect(() => {
     setLocalConfig((prev) => ({ ...prev, ...(props.config || {}) }));

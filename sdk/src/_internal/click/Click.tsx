@@ -20,7 +20,10 @@ export interface ClickProps extends React.HTMLAttributes<HTMLElement> {
 
 const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
   const { locale } = useCaptchaConfig();
-  const [localConfig, setLocalConfig] = useState<ClickConfig>({ ...defaultClickConfig(), ...(props.config || {}) });
+  const [localConfig, setLocalConfig] = useState<ClickConfig>({
+    ...defaultClickConfig(),
+    ...(props.config || {}),
+  });
   const [localData, setLocalData] = useState<ClickData>({ ...(props.data || {}) });
   const [localEvents, setLocalEvents] = useState<ClickEvent>({ ...(props.events || {}) });
 
@@ -42,9 +45,10 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
 
   const hPadding = localConfig.horizontalPadding || 0;
   const vPadding = localConfig.verticalPadding || 0;
-  const width = (localConfig.width || 0) + (hPadding * 2) + (localConfig.showTheme ? 2 : 0);
+  const width = (localConfig.width || 0) + hPadding * 2 + (localConfig.showTheme ? 2 : 0);
   const hasDisplayWrapperState = (localConfig.width || 0) > 0 || (localConfig.height || 0) > 0;
-  const hasDisplayImageState = (localData.image && localData.image.length > 0) && (localData.thumb && localData.thumb.length > 0);
+  const hasDisplayImageState =
+    localData.image && localData.image.length > 0 && localData.thumb && localData.thumb.length > 0;
 
   useImperativeHandle(ref, () => ({
     reset: handler.resetData,
@@ -107,8 +111,8 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
                 width: localConfig.dotSize + 'px',
                 height: localConfig.dotSize + 'px',
                 borderRadius: localConfig.dotSize + 'px',
-                top: (dot.y - ((localConfig.dotSize || 1) / 2) - 1) + 'px',
-                left: (dot.x - ((localConfig.dotSize || 1) / 2) - 1) + 'px',
+                top: dot.y - (localConfig.dotSize || 1) / 2 - 1 + 'px',
+                left: dot.x - (localConfig.dotSize || 1) / 2 - 1 + 'px',
               }}
               key={dot.key + '-' + dot.index}
             >
@@ -132,6 +136,7 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
         </div>
         <div className="gc-button-block">
           <button
+            type="button"
             className={!hasDisplayImageState ? 'gc-disabled' : ''}
             onClick={handler.confirmEvent}
           >

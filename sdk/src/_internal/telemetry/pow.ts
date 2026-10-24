@@ -4,9 +4,10 @@ import { encodeUtf8, leadingZeroBits, sha256 } from './sha256';
 /** 每计算多少次哈希让出一次主线程，避免阻塞 UI */
 const CHUNK_SIZE = 1024;
 
-const yieldToMain = () => new Promise<void>((resolve) => {
-  setTimeout(resolve, 0);
-});
+const yieldToMain = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 export interface SolvePowOptions {
   /** 最大尝试次数，默认为 max(2^20, 2^(difficulty + 4)) */
