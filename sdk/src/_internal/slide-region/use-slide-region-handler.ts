@@ -89,7 +89,7 @@ export const useSlideRegionHandler = (
       tileTop = top;
       event.move && event.move(left, top);
 
-      e.cancelBubble = true;
+      e.stopPropagation();
       e.preventDefault();
     };
 
@@ -113,7 +113,7 @@ export const useSlideRegionHandler = (
         resetData();
       });
 
-      e.cancelBubble = true;
+      e.stopPropagation();
       e.preventDefault();
     };
 

@@ -88,7 +88,7 @@ export const useSlideHandler = (
 
       event.move && event.move(currentThumbX, data.thumbY || 0);
 
-      e.cancelBubble = true;
+      e.stopPropagation();
       e.preventDefault();
     };
 
@@ -112,7 +112,7 @@ export const useSlideHandler = (
         resetData();
       });
 
-      e.cancelBubble = true;
+      e.stopPropagation();
       e.preventDefault();
     };
 

@@ -85,7 +85,7 @@ export const useRotateHandler = (
 
       event.rotate && event.rotate(angle);
 
-      e.cancelBubble = true;
+      e.stopPropagation();
       e.preventDefault();
     };
 
@@ -110,7 +110,7 @@ export const useRotateHandler = (
         resetData();
       });
 
-      e.cancelBubble = true;
+      e.stopPropagation();
       e.preventDefault();
     };
 

@@ -4,6 +4,7 @@ import type {
   CaptchaChallengeData,
   CaptchaErrorResponse,
   CaptchaType,
+  CaptchaVerifyPayload,
   CaptchaVerifySuccessData,
 } from '../Captcha.types';
 import { useCaptchaConfig } from '../CaptchaProvider';
@@ -18,7 +19,7 @@ export interface GetCaptchaResult {
   loading: boolean
   data: CaptchaChallengeData | null
   error: CaptchaErrorResponse | null
-  check: (rawBody: Record<string, string>) => Promise<CaptchaVerifySuccessData>
+  check: (body: CaptchaVerifyPayload | Record<string, unknown>) => Promise<CaptchaVerifySuccessData>
 }
 
 export function isCaptchaErrorResponse(value: unknown): value is CaptchaErrorResponse {
@@ -38,6 +39,15 @@ export function getCaptchaErrorMessage(error: CaptchaErrorResponse | string): st
   return error.error;
 }
 
+/** 取整并裁剪到 1-3 的设备像素比，服务端据此选择出图倍率 */
+export function getDevicePixelRatio(): number {
+  if (typeof window === 'undefined') {
+    return 1;
+  }
+  const dpr = Math.round(window.devicePixelRatio || 1);
+  return Math.min(3, Math.max(1, dpr));
+}
+
 export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<CaptchaChallengeData | null>(null);
@@ -52,7 +62,13 @@ export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
     setLoading(true);
     setError(null);
     try {
-      const url = `${captchaEndpoint}/${option.type}?mode=${option.mode || ''}`;
+      const params = new URLSearchParams();
+      if (option.mode) {
+        params.set('mode', option.mode);
+      }
+      params.set('dpr', String(getDevicePixelRatio()));
+
+      const url = `${captchaEndpoint}/${option.type}?${params.toString()}`;
       const res = await request.get<CaptchaChallengeData | CaptchaErrorResponse>(url);
       if (isCaptchaErrorResponse(res.data)) {
         setError(res.data);
@@ -73,12 +89,14 @@ export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
     }
   };
 
-  const check = async (rawBody: Record<string, string>): Promise<CaptchaVerifySuccessData> => {
+  const check = async (body: CaptchaVerifyPayload | Record<string, unknown>): Promise<CaptchaVerifySuccessData> => {
     setLoading(true);
     setError(null);
     try {
-      const url = `${captchaEndpoint}/${option.type}/${data?.key}/attempts`;
-      const res = await request.post<CaptchaVerifySuccessData | CaptchaErrorResponse>(url, rawBody);
+      // 提交路径使用服务端实际下发的题型（auto 已被服务端解析）
+      const resolvedType = data?.type || option.type;
+      const url = `${captchaEndpoint}/${resolvedType}/${data?.key}/attempts`;
+      const res = await request.post<CaptchaVerifySuccessData | CaptchaErrorResponse>(url, body);
       if (isCaptchaErrorResponse(res.data)) {
         setError(res.data);
         throw res.data;
