@@ -29,8 +29,9 @@ func SetupRouter() *gin.Engine {
 
 	r := gin.New()
 
-	// 客户端 IP 解析：这些代理头只有在直连来源命中 TrustedProxies 时才会被采信
-	r.RemoteIPHeaders = []string{"X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "True-Client-IP"}
+	// 客户端 IP 解析：代理头列表来自 REMOTE_IP_HEADERS（默认仅 X-Forwarded-For / X-Real-IP），
+	// 且只有在直连来源命中 TrustedProxies 时才会被采信
+	r.RemoteIPHeaders = cfg.Security.RemoteIPHeaders
 
 	// 初始化服务
 	serviceManager := services.GetServiceManager()

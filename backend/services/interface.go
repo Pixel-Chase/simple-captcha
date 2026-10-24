@@ -36,6 +36,10 @@ type CaptchaService interface {
 type VerifyService interface {
 	// VerifyData 验证数据，成功时第二个返回值为二次验证 key，失败时为提示信息
 	VerifyData(in *VerifyInput) (bool, string, *helper.CaptchaError)
+
+	// ConsumeAttempt 在不比对答案的情况下消耗一次尝试机会（例如风控拦截）。
+	// 返回 true 表示次数已耗尽、题目已作废。
+	ConsumeAttempt(key string) (bool, *helper.CaptchaError)
 }
 
 // RiskControlService 风险控制服务接口

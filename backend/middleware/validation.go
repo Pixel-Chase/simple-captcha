@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"errors"
 	"log"
+	"net/http"
+	"simple-captcha/config"
 	"simple-captcha/helper"
 	"simple-captcha/models"
 
@@ -68,8 +71,21 @@ func ValidateVerifyRequest() gin.HandlerFunc {
 			return
 		}
 
+		// 校验提交的请求体由轨迹点与环境信号构成，体积有限，在全局上限之外单独收紧，
+		// 避免攻击者用超大 JSON 拖慢解析与评分
+		if limit := config.LoadConfig().Security.VerifyMaxBodySize; limit > 0 && c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		}
+
 		// 绑定JSON参数
 		if err := c.ShouldBindJSON(&req); err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				log.Printf("请求体超出上限: limit=%d, ip=%s", tooLarge.Limit, c.ClientIP())
+				helper.SimpleErrorResponse(c, http.StatusRequestEntityTooLarge, "请求体过大")
+				c.Abort()
+				return
+			}
 			log.Printf("JSON参数绑定失败: error=%v, ip=%s", err, c.ClientIP())
 			helper.SimpleErrorResponse(c, helper.ErrCodeInvalidParam, "请求体参数错误")
 			c.Abort()

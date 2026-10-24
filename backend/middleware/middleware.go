@@ -155,11 +155,15 @@ func SecurityMiddleware() gin.HandlerFunc {
 			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 
-		// 检查请求大小
+		// 检查请求大小：ContentLength 只能拦住声明了长度的请求，chunked 编码时为 -1，
+		// 因此再用 MaxBytesReader 在读取阶段硬性截断
 		if c.Request.ContentLength > cfg.Security.MaxRequestSize {
 			helper.SimpleErrorResponse(c, 413, "请求体过大")
 			c.Abort()
 			return
+		}
+		if c.Request.Body != nil && cfg.Security.MaxRequestSize > 0 {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, cfg.Security.MaxRequestSize)
 		}
 
 		c.Next()

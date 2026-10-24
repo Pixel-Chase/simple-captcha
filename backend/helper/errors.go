@@ -18,7 +18,7 @@ const (
 	ErrCodeTooManyAttempts = 1005
 	ErrCodeTooFast         = 1006 // 出题到提交间隔过短，疑似自动化
 	ErrCodeClientMismatch  = 1007 // 提交客户端与出题客户端不一致
-	ErrCodeRiskBlocked     = 1008 // 风控评分过高被拦截
+	ErrCodeRiskBlocked     = 1008 // 风控评分过高被拦截（仅用于服务端标识；对外统一返回 ErrCodeVerifyFailed，避免成为调参探针）
 	ErrCodePowInvalid      = 1009 // 工作量证明缺失或无效
 )
 

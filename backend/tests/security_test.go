@@ -1,19 +1,53 @@
 package tests
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"simple-captcha/config"
 	"simple-captcha/helper"
+	"simple-captcha/models"
 	"simple-captcha/risk"
+	"simple-captcha/routes"
 	"simple-captcha/services"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var (
+	testRouter     *gin.Engine
+	testRouterOnce sync.Once
+)
+
+// router 构建真实路由（含全部中间件），并额外挂一个回显 ClientIP 的调试路由
+func router() *gin.Engine {
+	testRouterOnce.Do(func() {
+		gin.SetMode(gin.TestMode)
+		testRouter = routes.SetupRouter()
+		testRouter.GET("/__client_ip", func(c *gin.Context) { c.String(http.StatusOK, c.ClientIP()) })
+	})
+	return testRouter
+}
+
+// botTelemetry 一组足以触发拦截阈值的机器特征
+func botTelemetry() (*risk.Env, *risk.Trace) {
+	return &risk.Env{Webdriver: true, Automation: []string{"cdc_adoQpoasnfa76pfcZLmcfl_Array"}},
+		&risk.Trace{
+			Points:      [][3]float64{{0, 0, 0}, {10, 0, 5}, {20, 0, 10}, {30, 0, 15}, {40, 0, 20}, {50, 0, 25}, {60, 0, 30}, {70, 0, 35}, {80, 0, 40}, {90, 0, 45}, {100, 0, 50}},
+			Untrusted:   11,
+			StartedAt:   1,
+			SubmittedAt: 60,
+		}
+}
 
 var hexKeyPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
@@ -278,4 +312,161 @@ func TestRiskEngine_BlocksObviousBot(t *testing.T) {
 	if cfg.Risk.Mode == "enforce" {
 		assert.True(t, engine.ShouldBlock(result))
 	}
+}
+
+func TestClientRiskStore_ConcurrentRecordsAreAtomic(t *testing.T) {
+	store := services.NewClientRiskStore()
+	clientHash := fmt.Sprintf("test-concurrent-%d", time.Now().UnixNano())
+
+	const workers = 40
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			store.Record(clientHash, false, 20)
+		}()
+	}
+	wg.Wait()
+
+	state := store.Get(clientHash)
+	assert.Equal(t, workers, state.Fails, "并发失败不能互相覆盖")
+	assert.Equal(t, 20, state.LastScore)
+
+	// 成功一次：成功数 +1，失败数衰减 1
+	store.Record(clientHash, true, 0)
+	state = store.Get(clientHash)
+	assert.Equal(t, workers-1, state.Fails)
+	assert.Equal(t, 1, state.Successes)
+
+	// 失败计数不会衰减到负数
+	fresh := fmt.Sprintf("test-fresh-%d", time.Now().UnixNano())
+	store.Record(fresh, true, 0)
+	assert.Equal(t, 0, store.Get(fresh).Fails)
+}
+
+func TestVerify_ConsumeAttemptExhaustsChallenge(t *testing.T) {
+	manager := services.GetServiceManager()
+	service, _ := manager.GetCaptchaService("slide-text")
+	verifier, _ := manager.GetVerifyService("slide-text")
+
+	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text"})
+	require.Nil(t, err)
+	answer, meta := slideAnswer(t, data.Key)
+	pow := solvePow(t, data.Key, meta)
+
+	maxAttempts := config.LoadConfig().Captcha.MaxAttempts
+	for i := 1; i < maxAttempts; i++ {
+		exhausted, consumeErr := verifier.ConsumeAttempt(data.Key)
+		require.Nil(t, consumeErr)
+		assert.False(t, exhausted, "第 %d 次", i)
+	}
+
+	exhausted, consumeErr := verifier.ConsumeAttempt(data.Key)
+	require.Nil(t, consumeErr)
+	assert.True(t, exhausted, "最后一次消耗应作废题目")
+
+	waitMinSolveTime()
+	ok, _, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, Pow: pow})
+	assert.False(t, ok)
+	require.NotNil(t, verifyErr)
+	assert.Equal(t, helper.ErrCodeExpired, verifyErr.Code, "题目作废后正确答案也无法通过")
+}
+
+func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
+	cfg := config.LoadConfig()
+	if !cfg.Risk.Enabled || cfg.Risk.Mode != "enforce" {
+		t.Skip("RISK_MODE != enforce")
+	}
+
+	manager := services.GetServiceManager()
+	service, _ := manager.GetCaptchaService("slide-text")
+	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text"})
+	require.Nil(t, err)
+
+	env, trace := botTelemetry()
+	body, _ := json.Marshal(map[string]interface{}{"point": "1,1", "env": env, "trace": trace})
+	req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text/"+data.Key+"/attempts", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp struct {
+		Code  int    `json:"code"`
+		Error string `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, helper.ErrCodeVerifyFailed, resp.Code, "风控拦截对外应与答案错误无法区分")
+	assert.Equal(t, helper.ErrVerifyFailed.Message, resp.Error)
+
+	record, getErr := services.NewBaseService().GetCaptchaData(data.Key)
+	require.Nil(t, getErr)
+	assert.Equal(t, float64(1), record["attempts"], "拦截应消耗一次尝试机会")
+}
+
+func TestVerifyEndpoint_RejectsOversizedBody(t *testing.T) {
+	cfg := config.LoadConfig()
+	limit := cfg.Security.VerifyMaxBodySize
+	require.Greater(t, limit, int64(0))
+
+	// 语法合法但超过上限的 JSON；ContentLength 置为 -1 模拟 chunked 传输，只能靠 MaxBytesReader 截断
+	body := `{"point":"1,1"` + strings.Repeat(" ", int(limit)+1024) + `}`
+	req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text/"+strings.Repeat("a", 32)+"/attempts", strings.NewReader(body))
+	req.ContentLength = -1
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+}
+
+func TestVerifyRequest_RejectsOversizedTelemetryFields(t *testing.T) {
+	base := models.VerifyRequest{Type: "slide-text", Key: "k", Point: "1,1"}
+
+	req := base
+	req.Env = &risk.Env{Languages: []string{strings.Repeat("x", 129)}}
+	assert.NotNil(t, req.Validate(), "语言列表单项超长应被拒绝")
+
+	req = base
+	req.Env = &risk.Env{Automation: []string{strings.Repeat("x", 129)}}
+	assert.NotNil(t, req.Validate(), "自动化标记单项超长应被拒绝")
+
+	req = base
+	req.Trace = &risk.Trace{PointerType: strings.Repeat("p", 17)}
+	assert.NotNil(t, req.Validate(), "指针类型超长应被拒绝")
+
+	req = base
+	req.Env = &risk.Env{Languages: []string{"zh-CN", "en"}}
+	req.Trace = &risk.Trace{PointerType: "mouse"}
+	assert.Nil(t, req.Validate())
+}
+
+func TestRouter_CDNHeadersIgnoredByDefault(t *testing.T) {
+	cfg := config.LoadConfig()
+	if len(cfg.Security.RemoteIPHeaders) != 2 {
+		t.Skip("REMOTE_IP_HEADERS 已自定义")
+	}
+	assert.Equal(t, []string{"X-Forwarded-For", "X-Real-IP"}, cfg.Security.RemoteIPHeaders)
+
+	clientIP := func(remoteAddr string, headers map[string]string) string {
+		req := httptest.NewRequest(http.MethodGet, "/__client_ip", nil)
+		req.RemoteAddr = remoteAddr
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		rec := httptest.NewRecorder()
+		router().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+
+	// 直连来源命中可信代理网段：未显式开启的 CDN 头不应被采信
+	assert.Equal(t, "10.0.0.8", clientIP("10.0.0.8:4321", map[string]string{
+		"CF-Connecting-IP": "198.51.100.7",
+		"True-Client-IP":   "198.51.100.8",
+	}))
+	// 常规代理头仍然生效
+	assert.Equal(t, "203.0.113.9", clientIP("10.0.0.8:4321", map[string]string{"X-Forwarded-For": "203.0.113.9"}))
+	// 直连来源不在可信网段：任何代理头都不生效
+	assert.Equal(t, "203.0.113.50", clientIP("203.0.113.50:4321", map[string]string{"X-Forwarded-For": "198.51.100.1"}))
 }

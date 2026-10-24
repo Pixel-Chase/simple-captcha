@@ -8,6 +8,8 @@ import (
 	"simple-captcha/config"
 	"strconv"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -60,37 +62,48 @@ func (s *ClientRiskStore) Get(clientHash string) ClientRisk {
 	return state
 }
 
+// recordScript 在 Redis 端原子更新计数器：失败 fails+1；成功 successes+1 且 fails 衰减 1（下限 0）。
+// 之前"先 HGETALL 再 HSET"的读改写在并发失败时会互相覆盖，批量脚本的失败次数被严重低估，
+// 难度升级与拦截都会因此延迟触发。
+var recordScript = redis.NewScript(`
+local key = KEYS[1]
+local fails
+if ARGV[1] == "1" then
+  redis.call("HINCRBY", key, "successes", 1)
+  fails = redis.call("HINCRBY", key, "fails", -1)
+  if fails < 0 then
+    redis.call("HSET", key, "fails", 0)
+    fails = 0
+  end
+else
+  fails = redis.call("HINCRBY", key, "fails", 1)
+end
+redis.call("HSET", key, "lastScore", ARGV[2], "updatedAt", ARGV[3])
+redis.call("PEXPIRE", key, ARGV[4])
+return fails
+`)
+
 // Record 记录一次校验结果。失败累加失败计数，成功则让失败计数衰减一次。
 func (s *ClientRiskStore) Record(clientHash string, success bool, score int) {
 	if clientHash == "" {
 		return
 	}
 
-	current := s.Get(clientHash)
+	successFlag := 0
 	if success {
-		current.Successes++
-		if current.Fails > 0 {
-			current.Fails--
-		}
-	} else {
-		current.Fails++
+		successFlag = 1
 	}
-	current.LastScore = score
-	current.UpdatedAt = time.Now().Unix()
+	ttl := s.cfg.Risk.StateTTL
+	if ttl <= 0 {
+		ttl = 30 * time.Minute
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	key := s.stateKey(clientHash)
-	pipe := cache.GetRedisClient().TxPipeline()
-	pipe.HSet(ctx, key, map[string]interface{}{
-		"fails":     current.Fails,
-		"successes": current.Successes,
-		"lastScore": current.LastScore,
-		"updatedAt": current.UpdatedAt,
-	})
-	pipe.Expire(ctx, key, s.cfg.Risk.StateTTL)
-	if _, err := pipe.Exec(ctx); err != nil {
+	err := recordScript.Run(ctx, cache.GetRedisClient(), []string{s.stateKey(clientHash)},
+		successFlag, score, time.Now().Unix(), ttl.Milliseconds()).Err()
+	if err != nil {
 		log.Printf("写入客户端风控状态失败: client=%s, error=%v", clientHash, err)
 	}
 }

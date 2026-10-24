@@ -131,6 +131,20 @@ func (bvs *BaseVerifyService) failResult(key string, attempts int, message strin
 	return false, message, helper.NewCaptchaError(code, message)
 }
 
+// ConsumeAttempt 在不比对答案的情况下消耗一次尝试机会（例如风控拦截），
+// 否则攻击者可以对同一题目无限次调整遥测数据直到评分放行。次数耗尽时作废题目。
+func (bvs *BaseVerifyService) ConsumeAttempt(key string) (bool, *helper.CaptchaError) {
+	attempts, err := bvs.IncrementAttempts(key)
+	if err != nil {
+		return false, err
+	}
+	if bvs.config.Captcha.MaxAttempts-attempts <= 0 {
+		bvs.DeleteCaptchaData(key)
+		return true, nil
+	}
+	return false, nil
+}
+
 // ParseClickData 解析点击数据，格式为 "x1,y1,x2,y2,..."
 func (bvs *BaseVerifyService) ParseClickData(data string) (interface{}, *helper.CaptchaError) {
 	coords := strings.Split(data, ",")

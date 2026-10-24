@@ -12,11 +12,13 @@ import (
 
 // 遥测数据体积上限，防止超大请求体拖慢评分
 const (
-	maxTracePoints    = 600
-	maxTraceClicks    = 50
-	maxEnvString      = 512
-	maxEnvListLength  = 32
-	maxPowNonceLength = 64
+	maxTracePoints       = 600
+	maxTraceClicks       = 50
+	maxEnvString         = 512
+	maxEnvListLength     = 32
+	maxEnvListItem       = 128 // Languages / Automation 单个元素长度上限
+	maxPointerTypeLength = 16  // mouse / touch / pen
+	maxPowNonceLength    = 64
 )
 
 // CaptchaRequest 验证码请求结构
@@ -143,6 +145,9 @@ func (v *VerifyRequest) ValidateVerifyRequest() error {
 		if len(v.Trace.Clicks) > maxTraceClicks {
 			return errors.New("点击记录数量超出限制")
 		}
+		if len(v.Trace.PointerType) > maxPointerTypeLength {
+			return errors.New("指针类型字段超出长度限制")
+		}
 	}
 
 	if v.Env != nil {
@@ -153,6 +158,14 @@ func (v *VerifyRequest) ValidateVerifyRequest() error {
 		}
 		if len(v.Env.Languages) > maxEnvListLength || len(v.Env.Automation) > maxEnvListLength {
 			return errors.New("环境信息列表超出长度限制")
+		}
+		// 列表只限条数不限单项长度的话，32 个超长字符串仍可撑大请求体并污染日志
+		for _, list := range [][]string{v.Env.Languages, v.Env.Automation} {
+			for _, item := range list {
+				if len(item) > maxEnvListItem {
+					return errors.New("环境信息列表元素超出长度限制")
+				}
+			}
 		}
 	}
 

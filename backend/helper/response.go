@@ -39,6 +39,8 @@ func SimpleErrorResponse(c *gin.Context, code int, message string) {
 		statusCode = http.StatusUnauthorized
 	case 403:
 		statusCode = http.StatusForbidden
+	case 413:
+		statusCode = http.StatusRequestEntityTooLarge
 	case 429:
 		statusCode = http.StatusTooManyRequests
 	case 500:

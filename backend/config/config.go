@@ -118,21 +118,23 @@ type MonitoringConfig struct {
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
-	EnableHTTPS      bool
-	CertFile         string
-	KeyFile          string
-	TrustedProxies   []string
-	EnableCSRF       bool
-	CSRFSecret       string
-	JWTSecret        string
-	SessionSecret    string
-	MaxRequestSize   int64
-	EnableRateLimit  bool
-	GlobalRateLimit  int
-	IPWhitelist      []string
-	IPBlacklist      []string
-	APIKey           string
-	RateLimitBackend string // redis：多实例共享的滑动窗口限流；memory：单实例内存限流
+	EnableHTTPS       bool
+	CertFile          string
+	KeyFile           string
+	TrustedProxies    []string
+	RemoteIPHeaders   []string // 解析客户端 IP 时按顺序尝试的代理头；仅在直连来源命中 TrustedProxies 时采信
+	EnableCSRF        bool
+	CSRFSecret        string
+	JWTSecret         string
+	SessionSecret     string
+	MaxRequestSize    int64
+	VerifyMaxBodySize int64 // 校验提交接口（attempts）的请求体上限；遥测数据体积有限，单独收紧
+	EnableRateLimit   bool
+	GlobalRateLimit   int
+	IPWhitelist       []string
+	IPBlacklist       []string
+	APIKey            string
+	RateLimitBackend  string // redis：多实例共享的滑动窗口限流；memory：单实例内存限流
 }
 
 var (
@@ -257,21 +259,25 @@ func loadFromEnv() *Config {
 			CollectInterval: getDurationEnv("METRICS_COLLECT_INTERVAL", 30*time.Second),
 		},
 		Security: SecurityConfig{
-			EnableHTTPS:      getBoolEnv("ENABLE_HTTPS", false),
-			CertFile:         getEnv("CERT_FILE", ""),
-			KeyFile:          getEnv("KEY_FILE", ""),
-			TrustedProxies:   getStringSliceEnv("TRUSTED_PROXIES", []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}),
-			EnableCSRF:       getBoolEnv("ENABLE_CSRF", false),
-			CSRFSecret:       getEnv("CSRF_SECRET", ""),
-			JWTSecret:        getEnv("JWT_SECRET", ""),
-			SessionSecret:    getEnv("SESSION_SECRET", ""),
-			MaxRequestSize:   getInt64Env("MAX_REQUEST_SIZE", 32<<20), // 32MB
-			EnableRateLimit:  getBoolEnv("ENABLE_RATE_LIMIT", true),
-			GlobalRateLimit:  getIntEnv("RATE_LIMIT_REQUESTS", 100),
-			IPWhitelist:      getStringSliceEnv("IP_WHITELIST", []string{}),
-			IPBlacklist:      getStringSliceEnv("IP_BLACKLIST", []string{}),
-			APIKey:           getEnv("API_KEY", ""),
-			RateLimitBackend: strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_BACKEND", "redis"))),
+			EnableHTTPS:    getBoolEnv("ENABLE_HTTPS", false),
+			CertFile:       getEnv("CERT_FILE", ""),
+			KeyFile:        getEnv("KEY_FILE", ""),
+			TrustedProxies: getStringSliceEnv("TRUSTED_PROXIES", []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}),
+			// 默认只采信常规反向代理头。CF-Connecting-IP / True-Client-IP 之类的 CDN 头只应在
+			// 确认部署于对应 CDN 之后显式开启，否则前置代理原样透传时攻击者可借此伪造来源 IP。
+			RemoteIPHeaders:   getStringSliceEnv("REMOTE_IP_HEADERS", []string{"X-Forwarded-For", "X-Real-IP"}),
+			EnableCSRF:        getBoolEnv("ENABLE_CSRF", false),
+			CSRFSecret:        getEnv("CSRF_SECRET", ""),
+			JWTSecret:         getEnv("JWT_SECRET", ""),
+			SessionSecret:     getEnv("SESSION_SECRET", ""),
+			MaxRequestSize:    getInt64Env("MAX_REQUEST_SIZE", 32<<20),      // 32MB
+			VerifyMaxBodySize: getInt64Env("VERIFY_MAX_BODY_SIZE", 256<<10), // 256KB：600 个轨迹点加环境信号远小于该值
+			EnableRateLimit:   getBoolEnv("ENABLE_RATE_LIMIT", true),
+			GlobalRateLimit:   getIntEnv("RATE_LIMIT_REQUESTS", 100),
+			IPWhitelist:       getStringSliceEnv("IP_WHITELIST", []string{}),
+			IPBlacklist:       getStringSliceEnv("IP_BLACKLIST", []string{}),
+			APIKey:            getEnv("API_KEY", ""),
+			RateLimitBackend:  strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_BACKEND", "redis"))),
 		},
 	}
 }

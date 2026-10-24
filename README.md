@@ -216,8 +216,9 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 | `1005` | 尝试次数过多 |
 | `1006` | 出题到提交间隔过短（疑似脚本） |
 | `1007` | 提交客户端与出题客户端不一致 |
-| `1008` | 风控评分超过拦截阈值 |
 | `1009` | 工作量证明缺失或无效 |
+
+> 风控评分超过拦截阈值时，接口对外返回与答案错误完全相同的 `1003`，并同样消耗一次尝试机会；真实原因（内部码 `1008` 与评分理由）只记录在服务端日志，避免成为脚本调参的探针。
 
 ---
 
@@ -382,9 +383,10 @@ function App() {
 | 工作量证明 PoW | 每道题下发 nonce 与难度位数，SDK 在后台用 SHA-256 碰撞；真人无感，批量脚本成本线性上升。难度随客户端风险等级提升 | `CAPTCHA_POW_*` |
 | 难度分级 | 1-5 级，映射到字符数量、干扰强度、拼图尺寸、旋转区间以及校验容差；连续失败或高风险分会自动升级 | `CAPTCHA_DEFAULT_DIFFICULTY` |
 | 服务端选题 | `type=auto` 时由服务端按风险等级决定题型，客户端无法固定选择最易自动化的题型 | — |
-| 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100；达到升级阈值提升后续难度，达到拦截阈值拒绝本次校验 | `RISK_*` |
+| 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100；达到升级阈值提升后续难度，达到拦截阈值拒绝本次校验（同样消耗一次尝试机会，响应与答案错误一致） | `RISK_*` |
 | Redis 限流 | 基于有序集合的滑动窗口，多实例共享；Redis 不可用时自动回退进程内限流 | `RATE_LIMIT_BACKEND` |
-| 可信代理 | `X-Forwarded-For` 等头只在直连来源命中 `TRUSTED_PROXIES` 时才被采信 | `TRUSTED_PROXIES` |
+| 可信代理 | 仅 `REMOTE_IP_HEADERS` 列出的代理头（默认 `X-Forwarded-For` / `X-Real-IP`）会被读取，且只在直连来源命中 `TRUSTED_PROXIES` 时才被采信 | `TRUSTED_PROXIES` `REMOTE_IP_HEADERS` |
+| 请求体上限 | 全局上限之外，校验提交接口单独限制请求体大小，chunked 传输同样生效；遥测列表的单项长度也有上限 | `MAX_REQUEST_SIZE` `VERIFY_MAX_BODY_SIZE` |
 
 **采集级别与隐私**
 
@@ -495,7 +497,10 @@ curl -X GET \
 | `RISK_STATE_TTL` | 客户端风控状态保留时长 | `30m` |
 | `RISK_TELEMETRY_LOG_SIZE` | Redis 中保留的最近遥测记录条数（`captcha:telemetry` 列表），0 表示不保存 | `1000` |
 | `RATE_LIMIT_BACKEND` | `redis` 滑动窗口（多实例共享）或 `memory` | `redis` |
-| `TRUSTED_PROXIES` | 可信代理网段，只有来自这些来源的 `X-Forwarded-For` 等头才会被采信 | 私有网段 |
+| `TRUSTED_PROXIES` | 可信代理网段，只有来自这些来源的代理头才会被采信；生产环境建议收窄为实际的代理地址 | 私有网段 |
+| `REMOTE_IP_HEADERS` | 解析客户端 IP 时按顺序读取的代理头，逗号分隔。部署在 Cloudflare / Akamai 之后再追加 `CF-Connecting-IP` / `True-Client-IP` | `X-Forwarded-For,X-Real-IP` |
+| `MAX_REQUEST_SIZE` | 全局请求体上限（字节） | `33554432` |
+| `VERIFY_MAX_BODY_SIZE` | 校验提交接口（`/attempts`）的请求体上限（字节），超出返回 HTTP 413 | `262144` |
 
 ---
 
