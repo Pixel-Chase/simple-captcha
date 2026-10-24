@@ -4,62 +4,66 @@ import (
 	"log"
 	"simple-captcha/helper"
 
-	"github.com/wenlng/go-captcha/v2/base/option"
 	"github.com/wenlng/go-captcha/v2/rotate"
 )
+
+// 1 倍率下旋转内圆可选尺寸
+var baseRotateThumbSizes = []int{140, 150, 160, 170}
 
 // RotateCaptchaService 旋转验证码服务
 type RotateCaptchaService struct {
 	*BaseService
-	rotateCapt rotate.Captcha
+	backgrounds *backgroundCache
+	instances   *instanceCache[rotate.Captcha]
 }
 
 // NewRotateCaptchaService 创建旋转验证码服务
 func NewRotateCaptchaService() *RotateCaptchaService {
-	service := &RotateCaptchaService{
-		BaseService: NewBaseService(),
-	}
-	service.initCaptcha()
-	return service
-}
-
-// initCaptcha 初始化验证码生成器
-func (s *RotateCaptchaService) initCaptcha() {
-	// 创建一个旋转验证码的构建器，并设置旋转角度的范围
-	builder := rotate.NewBuilder(rotate.WithRangeAnglePos([]option.RangeVal{
-		{Min: 20, Max: 330},
-	}))
-
-	// 获取验证码图片资源，并检查是否有错误发生
 	images, err := helper.GetImages()
 	if err != nil {
 		log.Fatalln("加载图片资源失败:", err)
 	}
 
-	// 将获取到的图片资源设置到验证码构建器中
-	builder.SetResources(
-		rotate.WithImages(images),
-	)
+	service := &RotateCaptchaService{
+		BaseService: NewBaseService(),
+		backgrounds: newBackgroundCache(images),
+	}
+	service.instances = newInstanceCache(service.build)
+	return service
+}
 
-	// 使用构建器生成旋转类型的验证码实例
-	s.rotateCapt = builder.Make()
+// build 按难度 × 倍率构建生成器实例
+func (s *RotateCaptchaService) build(key instanceKey) rotate.Captcha {
+	profile := GetDifficultyProfile(key.level)
+
+	square := baseRotateSize * key.scale
+	builder := rotate.NewBuilder(
+		rotate.WithImageSquareSize(square),
+		rotate.WithRangeThumbImageSquareSize(scaleInts(baseRotateThumbSizes, key.scale)),
+		rotate.WithRangeAnglePos(profile.RotateAngles),
+	)
+	builder.SetResources(
+		rotate.WithImages(s.backgrounds.get(square, square)),
+	)
+	return builder.Make()
 }
 
 // GenerateCaptcha 生成验证码
-func (s *RotateCaptchaService) GenerateCaptcha(mode string) (*CaptchaData, *helper.CaptchaError) {
-	// 调用 rotateCapt.Generate() 生成基础验证码数据
-	captData, err := s.rotateCapt.Generate()
+func (s *RotateCaptchaService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
+	req = s.normalizeRequest(req, s.GetServiceType())
+	captcha := s.instances.get(req.Difficulty, req.Scale, "")
+
+	captData, err := captcha.Generate()
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码生成失败", err.Error())
 	}
 
-	// 获取验证码数据块
 	blockData := captData.GetData()
 	if blockData == nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码数据为空")
 	}
 
-	// 转换图片为Base64
+	// 旋转主图中心为透明圆孔，必须保留 Alpha 通道，因此沿用 PNG
 	masterImageBase64, err := captData.GetMasterImage().ToBase64()
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
@@ -70,22 +74,24 @@ func (s *RotateCaptchaService) GenerateCaptcha(mode string) (*CaptchaData, *help
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "缩略图转换失败", err.Error())
 	}
 
-	// 生成验证码key
-	key, keyErr := s.GenerateKey(blockData)
-	if keyErr != nil {
-		return nil, keyErr
+	key, meta, persistErr := s.persistChallenge(req, blockData)
+	if persistErr != nil {
+		return nil, persistErr
 	}
 
-	// 保存验证码数据到缓存
-	if saveErr := s.SaveCaptchaData(key, blockData); saveErr != nil {
-		return nil, saveErr
-	}
-
-	// 返回验证码数据
+	square := baseRotateSize * req.Scale
 	return &CaptchaData{
-		Key:   key,
-		Image: masterImageBase64,
-		Thumb: thumbImageBase64,
+		Key:         key,
+		Image:       masterImageBase64,
+		Thumb:       thumbImageBase64,
+		ImageWidth:  square,
+		ImageHeight: square,
+		ThumbWidth:  blockData.Width,
+		ThumbHeight: blockData.Height,
+		Scale:       req.Scale,
+		Difficulty:  req.Difficulty,
+		PowNonce:    meta.PowNonce,
+		PowBits:     meta.PowBits,
 	}, nil
 }
 
@@ -109,13 +115,16 @@ func NewRotateVerifyServiceImpl() *RotateVerifyServiceImpl {
 }
 
 // VerifyData 验证数据
-func (s *RotateVerifyServiceImpl) VerifyData(data, key string) (bool, string, *helper.CaptchaError) {
+func (s *RotateVerifyServiceImpl) VerifyData(in *VerifyInput) (bool, string, *helper.CaptchaError) {
 	return s.VerifyDataTemplate(
-		data, key,
+		in,
 		s.ParseRotateData,
-		func(userData, correctData interface{}) bool {
-			userAngle := userData.(map[string]interface{})
-			return s.validator.ValidateRotateAngle(userAngle, correctData, 5.0)
+		func(userData, correctData interface{}, meta *ChallengeMeta) bool {
+			userAngle, ok := userData.(map[string]interface{})
+			if !ok {
+				return false
+			}
+			return s.validator.ValidateRotateAngle(userAngle, correctData, RotateToleranceFor(meta))
 		},
 	)
 }

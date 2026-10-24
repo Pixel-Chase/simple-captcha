@@ -29,6 +29,9 @@ func SetupRouter() *gin.Engine {
 
 	r := gin.New()
 
+	// 客户端 IP 解析：这些代理头只有在直连来源命中 TrustedProxies 时才会被采信
+	r.RemoteIPHeaders = []string{"X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "True-Client-IP"}
+
 	// 初始化服务
 	serviceManager := services.GetServiceManager()
 	riskControl := serviceManager.GetRiskControlService()
@@ -56,7 +59,7 @@ func SetupRouter() *gin.Engine {
 	// 验证码API路由组（需要限流保护）
 	api := r.Group(cfg.Server.APIPrefix + "/captchas")
 	api.Use(middleware.RateLimitMiddleware(riskControl))
-	api.Use(middleware.CacheMiddleware(5 * time.Minute)) // 缓存5分钟
+	api.Use(middleware.NoCacheMiddleware()) // 验证码接口（含错误响应）一律禁止缓存
 
 	// 注册验证码相关路由
 	registerCaptchaRoutes(api)

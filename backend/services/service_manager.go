@@ -13,6 +13,9 @@ type ServiceManagerImpl struct {
 	verifyServices  map[string]VerifyService
 	riskControl     RiskControlService
 	cache           CacheService
+	clientRisk      *ClientRiskStore
+	riskEngine      *RiskEngine
+	policy          *ChallengePolicy
 	mutex           sync.RWMutex
 	initialized     bool
 }
@@ -42,22 +45,27 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	// 初始化缓存服务
 	sm.cache = NewRedisCacheService()
 
-	// 初始化风险控制服务
+	// 初始化风险控制服务（IP 限流 + 二次验证令牌）
 	sm.riskControl = NewRiskControlService()
+
+	// 初始化客户端风控状态、评分引擎与出题策略
+	sm.clientRisk = NewClientRiskStore()
+	sm.riskEngine = NewRiskEngine(sm.clientRisk)
+	sm.policy = NewChallengePolicy(sm.clientRisk)
 
 	// 注册验证码服务
 	sm.captchaServices["click-text"] = NewClickTextCaptchaService()
 	sm.captchaServices["click-shape"] = NewClickShapeCaptchaService()
 	sm.captchaServices["rotate"] = NewRotateCaptchaService()
-	sm.captchaServices["slide-text"] = &SlideTextService{}
-	sm.captchaServices["slide-region"] = &SlideRegionService{}
+	sm.captchaServices["slide-text"] = NewSlideTextCaptchaService()
+	sm.captchaServices["slide-region"] = NewSlideRegionCaptchaService()
 
 	// 注册验证服务
 	sm.verifyServices["click-text"] = NewClickTextVerifyService()
 	sm.verifyServices["click-shape"] = NewClickShapeVerifyService()
-	sm.verifyServices["rotate"] = &RotateVerifyService{}
-	sm.verifyServices["slide-text"] = &SlideTextVerifyService{}
-	sm.verifyServices["slide-region"] = &SlideVerifyService{}
+	sm.verifyServices["rotate"] = NewRotateVerifyServiceImpl()
+	sm.verifyServices["slide-text"] = NewSlideTextVerifyServiceImpl()
+	sm.verifyServices["slide-region"] = NewSlideRegionVerifyServiceImpl()
 
 	sm.initialized = true
 
@@ -132,6 +140,30 @@ func (sm *ServiceManagerImpl) GetCacheService() CacheService {
 	defer sm.mutex.RUnlock()
 
 	return sm.cache
+}
+
+// GetRiskEngine 获取风控评分引擎
+func (sm *ServiceManagerImpl) GetRiskEngine() *RiskEngine {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.riskEngine
+}
+
+// GetChallengePolicy 获取出题策略
+func (sm *ServiceManagerImpl) GetChallengePolicy() *ChallengePolicy {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.policy
+}
+
+// GetClientRiskStore 获取客户端风控状态存储
+func (sm *ServiceManagerImpl) GetClientRiskStore() *ClientRiskStore {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.clientRisk
 }
 
 // GetAllCaptchaServices 获取所有验证码服务
@@ -235,6 +267,9 @@ func (sm *ServiceManagerImpl) Shutdown() {
 	sm.verifyServices = make(map[string]VerifyService)
 	sm.riskControl = nil
 	sm.cache = nil
+	sm.clientRisk = nil
+	sm.riskEngine = nil
+	sm.policy = nil
 	sm.initialized = false
 
 	log.Println("服务管理器已关闭")

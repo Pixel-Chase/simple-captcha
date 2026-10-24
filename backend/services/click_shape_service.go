@@ -1,6 +1,7 @@
 package services
 
 import (
+	"image"
 	"log"
 	"simple-captcha/helper"
 
@@ -12,92 +13,63 @@ import (
 // ClickShapeCaptchaService 点击形状验证码服务
 type ClickShapeCaptchaService struct {
 	*BaseService
-	shapeCapt click.Captcha
+	shapes      map[string]image.Image
+	backgrounds *backgroundCache
+	instances   *instanceCache[click.Captcha]
 }
 
 // NewClickShapeCaptchaService 创建点击形状验证码服务
 func NewClickShapeCaptchaService() *ClickShapeCaptchaService {
-	service := &ClickShapeCaptchaService{
-		BaseService: NewBaseService(),
-	}
-	service.initCaptcha()
-	return service
-}
-
-// initCaptcha 初始化验证码生成器
-func (s *ClickShapeCaptchaService) initCaptcha() {
-	// 创建一个新的构建器实例，并设置各种配置选项
-	builder := click.NewBuilder(
-		click.WithRangeLen(option.RangeVal{Min: 3, Max: 6}),
-		click.WithRangeVerifyLen(option.RangeVal{Min: 2, Max: 3}),
-		click.WithRangeThumbBgDistort(1),
-		click.WithIsThumbNonDeformAbility(true),
-	)
-
-	// 加载形状数据，这些数据对于验证码生成至关重要
 	shapeMaps, err := shapes.GetShapes()
 	if err != nil {
 		log.Fatalln("加载形状数据失败:", err)
 	}
 
-	// 加载图像资源，用于背景等用途
 	images, err := helper.GetImages()
 	if err != nil {
 		log.Fatalln("加载图片资源失败:", err)
 	}
 
-	// 设置构建器所需的资源
-	builder.SetResources(
-		click.WithShapes(shapeMaps),
-		click.WithBackgrounds(images),
+	service := &ClickShapeCaptchaService{
+		BaseService: NewBaseService(),
+		shapes:      shapeMaps,
+		backgrounds: newBackgroundCache(images),
+	}
+	service.instances = newInstanceCache(service.build)
+	return service
+}
+
+// build 按难度 × 倍率构建生成器实例（图形点选不区分主题）
+func (s *ClickShapeCaptchaService) build(key instanceKey) click.Captcha {
+	profile := GetDifficultyProfile(key.level)
+
+	size := imageSize(key.scale)
+	builder := click.NewBuilder(
+		click.WithImageSize(size),
+		click.WithRangeThumbImageSize(thumbSize(key.scale)),
+		click.WithRangeLen(profile.ClickLen),
+		click.WithRangeVerifyLen(profile.ClickVerifyLen),
+		click.WithRangeSize(scaleRange(profile.ClickFontSize, key.scale)),
+		click.WithRangeThumbSize(scaleRange(option.RangeVal{Min: 22, Max: 28}, key.scale)),
+		click.WithRangeThumbBgDistort(profile.ThumbDistort),
+		click.WithRangeThumbBgCirclesNum(profile.ThumbCircles),
+		click.WithRangeThumbBgSlimLineNum(profile.ThumbSlimLines),
+		click.WithIsThumbNonDeformAbility(true),
 	)
 
-	// 使用构建器生成形状验证码
-	s.shapeCapt = builder.MakeWithShape()
+	builder.SetResources(
+		click.WithShapes(s.shapes),
+		click.WithBackgrounds(s.backgrounds.get(size.Width, size.Height)),
+	)
+	return builder.MakeWithShape()
 }
 
 // GenerateCaptcha 生成验证码
-func (s *ClickShapeCaptchaService) GenerateCaptcha(mode string) (*CaptchaData, *helper.CaptchaError) {
-	// 生成验证码数据
-	captData, err := s.shapeCapt.Generate()
-	if err != nil {
-		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码生成失败", err.Error())
-	}
-
-	// 获取验证码中的点数据
-	dotData := captData.GetData()
-	if dotData == nil {
-		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码数据为空")
-	}
-
-	// 转换图片为Base64
-	masterImageBase64, err := captData.GetMasterImage().ToBase64()
-	if err != nil {
-		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
-	}
-
-	thumbImageBase64, err := captData.GetThumbImage().ToBase64()
-	if err != nil {
-		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "缩略图转换失败", err.Error())
-	}
-
-	// 生成验证码key
-	key, keyErr := s.GenerateKey(dotData)
-	if keyErr != nil {
-		return nil, keyErr
-	}
-
-	// 保存验证码数据到缓存
-	if saveErr := s.SaveCaptchaData(key, dotData); saveErr != nil {
-		return nil, saveErr
-	}
-
-	// 返回验证码数据
-	return &CaptchaData{
-		Key:   key,
-		Image: masterImageBase64,
-		Thumb: thumbImageBase64,
-	}, nil
+func (s *ClickShapeCaptchaService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
+	req = s.normalizeRequest(req, s.GetServiceType())
+	// 图形点选不区分明暗主题，统一使用一套实例
+	captcha := s.instances.get(req.Difficulty, req.Scale, "")
+	return generateClickCaptcha(s.BaseService, captcha, req)
 }
 
 // GetServiceType 获取服务类型
@@ -120,13 +92,6 @@ func NewClickShapeVerifyService() *ClickShapeVerifyService {
 }
 
 // VerifyData 验证数据
-func (s *ClickShapeVerifyService) VerifyData(data, key string) (bool, string, *helper.CaptchaError) {
-	return s.VerifyDataTemplate(
-		data, key,
-		s.ParseClickData,
-		func(userData, correctData interface{}) bool {
-			userDots := userData.([]map[string]interface{})
-			return s.validator.ValidateClickData(userDots, correctData, 25.0)
-		},
-	)
+func (s *ClickShapeVerifyService) VerifyData(in *VerifyInput) (bool, string, *helper.CaptchaError) {
+	return s.VerifyDataTemplate(in, s.ParseClickData, validateClickAnswer(s.validator))
 }

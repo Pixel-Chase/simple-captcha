@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"fmt"
 	"simple-captcha/services"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -57,7 +59,7 @@ func TestServiceManager_ValidateServices(t *testing.T) {
 	// 验证服务完整性
 	if managerImpl, ok := manager.(*services.ServiceManagerImpl); ok {
 		err := managerImpl.ValidateServices()
-		assert.NoError(t, err)
+		assert.Nil(t, err)
 	}
 }
 
@@ -89,7 +91,8 @@ func TestRiskControlService_IPLimit(t *testing.T) {
 	manager := services.NewServiceManager()
 	riskControl := manager.GetRiskControlService()
 
-	testIP := "192.168.1.100"
+	// 限流计数存放在 Redis 中会跨测试运行保留，使用唯一 IP 避免互相干扰
+	testIP := fmt.Sprintf("198.51.100.%d-%d", time.Now().UnixNano()%250, time.Now().UnixNano())
 
 	// 测试IP限制检查
 	for i := 0; i < 30; i++ { // 默认限制是30次
@@ -113,7 +116,7 @@ func TestRiskControlService_SecondVerifyToken(t *testing.T) {
 	// 如果是具体实现，测试token生成
 	if riskImpl, ok := riskControl.(*services.RiskControlServiceImpl); ok {
 		token, err := riskImpl.GenerateSecondVerifyToken("test-key")
-		assert.NoError(t, err)
+		assert.Nil(t, err)
 		assert.NotEmpty(t, token)
 
 		// 验证生成的token
@@ -133,7 +136,7 @@ func TestRiskControlService_SecondVerifyDataConsumedFromRedis(t *testing.T) {
 	err := baseService.SaveSecondVerifyData(token, map[string]interface{}{
 		"verified": true,
 	})
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 	defer baseService.DeleteCaptchaData(token)
 
 	result := riskControl.ValidateSecondVerifyToken(token)
@@ -175,18 +178,19 @@ func TestCacheService_Operations(t *testing.T) {
 func TestBaseService_CaptchaDataOperations(t *testing.T) {
 	baseService := services.NewBaseService()
 	testKey := "test-captcha-key"
+	// JSON 往返后数值类型为 float64
 	testData := map[string]interface{}{
-		"x": 100,
-		"y": 200,
+		"x": float64(100),
+		"y": float64(200),
 	}
 
-	// 测试保存验证码数据
-	err := baseService.SaveCaptchaData(testKey, testData)
-	assert.NoError(t, err)
+	// 测试保存验证码数据（nil meta 使用默认元数据）
+	err := baseService.SaveCaptchaData(testKey, testData, nil)
+	assert.Nil(t, err)
 
 	// 测试获取验证码数据
 	retrievedData, err := baseService.GetCaptchaData(testKey)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 	assert.NotNil(t, retrievedData)
 
 	// 验证数据内容
@@ -196,17 +200,17 @@ func TestBaseService_CaptchaDataOperations(t *testing.T) {
 
 	// 测试增加尝试次数
 	attempts, err := baseService.IncrementAttempts(testKey)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 	assert.Equal(t, 1, attempts)
 
 	// 测试检查最大尝试次数
 	maxReached, err := baseService.IsMaxAttemptsReached(testKey)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 	assert.False(t, maxReached) // 第一次尝试，不应该达到最大值
 
 	// 测试标记为已验证
 	err = baseService.MarkAsVerified(testKey)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 
 	// 清理测试数据
 	baseService.DeleteCaptchaData(testKey)
@@ -231,7 +235,7 @@ func BenchmarkServiceManager_GetCaptchaService(b *testing.B) {
 func BenchmarkRiskControlService_CheckIPLimit(b *testing.B) {
 	manager := services.NewServiceManager()
 	riskControl := manager.GetRiskControlService()
-	testIP := "192.168.1.200"
+	testIP := fmt.Sprintf("198.51.100.b-%d", time.Now().UnixNano())
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -3,12 +3,14 @@ package helper
 import (
 	"crypto/md5"
 	crand "crypto/rand" // 使用别名避免冲突
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"image"
 	"math/rand" // 添加 math/rand 包
 	"os"
 	"path/filepath"
+	"simple-captcha/config"
 	"strings"
 	"time"
 
@@ -30,6 +32,24 @@ func StringToMD5(src string) string {
 	m.Write([]byte(src))
 	res := hex.EncodeToString(m.Sum(nil))
 	return res
+}
+
+// GenerateSecureKey 生成 128 位加密随机 key（32 位十六进制）。
+// 验证码 key 必须与答案无关：旧实现以答案的 MD5 作为 key，旋转/滑块答案空间很小，
+// 攻击者可离线建字典直接反推答案。
+func GenerateSecureKey() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := crand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+// HashClient 将若干客户端特征拼接后做 SHA-256 并截断为 32 位十六进制，
+// 用于验证码会话绑定与风控聚合，不落原始 IP / UA。
+func HashClient(parts ...string) string {
+	sum := sha256.Sum256([]byte(strings.Join(parts, "|")))
+	return hex.EncodeToString(sum[:16])
 }
 
 // GenerateTimestampedID 生成一个结合时间戳和随机数的唯一ID
@@ -64,9 +84,29 @@ func GenerateRandomString(length int) string {
 	return string(b)
 }
 
-// GetImages 动态读取指定目录下的所有图片文件
+// GetImages 读取配置的素材目录（CAPTCHA_IMAGE_PATH，默认 ./images）下的所有图片文件
 func GetImages() ([]image.Image, error) {
-	return GetImagesFromDir("images")
+	return GetImagesFromDir(resolveImageDir(config.LoadConfig().Captcha.ImagePath))
+}
+
+// resolveImageDir 解析素材目录：相对路径依次尝试当前工作目录及其上级目录
+// （go test 以包目录为工作目录，上级目录即项目根目录）
+func resolveImageDir(configured string) string {
+	if configured == "" {
+		configured = "images"
+	}
+	candidates := []string{configured}
+	if !filepath.IsAbs(configured) {
+		if wd, err := os.Getwd(); err == nil {
+			candidates = append(candidates, filepath.Join(filepath.Dir(wd), configured))
+		}
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate
+		}
+	}
+	return configured
 }
 
 // GetImagesFromDir 从指定目录读取所有支持的图片文件

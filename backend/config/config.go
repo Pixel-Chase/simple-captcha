@@ -22,6 +22,7 @@ type Config struct {
 	Logging    LoggingConfig
 	Monitoring MonitoringConfig
 	Security   SecurityConfig
+	Risk       RiskConfig
 }
 
 // ServerConfig 服务器配置
@@ -74,7 +75,25 @@ type CaptchaConfig struct {
 	RateLimitWindow    time.Duration
 	ImagePath          string
 	FontPath           string
-	DefaultDifficulty  int
+	DefaultDifficulty  int           // 基础难度等级 1-5，风控状态会在此基础上升级
+	MinSolveTime       time.Duration // 出题到提交的最短间隔，低于该值判定为自动化提交
+	BindClient         bool          // 是否将验证码会话绑定到客户端（IP + UA 哈希）
+	ImageQuality       int           // 主图 JPEG 质量 55-100
+	MaxScale           int           // 允许的最大出图倍率（对应前端 devicePixelRatio）1-3
+	PowEnabled         bool          // 是否下发工作量证明（PoW）挑战
+	PowRequired        bool          // 是否强制要求提交 PoW（false 时旧版 SDK 仍可通过，但会计入风险分）
+	PowDifficulty      int           // PoW 基础难度：SHA-256 前导零位数
+	PowMaxDifficulty   int           // PoW 难度上限
+}
+
+// RiskConfig 风控评分配置
+type RiskConfig struct {
+	Enabled           bool          // 是否启用行为/环境风控评分
+	Mode              string        // enforce：按阈值拦截；log：仅记录分数不拦截（灰度观察）
+	EscalateThreshold int           // 达到该分数后提升该客户端后续题目的难度与 PoW 位数
+	BlockThreshold    int           // 达到该分数直接拒绝本次校验（enforce 模式）
+	StateTTL          time.Duration // 客户端风控状态在 Redis 中的保留时间
+	TelemetryLogSize  int           // Redis 中保留的最近遥测记录条数，0 表示不落 Redis
 }
 
 // LoggingConfig 日志配置
@@ -99,20 +118,21 @@ type MonitoringConfig struct {
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
-	EnableHTTPS     bool
-	CertFile        string
-	KeyFile         string
-	TrustedProxies  []string
-	EnableCSRF      bool
-	CSRFSecret      string
-	JWTSecret       string
-	SessionSecret   string
-	MaxRequestSize  int64
-	EnableRateLimit bool
-	GlobalRateLimit int
-	IPWhitelist     []string
-	IPBlacklist     []string
-	APIKey          string
+	EnableHTTPS      bool
+	CertFile         string
+	KeyFile          string
+	TrustedProxies   []string
+	EnableCSRF       bool
+	CSRFSecret       string
+	JWTSecret        string
+	SessionSecret    string
+	MaxRequestSize   int64
+	EnableRateLimit  bool
+	GlobalRateLimit  int
+	IPWhitelist      []string
+	IPBlacklist      []string
+	APIKey           string
+	RateLimitBackend string // redis：多实例共享的滑动窗口限流；memory：单实例内存限流
 }
 
 var (
@@ -203,6 +223,22 @@ func loadFromEnv() *Config {
 			ImagePath:          getEnv("CAPTCHA_IMAGE_PATH", "./images"),
 			FontPath:           getEnv("CAPTCHA_FONT_PATH", "./fonts"),
 			DefaultDifficulty:  getIntEnv("CAPTCHA_DEFAULT_DIFFICULTY", 3),
+			MinSolveTime:       getDurationEnv("CAPTCHA_MIN_SOLVE_TIME", 500*time.Millisecond),
+			BindClient:         getBoolEnv("CAPTCHA_BIND_CLIENT", true),
+			ImageQuality:       getIntEnv("CAPTCHA_IMAGE_QUALITY", 80),
+			MaxScale:           getIntEnv("CAPTCHA_MAX_SCALE", 3),
+			PowEnabled:         getBoolEnv("CAPTCHA_POW_ENABLED", true),
+			PowRequired:        getBoolEnv("CAPTCHA_POW_REQUIRED", false),
+			PowDifficulty:      getIntEnv("CAPTCHA_POW_DIFFICULTY", 14),
+			PowMaxDifficulty:   getIntEnv("CAPTCHA_POW_MAX_DIFFICULTY", 20),
+		},
+		Risk: RiskConfig{
+			Enabled:           getBoolEnv("RISK_ENABLED", true),
+			Mode:              strings.ToLower(strings.TrimSpace(getEnv("RISK_MODE", "enforce"))),
+			EscalateThreshold: getIntEnv("RISK_ESCALATE_THRESHOLD", 55),
+			BlockThreshold:    getIntEnv("RISK_BLOCK_THRESHOLD", 85),
+			StateTTL:          getDurationEnv("RISK_STATE_TTL", 30*time.Minute),
+			TelemetryLogSize:  getIntEnv("RISK_TELEMETRY_LOG_SIZE", 1000),
 		},
 		Logging: LoggingConfig{
 			Level:      getEnv("LOG_LEVEL", "info"),
@@ -221,20 +257,21 @@ func loadFromEnv() *Config {
 			CollectInterval: getDurationEnv("METRICS_COLLECT_INTERVAL", 30*time.Second),
 		},
 		Security: SecurityConfig{
-			EnableHTTPS:     getBoolEnv("ENABLE_HTTPS", false),
-			CertFile:        getEnv("CERT_FILE", ""),
-			KeyFile:         getEnv("KEY_FILE", ""),
-			TrustedProxies:  getStringSliceEnv("TRUSTED_PROXIES", []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}),
-			EnableCSRF:      getBoolEnv("ENABLE_CSRF", false),
-			CSRFSecret:      getEnv("CSRF_SECRET", ""),
-			JWTSecret:       getEnv("JWT_SECRET", ""),
-			SessionSecret:   getEnv("SESSION_SECRET", ""),
-			MaxRequestSize:  getInt64Env("MAX_REQUEST_SIZE", 32<<20), // 32MB
-			EnableRateLimit: getBoolEnv("ENABLE_RATE_LIMIT", true),
-			GlobalRateLimit: getIntEnv("RATE_LIMIT_REQUESTS", 100),
-			IPWhitelist:     getStringSliceEnv("IP_WHITELIST", []string{}),
-			IPBlacklist:     getStringSliceEnv("IP_BLACKLIST", []string{}),
-			APIKey:          getEnv("API_KEY", ""),
+			EnableHTTPS:      getBoolEnv("ENABLE_HTTPS", false),
+			CertFile:         getEnv("CERT_FILE", ""),
+			KeyFile:          getEnv("KEY_FILE", ""),
+			TrustedProxies:   getStringSliceEnv("TRUSTED_PROXIES", []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}),
+			EnableCSRF:       getBoolEnv("ENABLE_CSRF", false),
+			CSRFSecret:       getEnv("CSRF_SECRET", ""),
+			JWTSecret:        getEnv("JWT_SECRET", ""),
+			SessionSecret:    getEnv("SESSION_SECRET", ""),
+			MaxRequestSize:   getInt64Env("MAX_REQUEST_SIZE", 32<<20), // 32MB
+			EnableRateLimit:  getBoolEnv("ENABLE_RATE_LIMIT", true),
+			GlobalRateLimit:  getIntEnv("RATE_LIMIT_REQUESTS", 100),
+			IPWhitelist:      getStringSliceEnv("IP_WHITELIST", []string{}),
+			IPBlacklist:      getStringSliceEnv("IP_BLACKLIST", []string{}),
+			APIKey:           getEnv("API_KEY", ""),
+			RateLimitBackend: strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_BACKEND", "redis"))),
 		},
 	}
 }
@@ -275,6 +312,35 @@ func validateConfig(config *Config) error {
 		if config.CORS.MaxAge < 0 {
 			return fmt.Errorf("cors max age cannot be negative")
 		}
+	}
+	if config.Captcha.DefaultDifficulty < 1 || config.Captcha.DefaultDifficulty > 5 {
+		return fmt.Errorf("CAPTCHA_DEFAULT_DIFFICULTY must be between 1 and 5")
+	}
+	if config.Captcha.ImageQuality < 55 || config.Captcha.ImageQuality > 100 {
+		return fmt.Errorf("CAPTCHA_IMAGE_QUALITY must be between 55 and 100")
+	}
+	if config.Captcha.MaxScale < 1 || config.Captcha.MaxScale > 3 {
+		return fmt.Errorf("CAPTCHA_MAX_SCALE must be between 1 and 3")
+	}
+	if config.Captcha.MinSolveTime < 0 {
+		return fmt.Errorf("CAPTCHA_MIN_SOLVE_TIME cannot be negative")
+	}
+	if config.Captcha.PowDifficulty < 1 || config.Captcha.PowDifficulty > 26 {
+		return fmt.Errorf("CAPTCHA_POW_DIFFICULTY must be between 1 and 26")
+	}
+	if config.Captcha.PowMaxDifficulty < config.Captcha.PowDifficulty || config.Captcha.PowMaxDifficulty > 26 {
+		return fmt.Errorf("CAPTCHA_POW_MAX_DIFFICULTY must be between CAPTCHA_POW_DIFFICULTY and 26")
+	}
+	if config.Risk.Mode != "enforce" && config.Risk.Mode != "log" {
+		return fmt.Errorf("RISK_MODE must be enforce or log")
+	}
+	if config.Risk.EscalateThreshold < 0 || config.Risk.EscalateThreshold > 100 ||
+		config.Risk.BlockThreshold < 0 || config.Risk.BlockThreshold > 100 ||
+		config.Risk.EscalateThreshold > config.Risk.BlockThreshold {
+		return fmt.Errorf("risk thresholds must satisfy 0 <= RISK_ESCALATE_THRESHOLD <= RISK_BLOCK_THRESHOLD <= 100")
+	}
+	if config.Security.RateLimitBackend != "redis" && config.Security.RateLimitBackend != "memory" {
+		return fmt.Errorf("RATE_LIMIT_BACKEND must be redis or memory")
 	}
 	return nil
 }

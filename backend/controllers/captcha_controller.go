@@ -3,6 +3,7 @@ package controllers
 import (
 	"log"
 	"net/http"
+	"simple-captcha/config"
 	"simple-captcha/helper"
 	"simple-captcha/middleware"
 	"simple-captcha/models"
@@ -15,25 +16,26 @@ import (
 type CaptchaController struct {
 	serviceManager services.ServiceManager
 	riskControl    services.RiskControlService
+	riskEngine     *services.RiskEngine
+	policy         *services.ChallengePolicy
+	config         *config.Config
 }
 
-// NewCaptchaController 创建验证码控制器
+// NewCaptchaController 创建验证码控制器（复用全局服务管理器，避免重复加载字体与图片资源）
 func NewCaptchaController() *CaptchaController {
-	// 初始化服务管理器
-	serviceManager := services.NewServiceManager()
-
-	// 获取风险控制服务
-	riskControl := serviceManager.GetRiskControlService()
+	serviceManager := services.GetServiceManager()
 
 	return &CaptchaController{
 		serviceManager: serviceManager,
-		riskControl:    riskControl,
+		riskControl:    serviceManager.GetRiskControlService(),
+		riskEngine:     serviceManager.GetRiskEngine(),
+		policy:         serviceManager.GetChallengePolicy(),
+		config:         config.LoadConfig(),
 	}
 }
 
 // GetCaptchaHandler 生成验证码处理器
 func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
-	// 从中间件获取已验证的请求参数
 	req := middleware.GetCaptchaRequest(c)
 	if req == nil {
 		log.Printf("获取请求参数失败: ip=%s", helper.GetRealClientIP(c))
@@ -41,32 +43,44 @@ func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
 		return
 	}
 
-	// 获取验证码服务
-	captchaService, exists := ctrl.serviceManager.GetCaptchaService(req.Type)
+	clientHash := helper.ClientFingerprint(c)
+
+	// 难度由服务端根据该客户端的历史表现决定；auto 类型也在这里解析为具体题型
+	level := ctrl.policy.DifficultyFor(clientHash)
+	captchaType := ctrl.policy.ResolveType(req.Type, level)
+
+	captchaService, exists := ctrl.serviceManager.GetCaptchaService(captchaType)
 	if !exists {
-		log.Printf("不支持的验证码类型: type=%s, ip=%s", req.Type, helper.GetRealClientIP(c))
+		log.Printf("不支持的验证码类型: type=%s, ip=%s", captchaType, helper.GetRealClientIP(c))
 		helper.SimpleErrorResponse(c, helper.ErrCodeInvalidParam, "不支持的验证码类型")
 		return
 	}
 
-	// 生成验证码
-	captData, err := captchaService.GenerateCaptcha(req.Mode)
+	challenge := &services.ChallengeRequest{
+		Type:       captchaType,
+		Mode:       req.Mode,
+		Scale:      req.Scale(),
+		Difficulty: level,
+	}
+	if ctrl.config.Captcha.BindClient {
+		challenge.ClientHash = clientHash
+	}
+
+	captData, err := captchaService.GenerateCaptcha(challenge)
 	if err != nil {
 		log.Printf("生成验证码失败: type=%s, mode=%s, ip=%s, error=%v",
-			req.Type, req.Mode, helper.GetRealClientIP(c), err)
+			captchaType, req.Mode, helper.GetRealClientIP(c), err)
 		helper.ErrorResponse(c, err)
 		return
 	}
 
-	// 记录成功生成日志
-	log.Printf("生成验证码成功: type=%s, mode=%s, key=%s, ip=%s",
-		req.Type, req.Mode, captData.Key, helper.GetRealClientIP(c))
+	log.Printf("生成验证码成功: type=%s, mode=%s, scale=%d, level=%d, key=%s, ip=%s",
+		captchaType, req.Mode, captData.Scale, captData.Difficulty, captData.Key, helper.GetRealClientIP(c))
 
-	// 构建响应数据
-	response := ctrl.buildCaptchaResponse(req.Type, captData)
+	response := ctrl.buildCaptchaResponse(captchaType, captData)
 
-	// 设置防缓存头，确保浏览器不会缓存验证码图片
-	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	// 验证码响应绝不允许被缓存
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 	c.Header("Pragma", "no-cache")
 	c.Header("Expires", "0")
 
@@ -75,7 +89,6 @@ func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
 
 // VerifyCaptchaHandler 验证验证码处理器
 func (ctrl *CaptchaController) VerifyCaptchaHandler(c *gin.Context) {
-	// 从中间件获取已验证的请求参数
 	req := middleware.GetVerifyRequest(c)
 	if req == nil {
 		log.Printf("获取请求参数失败: ip=%s", helper.GetRealClientIP(c))
@@ -83,45 +96,65 @@ func (ctrl *CaptchaController) VerifyCaptchaHandler(c *gin.Context) {
 		return
 	}
 
-	// 获取验证服务
+	ip := helper.GetRealClientIP(c)
+	clientHash := helper.ClientFingerprint(c)
+
 	verifyService, exists := ctrl.serviceManager.GetVerifyService(req.Type)
 	if !exists {
-		log.Printf("不支持的验证类型: type=%s, ip=%s", req.Type, helper.GetRealClientIP(c))
+		log.Printf("不支持的验证类型: type=%s, ip=%s", req.Type, ip)
 		helper.SimpleErrorResponse(c, helper.ErrCodeInvalidParam, "不支持的验证类型")
 		return
 	}
 
-	// 执行验证
-	verifyData := ctrl.extractVerifyData(req)
-	isValid, secondKey, err := verifyService.VerifyData(verifyData, req.Key)
+	// 行为 / 环境风控评分：enforce 模式下达到拦截阈值直接拒绝，不再比对答案
+	evalCtx := &services.EvaluationContext{
+		Type:       req.Type,
+		ClientHash: clientHash,
+		IP:         ip,
+		Key:        req.Key,
+		Trace:      req.Trace,
+		Env:        req.Env,
+		Pow:        req.Pow,
+	}
+	riskResult := ctrl.riskEngine.Evaluate(evalCtx)
+	if ctrl.riskEngine.ShouldBlock(riskResult) {
+		ctrl.riskEngine.Record(evalCtx, riskResult, false)
+		log.Printf("风控拦截: type=%s, key=%s, ip=%s, score=%d", req.Type, req.Key, ip, riskResult.Score)
+		helper.ErrorResponse(c, helper.ErrRiskBlocked)
+		return
+	}
+
+	input := &services.VerifyInput{
+		Key:    req.Key,
+		Answer: ctrl.extractVerifyData(req),
+		Pow:    req.Pow,
+	}
+	if ctrl.config.Captcha.BindClient {
+		input.ClientHash = clientHash
+	}
+
+	isValid, secondKey, err := verifyService.VerifyData(input)
+	ctrl.riskEngine.Record(evalCtx, riskResult, isValid)
 
 	if err != nil {
-		log.Printf("验证过程出错: type=%s, key=%s, ip=%s, error=%v",
-			req.Type, req.Key, helper.GetRealClientIP(c), err)
+		log.Printf("验证过程出错: type=%s, key=%s, ip=%s, error=%v", req.Type, req.Key, ip, err)
 		helper.ErrorResponse(c, err)
 		return
 	}
 
 	if !isValid {
-		log.Printf("验证失败: type=%s, key=%s, ip=%s, message=%s",
-			req.Type, req.Key, helper.GetRealClientIP(c), secondKey)
+		log.Printf("验证失败: type=%s, key=%s, ip=%s, message=%s", req.Type, req.Key, ip, secondKey)
 		helper.SimpleErrorResponse(c, helper.ErrCodeVerifyFailed, secondKey)
 		return
 	}
 
-	// 验证成功
-	log.Printf("验证成功: type=%s, key=%s, secondKey=%s, ip=%s",
-		req.Type, req.Key, secondKey, helper.GetRealClientIP(c))
+	log.Printf("验证成功: type=%s, key=%s, secondKey=%s, ip=%s", req.Type, req.Key, secondKey, ip)
 
-	response := models.VerifyResponse{
-		SecondKey: secondKey,
-	}
-	helper.SuccessResponse(c, response)
+	helper.SuccessResponse(c, models.VerifyResponse{SecondKey: secondKey})
 }
 
 // ValidateCaptchaHandler 验证码状态查询（二次验证）处理器
 func (ctrl *CaptchaController) ValidateCaptchaHandler(c *gin.Context) {
-	// 从中间件获取已验证的请求参数
 	req := middleware.GetStateRequest(c)
 	if req == nil {
 		log.Printf("获取请求参数失败: ip=%s", helper.GetRealClientIP(c))
@@ -129,7 +162,6 @@ func (ctrl *CaptchaController) ValidateCaptchaHandler(c *gin.Context) {
 		return
 	}
 
-	// 验证二次验证令牌
 	if !ctrl.riskControl.ValidateSecondVerifyToken(req.Key) {
 		log.Printf("二次验证令牌无效: key=%s, ip=%s", req.Key, helper.GetRealClientIP(c))
 		helper.SimpleErrorResponse(c, helper.ErrCodeExpired, "验证码已失效")
@@ -138,7 +170,6 @@ func (ctrl *CaptchaController) ValidateCaptchaHandler(c *gin.Context) {
 
 	log.Printf("状态查询成功: key=%s, ip=%s", req.Key, helper.GetRealClientIP(c))
 
-	// 返回成功响应 (纯净 RESTful)
 	c.JSON(http.StatusOK, gin.H{
 		"valid": true,
 	})
@@ -147,19 +178,33 @@ func (ctrl *CaptchaController) ValidateCaptchaHandler(c *gin.Context) {
 // buildCaptchaResponse 构建验证码响应
 func (ctrl *CaptchaController) buildCaptchaResponse(captchaType string, captData *services.CaptchaData) models.CaptchaResponse {
 	response := models.CaptchaResponse{
-		Key:   captData.Key,
-		Image: captData.Image,
+		Key:         captData.Key,
+		Type:        captchaType,
+		Image:       captData.Image,
+		ImageWidth:  captData.ImageWidth,
+		ImageHeight: captData.ImageHeight,
+		Scale:       captData.Scale,
+		Difficulty:  captData.Difficulty,
 	}
 
-	// 根据验证码类型设置不同的响应字段
-	if captchaType == "slide-region" || captchaType == "slide-text" {
+	switch captchaType {
+	case "slide-region", "slide-text":
 		response.Thumb = captData.Tile
 		response.ThumbWidth = captData.Width
 		response.ThumbHeight = captData.Height
 		response.ThumbX = captData.X
 		response.ThumbY = captData.Y
-	} else {
+	default:
 		response.Thumb = captData.Thumb
+		response.ThumbWidth = captData.ThumbWidth
+		response.ThumbHeight = captData.ThumbHeight
+	}
+
+	if captData.PowBits > 0 {
+		response.Pow = &models.PowChallenge{
+			Nonce:      captData.PowNonce,
+			Difficulty: captData.PowBits,
+		}
 	}
 
 	return response

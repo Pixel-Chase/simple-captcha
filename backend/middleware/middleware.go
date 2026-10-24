@@ -200,6 +200,16 @@ func CompressionMiddleware() gin.HandlerFunc {
 	}
 }
 
+// NoCacheMiddleware 禁止缓存中间件：验证码题目与错误响应都不允许被浏览器或 CDN 缓存
+func NoCacheMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		c.Next()
+	}
+}
+
 // CacheMiddleware 缓存中间件
 func CacheMiddleware(duration time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {

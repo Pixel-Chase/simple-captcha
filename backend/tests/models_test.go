@@ -52,7 +52,7 @@ func TestCaptchaRequest_Validate_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.req.Validate()
-			assert.NoError(t, err, "Expected no error for valid request")
+			assert.Nil(t, err, "Expected no error for valid request")
 		})
 	}
 }
@@ -81,7 +81,7 @@ func TestCaptchaRequest_Validate_InvalidType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.req.Validate()
-			assert.Error(t, err)
+			assert.NotNil(t, err)
 		})
 	}
 }
@@ -93,7 +93,7 @@ func TestCaptchaRequest_Validate_InvalidMode(t *testing.T) {
 	}
 
 	err := req.Validate()
-	assert.Error(t, err)
+	assert.NotNil(t, err)
 }
 
 // 测试验证请求验证
@@ -147,7 +147,7 @@ func TestVerifyRequest_Validate_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.req.Validate()
-			assert.NoError(t, err)
+			assert.Nil(t, err)
 		})
 	}
 }
@@ -202,7 +202,7 @@ func TestVerifyRequest_Validate_MissingParams(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.req.Validate()
-			assert.Error(t, err)
+			assert.NotNil(t, err)
 		})
 	}
 }
@@ -215,7 +215,7 @@ func TestVerifyRequest_Validate_InvalidType(t *testing.T) {
 	}
 
 	err := req.Validate()
-	assert.Error(t, err)
+	assert.NotNil(t, err)
 }
 
 func TestVerifyRequest_Validate_InvalidKey(t *testing.T) {
@@ -242,7 +242,7 @@ func TestVerifyRequest_Validate_InvalidKey(t *testing.T) {
 			}
 
 			err := req.Validate()
-			assert.Error(t, err)
+			assert.NotNil(t, err)
 		})
 	}
 }
@@ -281,7 +281,7 @@ func TestStateRequest_Validate_Success(t *testing.T) {
 			}
 
 			err := req.Validate()
-			assert.NoError(t, err)
+			assert.Nil(t, err)
 		})
 	}
 }
@@ -315,7 +315,7 @@ func TestStateRequest_Validate_InvalidKey(t *testing.T) {
 			}
 
 			err := req.Validate()
-			assert.Error(t, err)
+			assert.NotNil(t, err)
 		})
 	}
 }

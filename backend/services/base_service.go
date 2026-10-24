@@ -8,6 +8,17 @@ import (
 	"time"
 )
 
+// ChallengeMeta 随答案一同落库的出题上下文。
+// 校验阶段据此完成客户端绑定、容差按倍率换算以及 PoW 校验。
+type ChallengeMeta struct {
+	Type       string `json:"type"`
+	ClientHash string `json:"client,omitempty"`
+	Scale      int    `json:"scale"`
+	Difficulty int    `json:"difficulty"`
+	PowNonce   string `json:"powNonce,omitempty"`
+	PowBits    int    `json:"powBits,omitempty"`
+}
+
 // BaseService 基础服务类
 type BaseService struct {
 	config *config.Config
@@ -20,27 +31,88 @@ func NewBaseService() *BaseService {
 	}
 }
 
-// SaveCaptchaData 保存验证码数据到缓存
-func (bs *BaseService) SaveCaptchaData(key string, data interface{}) *helper.CaptchaError {
-	// 创建包含多次尝试逻辑的验证数据结构
-	verifyData := map[string]interface{}{
-		"data":        data,
-		"createTime":  time.Now().Unix(),
-		"expireAt":    time.Now().Add(bs.config.Captcha.CacheExpiration).Unix(),
-		"maxAttempts": bs.config.Captcha.MaxAttempts,
-		"attempts":    0,
-		"verified":    false,
+// normalizeRequest 返回裁剪过倍率与难度的请求副本
+func (bs *BaseService) normalizeRequest(req *ChallengeRequest, serviceType string) *ChallengeRequest {
+	out := ChallengeRequest{}
+	if req != nil {
+		out = *req
+	}
+	if out.Type == "" {
+		out.Type = serviceType
+	}
+	if out.Difficulty == 0 {
+		out.Difficulty = bs.config.Captcha.DefaultDifficulty
+	}
+	out.Difficulty = ClampDifficulty(out.Difficulty)
+	out.Scale = ClampScale(out.Scale, bs.config.Captcha.MaxScale)
+	return &out
+}
+
+// persistChallenge 生成随机 key、组装元数据（含 PoW 挑战）并写入缓存
+func (bs *BaseService) persistChallenge(req *ChallengeRequest, data interface{}) (string, *ChallengeMeta, *helper.CaptchaError) {
+	key, keyErr := bs.GenerateKey()
+	if keyErr != nil {
+		return "", nil, keyErr
 	}
 
-	// 将验证数据结构序列化为JSON
+	meta := &ChallengeMeta{
+		Type:       req.Type,
+		ClientHash: req.ClientHash,
+		Scale:      req.Scale,
+		Difficulty: req.Difficulty,
+	}
+
+	if bs.config.Captcha.PowEnabled {
+		nonce, err := helper.GenerateSecureKey()
+		if err != nil {
+			return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "生成PoW挑战失败", err.Error())
+		}
+		meta.PowNonce = nonce
+		meta.PowBits = bs.powBits(req.Difficulty)
+	}
+
+	if saveErr := bs.SaveCaptchaData(key, data, meta); saveErr != nil {
+		return "", nil, saveErr
+	}
+	return key, meta, nil
+}
+
+// powBits 根据难度等级计算 PoW 前导零位数
+func (bs *BaseService) powBits(level int) int {
+	bits := bs.config.Captcha.PowDifficulty + GetDifficultyProfile(level).PowExtraBits
+	if maxBits := bs.config.Captcha.PowMaxDifficulty; bits > maxBits {
+		bits = maxBits
+	}
+	if bits < 1 {
+		bits = 1
+	}
+	return bits
+}
+
+// SaveCaptchaData 保存验证码答案与出题上下文到缓存
+func (bs *BaseService) SaveCaptchaData(key string, data interface{}, meta *ChallengeMeta) *helper.CaptchaError {
+	if meta == nil {
+		meta = &ChallengeMeta{Scale: 1, Difficulty: bs.config.Captcha.DefaultDifficulty}
+	}
+	now := time.Now()
+
+	verifyData := map[string]interface{}{
+		"data":         data,
+		"meta":         meta,
+		"createTime":   now.Unix(),
+		"createTimeMs": now.UnixMilli(),
+		"expireAt":     now.Add(bs.config.Captcha.CacheExpiration).Unix(),
+		"maxAttempts":  bs.config.Captcha.MaxAttempts,
+		"attempts":     0,
+		"verified":     false,
+	}
+
 	verifyDataBytes, err := json.Marshal(verifyData)
 	if err != nil {
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
 	}
 
-	// 将数据写入缓存
-	err = cache.Set(key, verifyDataBytes, bs.config.Captcha.CacheExpiration)
-	if err != nil {
+	if err = cache.Set(key, verifyDataBytes, bs.config.Captcha.CacheExpiration); err != nil {
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "保存验证码数据失败", err.Error())
 	}
 
@@ -49,29 +121,24 @@ func (bs *BaseService) SaveCaptchaData(key string, data interface{}) *helper.Cap
 
 // GetCaptchaData 从缓存获取验证码数据
 func (bs *BaseService) GetCaptchaData(key string) (map[string]interface{}, *helper.CaptchaError) {
-	// 检查缓存中是否存在
 	if !cache.Exists(key) {
 		return nil, helper.NewCaptchaError(helper.ErrCodeExpired, "验证码不存在或已失效")
 	}
 
-	// 获取缓存数据
 	cacheDataByte := cache.Get(key)
 	if cacheDataByte == nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCacheError, "获取验证码数据失败")
 	}
 
-	// 解析验证数据
 	var verifyData map[string]interface{}
 	if err := json.Unmarshal([]byte(*cacheDataByte), &verifyData); err != nil {
-		// 清理无效数据
 		cache.Del(key)
 		return nil, helper.NewCaptchaError(helper.ErrCodeCacheError, "验证码数据格式错误")
 	}
 
-	// 检查是否已过期
 	if expireAt, ok := verifyData["expireAt"].(float64); ok {
 		if time.Now().Unix() > int64(expireAt) {
-			cache.Del(key) // 清理过期数据
+			cache.Del(key)
 			return nil, helper.NewCaptchaError(helper.ErrCodeExpired, "验证码已过期")
 		}
 	}
@@ -79,17 +146,43 @@ func (bs *BaseService) GetCaptchaData(key string) (map[string]interface{}, *help
 	return verifyData, nil
 }
 
+// ParseMeta 从缓存记录中还原出题上下文；旧记录缺少 meta 时返回 1 倍率默认值
+func ParseMeta(verifyData map[string]interface{}) *ChallengeMeta {
+	meta := &ChallengeMeta{Scale: 1}
+	raw, ok := verifyData["meta"]
+	if !ok || raw == nil {
+		return meta
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return meta
+	}
+	_ = json.Unmarshal(b, meta)
+	if meta.Scale <= 0 {
+		meta.Scale = 1
+	}
+	return meta
+}
+
+// CreatedAt 返回题目签发时间（毫秒精度），缺失时返回零值
+func CreatedAt(verifyData map[string]interface{}) time.Time {
+	if ms, ok := verifyData["createTimeMs"].(float64); ok && ms > 0 {
+		return time.UnixMilli(int64(ms))
+	}
+	if sec, ok := verifyData["createTime"].(float64); ok && sec > 0 {
+		return time.Unix(int64(sec), 0)
+	}
+	return time.Time{}
+}
+
 // UpdateCaptchaData 更新验证码数据
 func (bs *BaseService) UpdateCaptchaData(key string, verifyData map[string]interface{}) *helper.CaptchaError {
-	// 序列化数据
 	verifyDataBytes, err := json.Marshal(verifyData)
 	if err != nil {
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
 	}
 
-	// 更新缓存
-	err = cache.Set(key, verifyDataBytes, bs.config.Captcha.CacheExpiration)
-	if err != nil {
+	if err = cache.Set(key, verifyDataBytes, bs.config.Captcha.CacheExpiration); err != nil {
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "更新验证码数据失败", err.Error())
 	}
 
@@ -101,15 +194,12 @@ func (bs *BaseService) DeleteCaptchaData(key string) {
 	cache.Del(key)
 }
 
-// GenerateKey 生成验证码key
-func (bs *BaseService) GenerateKey(data interface{}) (string, *helper.CaptchaError) {
-	// 将数据转换为JSON格式并生成MD5哈希值作为键
-	dataBytes, err := json.Marshal(data)
+// GenerateKey 生成与答案无关的随机验证码 key
+func (bs *BaseService) GenerateKey() (string, *helper.CaptchaError) {
+	key, err := helper.GenerateSecureKey()
 	if err != nil {
 		return "", helper.NewCaptchaError(helper.ErrCodeInternalError, "生成验证码key失败", err.Error())
 	}
-
-	key := helper.StringToMD5(string(dataBytes))
 	return key, nil
 }
 
@@ -120,17 +210,14 @@ func (bs *BaseService) IncrementAttempts(key string) (int, *helper.CaptchaError)
 		return 0, err
 	}
 
-	// 获取当前尝试次数
 	attempts, ok := verifyData["attempts"].(float64)
 	if !ok {
 		attempts = 0
 	}
 
-	// 增加尝试次数
 	attempts++
 	verifyData["attempts"] = attempts
 
-	// 更新缓存
 	if updateErr := bs.UpdateCaptchaData(key, verifyData); updateErr != nil {
 		return int(attempts), updateErr
 	}
@@ -173,15 +260,12 @@ func (bs *BaseService) MarkAsVerified(key string) *helper.CaptchaError {
 
 // SaveSecondVerifyData 保存二次验证数据到缓存
 func (bs *BaseService) SaveSecondVerifyData(key string, data map[string]interface{}) *helper.CaptchaError {
-	// 将二次验证数据序列化为JSON
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化二次验证数据失败", err.Error())
 	}
 
-	// 将数据写入缓存，过期时间15分钟
-	err = cache.Set(key, dataBytes, 15*time.Minute)
-	if err != nil {
+	if err = cache.Set(key, dataBytes, bs.config.Captcha.SecondVerifyExpire); err != nil {
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "保存二次验证数据失败", err.Error())
 	}
 

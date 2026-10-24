@@ -1,64 +1,21 @@
 package helper
 
 import (
-	"net"
-	"strings"
-
 	"github.com/gin-gonic/gin"
 )
 
-// GetRealClientIP 获取真实的客户端IP地址
-// 支持从反向代理（如Spring Cloud Gateway）中获取真实IP
+// GetRealClientIP 获取客户端 IP。
+//
+// 代理头（X-Forwarded-For / X-Real-IP / CF-Connecting-IP / True-Client-IP）
+// 只有在直连来源命中 TrustedProxies 配置时才会被采信，这部分逻辑由 Gin 在
+// router 初始化时通过 SetTrustedProxies + RemoteIPHeaders 统一处理。
+// 旧实现无条件信任这些头，攻击者改头即可绕过限流与客户端绑定。
 func GetRealClientIP(c *gin.Context) string {
-	// 按优先级检查各种代理头
-	headers := []string{
-		"X-Forwarded-For",
-		"X-Real-IP",
-		"X-Client-IP",
-		"CF-Connecting-IP", // Cloudflare
-		"True-Client-IP",   // Akamai
-	}
-
-	for _, header := range headers {
-		ip := c.GetHeader(header)
-		if ip != "" {
-			// X-Forwarded-For 可能包含多个IP，取第一个
-			if header == "X-Forwarded-For" {
-				ips := strings.Split(ip, ",")
-				if len(ips) > 0 {
-					ip = strings.TrimSpace(ips[0])
-				}
-			}
-
-			// 验证IP格式是否有效
-			if isValidIP(ip) {
-				return ip
-			}
-		}
-	}
-
-	// 如果没有找到代理头，使用Gin的默认方法
 	return c.ClientIP()
 }
 
-// isValidIP 验证IP地址格式是否有效
-func isValidIP(ip string) bool {
-	// 排除内网IP和无效IP
-	if ip == "" || ip == "unknown" || ip == "127.0.0.1" || ip == "::1" {
-		return false
-	}
-
-	// 解析IP地址
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return false
-	}
-
-	// 排除私有IP地址（可选，根据需求决定）
-	// 如果你的应用部署在内网环境，可能需要注释掉这部分
-	if parsedIP.IsPrivate() || parsedIP.IsLoopback() {
-		return false
-	}
-
-	return true
+// ClientFingerprint 基于真实 IP 与 User-Agent 生成客户端哈希，
+// 用于验证码会话绑定（出题与提交必须来自同一客户端）以及风控状态聚合。
+func ClientFingerprint(c *gin.Context) string {
+	return HashClient(GetRealClientIP(c), c.GetHeader("User-Agent"))
 }

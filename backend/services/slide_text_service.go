@@ -8,78 +8,90 @@ import (
 	"github.com/wenlng/go-captcha/v2/slide"
 )
 
-// SlideTextCaptchaService 滑动文字验证码服务
-type SlideTextCaptchaService struct {
-	*BaseService
-	slideCapt slide.Captcha
-}
-
-// NewSlideTextCaptchaService 创建滑动文字验证码服务
-func NewSlideTextCaptchaService() *SlideTextCaptchaService {
-	service := &SlideTextCaptchaService{
-		BaseService: NewBaseService(),
-	}
-	service.initCaptcha()
-	return service
-}
-
-// initCaptcha 初始化验证码生成器
-func (s *SlideTextCaptchaService) initCaptcha() {
-	// 创建一个新的构建器实例，启用垂直随机布局
-	builder := slide.NewBuilder(
-		slide.WithEnableGraphVerticalRandom(true),
-	)
-
-	// 获取并检查图像资源，如果获取失败则退出程序
-	images, err := helper.GetImages()
-	if err != nil {
-		log.Fatalln("加载图片资源失败:", err)
-	}
-
-	// 获取并检查瓷砖资源，如果获取失败则退出程序
+// loadSlideGraphs 加载滑块拼图块资源
+func loadSlideGraphs() []*slide.GraphImage {
 	graphs, err := tiles.GetTiles()
 	if err != nil {
 		log.Fatalln("加载瓷砖资源失败:", err)
 	}
 
-	// 初始化一个新的切片来存储处理后的图形图像
-	var newGraphs = make([]*slide.GraphImage, 0, len(graphs))
-	// 处理每个图形，创建并添加新的图形图像到切片中
-	for i := 0; i < len(graphs); i++ {
-		graph := graphs[i]
+	newGraphs := make([]*slide.GraphImage, 0, len(graphs))
+	for _, graph := range graphs {
 		newGraphs = append(newGraphs, &slide.GraphImage{
 			OverlayImage: graph.OverlayImage,
 			MaskImage:    graph.MaskImage,
 			ShadowImage:  graph.ShadowImage,
 		})
 	}
+	return newGraphs
+}
 
-	// 设置资源
-	builder.SetResources(
-		slide.WithGraphImages(newGraphs),
-		slide.WithBackgrounds(images),
+// SlideTextCaptchaService 滑块拼图验证码服务
+type SlideTextCaptchaService struct {
+	*BaseService
+	backgrounds *backgroundCache
+	graphs      []*slide.GraphImage
+	instances   *instanceCache[slide.Captcha]
+}
+
+// NewSlideTextCaptchaService 创建滑块拼图验证码服务
+func NewSlideTextCaptchaService() *SlideTextCaptchaService {
+	images, err := helper.GetImages()
+	if err != nil {
+		log.Fatalln("加载图片资源失败:", err)
+	}
+
+	service := &SlideTextCaptchaService{
+		BaseService: NewBaseService(),
+		backgrounds: newBackgroundCache(images),
+		graphs:      loadSlideGraphs(),
+	}
+	service.instances = newInstanceCache(service.build)
+	return service
+}
+
+// build 按难度 × 倍率构建生成器实例
+func (s *SlideTextCaptchaService) build(key instanceKey) slide.Captcha {
+	profile := GetDifficultyProfile(key.level)
+
+	size := imageSize(key.scale)
+	builder := slide.NewBuilder(
+		slide.WithImageSize(size),
+		slide.WithRangeGraphSize(scaleRange(profile.SlideGraphSize, key.scale)),
+		slide.WithEnableGraphVerticalRandom(true),
 	)
-
-	// 生成基础滑动验证码资源
-	s.slideCapt = builder.Make()
+	builder.SetResources(
+		slide.WithGraphImages(s.graphs),
+		slide.WithBackgrounds(s.backgrounds.get(size.Width, size.Height)),
+	)
+	return builder.Make()
 }
 
 // GenerateCaptcha 生成验证码
-func (s *SlideTextCaptchaService) GenerateCaptcha(mode string) (*CaptchaData, *helper.CaptchaError) {
-	// 生成基础滑动验证码数据
-	captData, err := s.slideCapt.Generate()
+func (s *SlideTextCaptchaService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
+	req = s.normalizeRequest(req, s.GetServiceType())
+	captcha := s.instances.get(req.Difficulty, req.Scale, "")
+	return generateSlideCaptcha(s.BaseService, captcha, req)
+}
+
+// GetServiceType 获取服务类型
+func (s *SlideTextCaptchaService) GetServiceType() string {
+	return "slide-text"
+}
+
+// generateSlideCaptcha 滑块类（拼图/区域）共用的生成流程
+func generateSlideCaptcha(bs *BaseService, captcha slide.Captcha, req *ChallengeRequest) (*CaptchaData, *helper.CaptchaError) {
+	captData, err := captcha.Generate()
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码生成失败", err.Error())
 	}
 
-	// 获取验证码数据块
 	blockData := captData.GetData()
 	if blockData == nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码数据为空")
 	}
 
-	// 转换图片为Base64
-	masterImageBase64, err := captData.GetMasterImage().ToBase64()
+	masterImageBase64, err := captData.GetMasterImage().ToBase64WithQuality(bs.config.Captcha.ImageQuality)
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
 	}
@@ -89,41 +101,36 @@ func (s *SlideTextCaptchaService) GenerateCaptcha(mode string) (*CaptchaData, *h
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "滑动块图片转换失败", err.Error())
 	}
 
-	// 生成验证码key
-	key, keyErr := s.GenerateKey(blockData)
-	if keyErr != nil {
-		return nil, keyErr
+	key, meta, persistErr := bs.persistChallenge(req, blockData)
+	if persistErr != nil {
+		return nil, persistErr
 	}
 
-	// 保存验证码数据到缓存
-	if saveErr := s.SaveCaptchaData(key, blockData); saveErr != nil {
-		return nil, saveErr
-	}
-
-	// 返回验证码数据
+	size := imageSize(req.Scale)
 	return &CaptchaData{
-		Key:    key,
-		Image:  masterImageBase64,
-		Tile:   tileImageBase64,
-		Width:  blockData.Width,
-		Height: blockData.Height,
-		X:      blockData.TileX,
-		Y:      blockData.TileY,
+		Key:         key,
+		Image:       masterImageBase64,
+		Tile:        tileImageBase64,
+		Width:       blockData.Width,
+		Height:      blockData.Height,
+		X:           blockData.TileX,
+		Y:           blockData.TileY,
+		ImageWidth:  size.Width,
+		ImageHeight: size.Height,
+		Scale:       req.Scale,
+		Difficulty:  req.Difficulty,
+		PowNonce:    meta.PowNonce,
+		PowBits:     meta.PowBits,
 	}, nil
 }
 
-// GetServiceType 获取服务类型
-func (s *SlideTextCaptchaService) GetServiceType() string {
-	return "slide-text"
-}
-
-// SlideTextVerifyServiceImpl 滑动文字验证服务实现
+// SlideTextVerifyServiceImpl 滑块拼图验证服务实现
 type SlideTextVerifyServiceImpl struct {
 	*BaseVerifyService
 	validator *ValidationUtils
 }
 
-// NewSlideTextVerifyServiceImpl 创建滑动文字验证服务实现
+// NewSlideTextVerifyServiceImpl 创建滑块拼图验证服务实现
 func NewSlideTextVerifyServiceImpl() *SlideTextVerifyServiceImpl {
 	return &SlideTextVerifyServiceImpl{
 		BaseVerifyService: NewBaseVerifyService(),
@@ -132,13 +139,17 @@ func NewSlideTextVerifyServiceImpl() *SlideTextVerifyServiceImpl {
 }
 
 // VerifyData 验证数据
-func (s *SlideTextVerifyServiceImpl) VerifyData(data, key string) (bool, string, *helper.CaptchaError) {
-	return s.VerifyDataTemplate(
-		data, key,
-		s.ParseSlideData,
-		func(userData, correctData interface{}) bool {
-			userSlide := userData.(map[string]interface{})
-			return s.validator.ValidateSlidePosition(userSlide, correctData, 6.0)
-		},
-	)
+func (s *SlideTextVerifyServiceImpl) VerifyData(in *VerifyInput) (bool, string, *helper.CaptchaError) {
+	return s.VerifyDataTemplate(in, s.ParseSlideData, validateSlideAnswer(s.validator))
+}
+
+// validateSlideAnswer 滑块答案比对，容差按难度与倍率换算
+func validateSlideAnswer(validator *ValidationUtils) AnswerValidator {
+	return func(userData, correctData interface{}, meta *ChallengeMeta) bool {
+		userSlide, ok := userData.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		return validator.ValidateSlidePosition(userSlide, correctData, SlideToleranceFor(meta))
+	}
 }

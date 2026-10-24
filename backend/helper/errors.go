@@ -16,6 +16,10 @@ const (
 	ErrCodeVerifyFailed    = 1003
 	ErrCodeExpired         = 1004
 	ErrCodeTooManyAttempts = 1005
+	ErrCodeTooFast         = 1006 // 出题到提交间隔过短，疑似自动化
+	ErrCodeClientMismatch  = 1007 // 提交客户端与出题客户端不一致
+	ErrCodeRiskBlocked     = 1008 // 风控评分过高被拦截
+	ErrCodePowInvalid      = 1009 // 工作量证明缺失或无效
 )
 
 // CaptchaError 自定义错误类型
@@ -54,6 +58,10 @@ var (
 	ErrVerifyFailed    = NewCaptchaError(ErrCodeVerifyFailed, "验证失败")
 	ErrExpired         = NewCaptchaError(ErrCodeExpired, "验证码已过期")
 	ErrTooManyAttempts = NewCaptchaError(ErrCodeTooManyAttempts, "验证尝试次数过多")
+	ErrTooFast         = NewCaptchaError(ErrCodeTooFast, "操作过快，请重试")
+	ErrClientMismatch  = NewCaptchaError(ErrCodeClientMismatch, "验证码已失效，请重新获取")
+	ErrRiskBlocked     = NewCaptchaError(ErrCodeRiskBlocked, "验证失败")
+	ErrPowInvalid      = NewCaptchaError(ErrCodePowInvalid, "验证失败，请刷新后重试")
 )
 
 // HTTPStatusFromError 根据错误码返回HTTP状态码
