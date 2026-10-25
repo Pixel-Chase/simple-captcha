@@ -16,7 +16,6 @@ import (
 
 	"github.com/golang/freetype"
 	"golang.org/x/image/draw"
-	"golang.org/x/image/font"
 	"simple-captcha/internal/gocaptcha/base/canvas"
 	"simple-captcha/internal/gocaptcha/base/helper"
 	"simple-captcha/internal/gocaptcha/base/option"
@@ -40,7 +39,6 @@ type DrawImageParams struct {
 	BackgroundCirclesNum  int
 	BackgroundSlimLineNum int
 	Alpha                 float32
-	FontHinting           font.Hinting
 	CaptchaDrawDot        []*DrawDot
 	ShowShadow            bool
 	ShadowColor           string
@@ -167,6 +165,7 @@ func (d *drawImage) DrawWithPalette(params *DrawImageParams, tColors []color.Col
 				Width:   dot.Width,
 				Height:  dot.Height,
 				FontDPI: dot.FontDPI,
+				Hinting: dot.FontHinting,
 				Text:    dot.Text,
 				Font:    dot.Font,
 			}, pt)
@@ -415,6 +414,7 @@ func (d *drawImage) DrawStringImage(dot *DrawDot, textColor color.Color) (canvas
 		Width:   dot.Width,
 		Height:  dot.Height,
 		FontDPI: dot.FontDPI,
+		Hinting: dot.FontHinting,
 		Text:    dot.Text,
 		Font:    dot.Font,
 	}, pt)

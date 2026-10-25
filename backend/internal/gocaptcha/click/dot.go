@@ -12,6 +12,7 @@ import (
 	"image"
 
 	"github.com/golang/freetype/truetype"
+	"golang.org/x/image/font"
 )
 
 // Dot represents a single point (character or shape) in the captcha
@@ -35,6 +36,7 @@ type DrawDot struct {
 	X                int
 	Y                int
 	FontDPI          int
+	FontHinting      font.Hinting
 	Text             string
 	Image            image.Image
 	UseOriginalColor bool

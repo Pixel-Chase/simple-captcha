@@ -24,3 +24,4 @@
 - `click.Validate`：修正容差偏移。上游以 `max(dx, dx-padding)` 计算左上角，结果恒为 `dx`，有效区间变成 `[dx, dx+w+2p]`；现改为四边各放宽 `padding`，即 `[dx-p, dx+w+p]`（纵向同理）
 - 清理 staticcheck 告警：导出的错误变量按 Go 惯例由 `XxxErr` 改名为 `ErrXxx`（如 `ImageTypeErr` → `ErrImageType`）；删除未使用的 `click.wrapError` 与 click/rotate/slide 中从未读写的 `version` 字段
 - 删除本项目不使用的工具函数：`canvas.MakeAreaRect/MakePositionRect`（对应类型保留）、`codec.DecodeByteToJpeg/DecodeByteToPng`、`helper.RgbToHex/HexToRgb/PathExists` 及仅供 `RgbToHex` 使用的 `t2x`
+- 修正 `click.WithFontHinting` 不生效：上游把该选项写入 `DrawImageParams.FontHinting` 后再无读取，画布绘制文字时写死 `font.HintingFull`。现由 `DrawDot.FontHinting` 随每个字传入 `canvas.DrawStringParams.Hinting`，默认值 `HintingNone` 才真正生效；删除只写不读的 `DrawImageParams.FontHinting`

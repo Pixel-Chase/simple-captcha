@@ -398,6 +398,7 @@ func (c *captcha) genMasterImage(size *option.Size, dots map[int]*Dot) (image.Im
 			drawDot.DrawType = DrawTypeString
 			drawDot.Text = dot.Text
 			drawDot.FontDPI = c.opts.fontDPI
+			drawDot.FontHinting = c.opts.fontHinting
 			drawDot.Font = randgen.RandFont(c.resources.rangFonts)
 		}
 
@@ -409,7 +410,6 @@ func (c *captcha) genMasterImage(size *option.Size, dots map[int]*Dot) (image.Im
 		Height:         size.Height,
 		Background:     randgen.RandImage(c.resources.rangBackgrounds),
 		Alpha:          c.opts.imageAlpha,
-		FontHinting:    c.opts.fontHinting,
 		CaptchaDrawDot: drawDots,
 
 		ShowShadow:  c.opts.displayShadow,
@@ -461,6 +461,7 @@ func (c *captcha) genThumbImage(size *option.Size, dots map[int]*Dot) (image.Ima
 			drawDot.DrawType = DrawTypeString
 			drawDot.Text = dot.Text
 			drawDot.FontDPI = c.opts.fontDPI
+			drawDot.FontHinting = c.opts.fontHinting
 			drawDot.Font = randgen.RandFont(c.resources.rangFonts)
 		}
 

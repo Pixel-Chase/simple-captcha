@@ -14,7 +14,6 @@ import (
 	"math"
 
 	"github.com/golang/freetype"
-	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -235,7 +234,7 @@ func (p *palette) DrawString(params *DrawStringParams, pt fixed.Point26_6) error
 	dc.SetDst(p.Get())
 
 	dc.SetFontSize(float64(params.Size))
-	dc.SetHinting(font.HintingFull)
+	dc.SetHinting(params.Hinting)
 
 	fontColor := image.NewUniform(params.Color)
 	dc.SetSrc(fontColor)

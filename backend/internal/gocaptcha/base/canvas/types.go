@@ -12,6 +12,7 @@ import (
 	"image/color"
 
 	"github.com/golang/freetype/truetype"
+	"golang.org/x/image/font"
 )
 
 // AreaRect struct for defining a rectangular area
@@ -31,6 +32,7 @@ type DrawStringParams struct {
 	Width   int
 	Height  int
 	FontDPI int
+	Hinting font.Hinting
 	Text    string
 	Font    *truetype.Font
 }

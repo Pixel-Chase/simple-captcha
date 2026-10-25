@@ -15,7 +15,6 @@ import (
 
 	"github.com/golang/freetype"
 	"golang.org/x/image/draw"
-	"golang.org/x/image/font"
 	"golang.org/x/image/math/f64"
 	"golang.org/x/image/math/fixed"
 )
@@ -73,7 +72,7 @@ func (n *nRGBA) DrawString(params *DrawStringParams, pt fixed.Point26_6) error {
 	dc.SetDst(n.Get())
 
 	dc.SetFontSize(float64(params.Size))
-	dc.SetHinting(font.HintingFull)
+	dc.SetHinting(params.Hinting)
 
 	fontColor := image.NewUniform(params.Color)
 	dc.SetSrc(fontColor)
