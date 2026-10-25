@@ -15,8 +15,14 @@ func TestClampDifficulty(t *testing.T) {
 }
 
 func TestClampScale(t *testing.T) {
-	if got := ClampScale(0, 3); got != 1 {
-		t.Errorf("scale 0 should clamp to 1, got %d", got)
+	if got := ClampScale(0, 3); got != MinRenderScale {
+		t.Errorf("scale 0 should clamp to %d, got %d", MinRenderScale, got)
+	}
+	if got := ClampScale(1, 3); got != MinRenderScale {
+		t.Errorf("1x screens should still get %dx images, got %d", MinRenderScale, got)
+	}
+	if got := ClampScale(2, 1); got != 1 {
+		t.Errorf("max 1 configured by operator should win over the render floor, got %d", got)
 	}
 	if got := ClampScale(5, 3); got != 3 {
 		t.Errorf("scale 5 should clamp to 3, got %d", got)

@@ -10,15 +10,19 @@ const (
 	MaxDifficulty = 5
 	MinScale      = 1
 	MaxScale      = 3
+	// MinRenderScale 默认的最低出图倍率：1x 屏也下发 2x 图，由浏览器缩小显示，文字与拼图边缘更锐利
+	MinRenderScale = 2
 )
 
 // 1 倍率下的基础出图尺寸，与前端 SDK 的默认渲染尺寸一致
 const (
+	// 点选、滑块拼图、空间拼图统一使用 3:2 画布，背景素材只需一种比例
 	baseImageWidth  = 300
-	baseImageHeight = 220
+	baseImageHeight = 200
 	baseThumbWidth  = 150
 	baseThumbHeight = 40
-	baseRotateSize  = 220
+	// 旋转题圆形图的直径
+	baseRotateSize = 128
 )
 
 // DifficultyProfile 单个难度等级的出题参数，全部按 1 倍率定义，使用时按 Scale 放大
@@ -155,13 +159,14 @@ func ClampDifficulty(level int) int {
 	return level
 }
 
-// ClampScale 将倍率裁剪到 [1, maxScale]，maxScale 本身也受全局上限约束
+// ClampScale 将倍率裁剪到 [MinRenderScale, maxScale]，maxScale 本身也受全局上限约束；
+// 运维把 maxScale 配得比 MinRenderScale 还低时以 maxScale 为准
 func ClampScale(scale, maxScale int) int {
 	if maxScale < MinScale || maxScale > MaxScale {
 		maxScale = MaxScale
 	}
-	if scale < MinScale {
-		return MinScale
+	if floor := min(MinRenderScale, maxScale); scale < floor {
+		return floor
 	}
 	if scale > maxScale {
 		return maxScale

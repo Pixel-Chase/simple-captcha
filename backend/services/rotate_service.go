@@ -6,8 +6,8 @@ import (
 	"github.com/wenlng/go-captcha/v2/rotate"
 )
 
-// 1 倍率下旋转内圆可选尺寸
-var baseRotateThumbSizes = []int{140, 150, 160, 170}
+// 1 倍率下旋转内圆可选尺寸，约为圆形图直径的 64%~77%
+var baseRotateThumbSizes = []int{82, 87, 93, 99}
 
 // RotateCaptchaService 旋转验证码服务
 type RotateCaptchaService struct {

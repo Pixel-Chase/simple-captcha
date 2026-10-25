@@ -69,27 +69,28 @@ func TestGetCaptchaHandler_ValidRequest(t *testing.T) {
 	assert.Len(t, response["key"], 32, "key 应为 32 位十六进制随机串")
 	assert.NotEmpty(t, response["image"])
 	assert.NotEmpty(t, response["thumb"])
-	assert.EqualValues(t, 300, response["imageWidth"])
-	assert.EqualValues(t, 220, response["imageHeight"])
-	assert.EqualValues(t, 1, response["scale"])
+	// 未带 dpr 时按最低出图倍率 2x 下发 3:2 画布
+	assert.EqualValues(t, 600, response["imageWidth"])
+	assert.EqualValues(t, 400, response["imageHeight"])
+	assert.EqualValues(t, 2, response["scale"])
 	assert.Contains(t, response, "pow", "默认应下发 PoW 挑战")
 }
 
 func TestGetCaptchaHandler_ScaleFromDpr(t *testing.T) {
 	router := setupTestRouter()
 
-	req, _ := http.NewRequest("GET", "/api/v1/captchas/slide-text?dpr=2", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/captchas/slide-text?dpr=3", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	response := decodeBody(t, w)
-	assert.EqualValues(t, 2, response["scale"])
-	assert.EqualValues(t, 600, response["imageWidth"])
-	assert.EqualValues(t, 440, response["imageHeight"])
+	assert.EqualValues(t, 3, response["scale"])
+	assert.EqualValues(t, 900, response["imageWidth"])
+	assert.EqualValues(t, 600, response["imageHeight"])
 	// 滑块拼图块尺寸也应随倍率放大：所有难度等级在 1x 下的区间为 40-70 像素
-	assert.GreaterOrEqual(t, response["thumbWidth"], float64(80))
-	assert.LessOrEqual(t, response["thumbWidth"], float64(150))
+	assert.GreaterOrEqual(t, response["thumbWidth"], float64(120))
+	assert.LessOrEqual(t, response["thumbWidth"], float64(210))
 }
 
 func TestGetCaptchaHandler_AutoTypeResolvedByServer(t *testing.T) {

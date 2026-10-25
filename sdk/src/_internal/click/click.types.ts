@@ -14,7 +14,7 @@ export interface ClickConfig {
 
 export const defaultClickConfig = (): ClickConfig => ({
   width: 300,
-  height: 220,
+  height: 200,
   thumbWidth: 112,
   thumbHeight: 30,
   verticalPadding: 20,

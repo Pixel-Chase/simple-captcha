@@ -235,7 +235,7 @@ func TestVerify_ScaledChallengeUsesImageCoordinates(t *testing.T) {
 	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text", Scale: 2, Difficulty: 3})
 	require.Nil(t, err)
 	assert.Equal(t, 600, data.ImageWidth)
-	assert.Equal(t, 440, data.ImageHeight)
+	assert.Equal(t, 400, data.ImageHeight)
 	assert.Equal(t, 2, data.Scale)
 
 	answer, meta := slideAnswer(t, data.Key)

@@ -329,7 +329,7 @@ func TestAdmin_RequiresBearerToken(t *testing.T) {
 	}
 
 	// 其余受保护接口同样拒绝
-	w := h.upload(t, "", "x.png", encodePNG(t, 320, 240))
+	w := h.upload(t, "", "x.png", encodePNG(t, 960, 640))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	w = h.do(http.MethodDelete, "/backgrounds/1.jpeg", nil, "", "")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -358,8 +358,10 @@ func TestAdmin_ListBackgrounds(t *testing.T) {
 	assert.Equal(t, float64(420), first["width"])
 
 	constraints := body["constraints"].(map[string]interface{})
-	assert.Equal(t, float64(300), constraints["minWidth"])
-	assert.Equal(t, float64(220), constraints["minHeight"])
+	assert.Equal(t, float64(900), constraints["minWidth"])
+	assert.Equal(t, float64(600), constraints["minHeight"])
+	assert.Equal(t, float64(1800), constraints["recommendedWidth"])
+	assert.Equal(t, float64(1200), constraints["recommendedHeight"])
 	assert.Equal(t, float64(2<<20), constraints["maxUploadSize"])
 	assert.ElementsMatch(t, []interface{}{"jpeg", "png"}, constraints["allowedFormats"])
 }
@@ -374,15 +376,15 @@ func TestAdmin_UploadHotReloadsBackgrounds(t *testing.T) {
 	require.Equal(t, 2, h.store.Count())
 
 	// PNG：文件名带路径与中文，落盘名应被清洗并带随机后缀
-	w := h.upload(t, token, "../相册/My Photo (1).PNG", encodePNG(t, 320, 240))
+	w := h.upload(t, token, "../相册/My Photo (1).PNG", encodePNG(t, 960, 640))
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	saved := decodeBody(t, w)
 	name := saved["name"].(string)
 	assert.Regexp(t, savedNamePattern, name)
 	assert.True(t, strings.HasPrefix(name, "My-Photo-1-"), "name=%s", name)
 	assert.Equal(t, "png", saved["format"])
-	assert.Equal(t, float64(320), saved["width"])
-	assert.Equal(t, float64(240), saved["height"])
+	assert.Equal(t, float64(960), saved["width"])
+	assert.Equal(t, float64(640), saved["height"])
 	assert.FileExists(t, filepath.Join(h.dir, name))
 
 	// 仓库已热重载：数量 +1、版本递增、回调被触发
@@ -429,6 +431,7 @@ func TestAdmin_UploadRejectsInvalidFiles(t *testing.T) {
 	}{
 		{"尺寸过小", "small.png", encodePNG(t, 100, 100), http.StatusBadRequest, helper.ErrCodeInvalidImage},
 		{"宽度不足", "narrow.png", encodePNG(t, 200, 400), http.StatusBadRequest, helper.ErrCodeInvalidImage},
+		{"低于 3 倍率下限", "lowres.png", encodePNG(t, 600, 400), http.StatusBadRequest, helper.ErrCodeInvalidImage},
 		{"非图片内容", "notes.png", []byte("hello, this is not an image"), http.StatusBadRequest, helper.ErrCodeInvalidImage},
 		{"空文件", "empty.png", []byte{}, http.StatusBadRequest, helper.ErrCodeInvalidImage},
 		{"体积超限", "huge.png", bytes.Repeat([]byte{0x89}, 100<<10), http.StatusRequestEntityTooLarge, helper.ErrCodeImageTooLarge},
@@ -456,7 +459,7 @@ func TestAdmin_DeleteBackground(t *testing.T) {
 	h := newAdminHarness(t, 2)
 	token := h.login(t)
 
-	w := h.upload(t, token, "extra.png", encodePNG(t, 320, 240))
+	w := h.upload(t, token, "extra.png", encodePNG(t, 960, 640))
 	require.Equal(t, http.StatusOK, w.Code)
 	name := decodeBody(t, w)["name"].(string)
 	require.Equal(t, 3, h.store.Count())
@@ -487,7 +490,7 @@ func TestAdmin_RejectsUnsafeNames(t *testing.T) {
 
 	// 在目录之外放一个诱饵文件，确认任何路径成分都无法触达它
 	decoy := filepath.Join(filepath.Dir(h.dir), "decoy.png")
-	require.NoError(t, os.WriteFile(decoy, encodePNG(t, 320, 240), 0o644))
+	require.NoError(t, os.WriteFile(decoy, encodePNG(t, 960, 640), 0o644))
 	t.Cleanup(func() { _ = os.Remove(decoy) })
 
 	unsafe := []string{
@@ -554,7 +557,7 @@ func TestBackgroundStore_ReloadKeepsOldImagesOnFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 2, store.Count())
 	assert.Equal(t, versionBefore, store.Version())
-	assert.Len(t, store.Get(300, 220), 2)
+	assert.Len(t, store.Get(600, 400), 2)
 }
 
 func TestBackgroundStore_GetCoversRequestedSize(t *testing.T) {
@@ -564,15 +567,35 @@ func TestBackgroundStore_GetCoversRequestedSize(t *testing.T) {
 	store, err := services.NewBackgroundStore(dir)
 	require.NoError(t, err)
 
-	// 420x420 素材配 3x 出图（900x660）会被放大到至少覆盖目标尺寸
-	for _, img := range store.Get(900, 660) {
-		bounds := img.Bounds()
-		assert.GreaterOrEqual(t, bounds.Dx(), 900)
-		assert.GreaterOrEqual(t, bounds.Dy(), 660)
+	// 420x420 素材：各出图尺寸都等比缩放到恰好覆盖“目标 + 10% 外扩”，受限的一边与之相等
+	cases := []struct{ w, h, wantW, wantH int }{
+		{900, 600, 990, 990}, // 3x 主图
+		{600, 400, 660, 660}, // 2x 主图
+		{256, 256, 282, 282}, // 2x 旋转
 	}
-	// 1x 出图不需要放大，保持原尺寸
-	for _, img := range store.Get(300, 220) {
-		assert.Equal(t, 420, img.Bounds().Dx())
+	for _, c := range cases {
+		for _, img := range store.Get(c.w, c.h) {
+			assert.Equal(t, c.wantW, img.Bounds().Dx(), "%dx%d", c.w, c.h)
+			assert.Equal(t, c.wantH, img.Bounds().Dy(), "%dx%d", c.w, c.h)
+		}
+	}
+}
+
+func TestBackgroundStore_DownscalesLargeOriginals(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "large.png"), encodePNG(t, 1800, 1200), 0o644))
+
+	store, err := services.NewBackgroundStore(dir)
+	require.NoError(t, err)
+
+	// 3:2 高清原图整张缩小，保留完整构图，而不是从原图里随机裁一小块
+	for _, img := range store.Get(600, 400) {
+		assert.Equal(t, 660, img.Bounds().Dx())
+		assert.Equal(t, 440, img.Bounds().Dy())
+	}
+	for _, img := range store.Get(900, 600) {
+		assert.Equal(t, 990, img.Bounds().Dx())
+		assert.Equal(t, 660, img.Bounds().Dy())
 	}
 }
 
@@ -588,7 +611,7 @@ func TestCaptchaService_GeneratesAfterBackgroundReload(t *testing.T) {
 	require.Nil(t, cerr)
 	require.NotEmpty(t, first.Image)
 
-	w := h.upload(t, token, "fresh.png", encodePNG(t, 640, 480))
+	w := h.upload(t, token, "fresh.png", encodePNG(t, 960, 640))
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	second, cerr := svc.GenerateCaptcha(req)

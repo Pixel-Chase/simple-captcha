@@ -63,11 +63,14 @@ type BackgroundInfo struct {
 
 // UploadConstraints 上传约束，随列表接口下发供前端提示与预检
 type UploadConstraints struct {
-	MinWidth       int      `json:"minWidth"`
-	MinHeight      int      `json:"minHeight"`
-	MaxUploadSize  int64    `json:"maxUploadSize"`
-	MaxPixels      int      `json:"maxPixels"`
-	AllowedFormats []string `json:"allowedFormats"`
+	MinWidth  int `json:"minWidth"`
+	MinHeight int `json:"minHeight"`
+	// 建议尺寸（3:2），仅用于前端提示，不做校验
+	RecommendedWidth  int      `json:"recommendedWidth"`
+	RecommendedHeight int      `json:"recommendedHeight"`
+	MaxUploadSize     int64    `json:"maxUploadSize"`
+	MaxPixels         int      `json:"maxPixels"`
+	AllowedFormats    []string `json:"allowedFormats"`
 }
 
 // AdminService 管理后台业务：管理员登录会话 + 背景图增删查
@@ -186,11 +189,13 @@ func sessionKey(token string) string {
 // Constraints 返回上传约束
 func (s *AdminService) Constraints() UploadConstraints {
 	return UploadConstraints{
-		MinWidth:       baseImageWidth,
-		MinHeight:      baseImageHeight,
-		MaxUploadSize:  s.cfg.MaxUploadSize,
-		MaxPixels:      s.cfg.MaxImagePixels,
-		AllowedFormats: append([]string{}, allowedUploadFormats...),
+		MinWidth:          minBackgroundWidth,
+		MinHeight:         minBackgroundHeight,
+		RecommendedWidth:  recommendedBackgroundWidth,
+		RecommendedHeight: recommendedBackgroundHeight,
+		MaxUploadSize:     s.cfg.MaxUploadSize,
+		MaxPixels:         s.cfg.MaxImagePixels,
+		AllowedFormats:    append([]string{}, allowedUploadFormats...),
 	}
 }
 
@@ -242,9 +247,9 @@ func (s *AdminService) SaveBackground(originalName string, r io.Reader) (*Backgr
 	if err != nil || !isAllowedUploadFormat(format) {
 		return nil, helper.NewCaptchaError(helper.ErrCodeInvalidImage, "仅支持 JPEG 或 PNG 图片")
 	}
-	if header.Width < baseImageWidth || header.Height < baseImageHeight {
+	if header.Width < minBackgroundWidth || header.Height < minBackgroundHeight {
 		return nil, helper.NewCaptchaError(helper.ErrCodeInvalidImage,
-			fmt.Sprintf("图片尺寸至少需要 %dx%d，当前为 %dx%d", baseImageWidth, baseImageHeight, header.Width, header.Height))
+			fmt.Sprintf("图片尺寸至少需要 %dx%d，当前为 %dx%d", minBackgroundWidth, minBackgroundHeight, header.Width, header.Height))
 	}
 	if header.Width*header.Height > s.cfg.MaxImagePixels {
 		return nil, helper.NewCaptchaError(helper.ErrCodeInvalidImage,

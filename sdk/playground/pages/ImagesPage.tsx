@@ -18,17 +18,19 @@ interface UploadTask {
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg'];
 const MAX_VISIBLE_TASKS = 6;
 
-/** 按基础出图尺寸换算素材能支撑的最高清晰度 */
+/** 对照素材规格给出清晰度标签：达到建议尺寸为高清，达到下限即 3 倍率出图无需放大 */
 function qualityOf(item: BackgroundItem, constraints: UploadConstraints | null) {
-  const minW = constraints?.minWidth ?? 300;
-  const minH = constraints?.minHeight ?? 220;
-  if (item.width >= minW * 3 && item.height >= minH * 3) {
-    return { text: '3x 高清', tone: 'good' as const };
+  const minW = constraints?.minWidth ?? 900;
+  const minH = constraints?.minHeight ?? 600;
+  const recW = constraints?.recommendedWidth ?? 1800;
+  const recH = constraints?.recommendedHeight ?? 1200;
+  if (item.width >= recW && item.height >= recH) {
+    return { text: '高清', tone: 'good' as const };
   }
-  if (item.width >= minW * 2 && item.height >= minH * 2) {
-    return { text: '2x', tone: 'ok' as const };
+  if (item.width >= minW && item.height >= minH) {
+    return { text: '达标', tone: 'ok' as const };
   }
-  return { text: '1x · 高倍率会放大', tone: 'warn' as const };
+  return { text: '低于下限 · 出图会放大', tone: 'warn' as const };
 }
 
 /** 客户端预检：类型与体积不合格的文件直接标记，不发请求 */
@@ -205,7 +207,7 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
       formats,
       `最小 ${constraints.minWidth}×${constraints.minHeight}`,
       `单张 ≤ ${formatBytes(constraints.maxUploadSize)}`,
-      `3x 高清建议 ≥ ${constraints.minWidth * 3}×${constraints.minHeight * 3}`,
+      `建议 3:2 · ≥ ${constraints.recommendedWidth}×${constraints.recommendedHeight}`,
     ].join(' · ');
   }, [constraints]);
 

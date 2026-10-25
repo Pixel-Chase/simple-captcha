@@ -13,7 +13,7 @@ export interface SlideConfig {
 
 export const defaultSlideConfig = (): SlideConfig => ({
   width: 300,
-  height: 220,
+  height: 200,
   thumbWidth: 150,
   thumbHeight: 40,
   verticalPadding: 20,

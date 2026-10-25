@@ -458,7 +458,7 @@ p {
 
 .tile__preview {
   position: relative;
-  aspect-ratio: 300 / 220;
+  aspect-ratio: 3 / 2;
   background: #eef1f7;
 }
 

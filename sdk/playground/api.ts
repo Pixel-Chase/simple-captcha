@@ -34,6 +34,9 @@ export interface BackgroundItem {
 export interface UploadConstraints {
   minWidth: number;
   minHeight: number;
+  /** 建议尺寸（3:2），仅用于提示 */
+  recommendedWidth: number;
+  recommendedHeight: number;
   maxUploadSize: number;
   maxPixels: number;
   allowedFormats: string[];
