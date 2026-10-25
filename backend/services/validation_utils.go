@@ -3,9 +3,9 @@ package services
 import (
 	"strconv"
 
-	"github.com/wenlng/go-captcha/v2/click"
-	"github.com/wenlng/go-captcha/v2/rotate"
-	"github.com/wenlng/go-captcha/v2/slide"
+	"simple-captcha/internal/gocaptcha/click"
+	"simple-captcha/internal/gocaptcha/rotate"
+	"simple-captcha/internal/gocaptcha/slide"
 )
 
 // ValidationUtils 验证工具类

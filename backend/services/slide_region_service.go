@@ -3,7 +3,7 @@ package services
 import (
 	"simple-captcha/helper"
 
-	"github.com/wenlng/go-captcha/v2/slide"
+	"simple-captcha/internal/gocaptcha/slide"
 )
 
 // SlideRegionCaptchaService 滑动区域验证码服务

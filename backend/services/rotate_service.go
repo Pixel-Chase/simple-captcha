@@ -3,8 +3,8 @@ package services
 import (
 	"simple-captcha/helper"
 
-	"github.com/wenlng/go-captcha/v2/base/imagedata"
-	"github.com/wenlng/go-captcha/v2/rotate"
+	"simple-captcha/internal/gocaptcha/base/imagedata"
+	"simple-captcha/internal/gocaptcha/rotate"
 )
 
 // 1 倍率下旋转内圆可选尺寸，约为圆形图直径的 64%~77%

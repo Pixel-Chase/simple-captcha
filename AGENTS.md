@@ -18,6 +18,7 @@ simple-captcha/
 │   ├── cache/                   # 缓存配置 (Redis)
 │   ├── config/                  # 应用配置项
 │   ├── helper/                  # 全局工具函数
+│   ├── internal/gocaptcha/      # 验证码图形引擎（fork 自 go-captcha v2.0.5，自行维护，与上游的差异记在 NOTICE.md）
 │   └── main.go                  # 后端服务入口
 │
 └── sdk/                         # React 验证码前端组件库 / SDK
@@ -35,7 +36,7 @@ simple-captcha/
 
 ### 3.1 技术栈
 *   **Web 框架**: Gin (`github.com/gin-gonic/gin`)
-*   **核心图形引擎**: Go-Captcha v2 (`github.com/wenlng/go-captcha/v2`)
+*   **核心图形引擎**: 内置的 `internal/gocaptcha`（fork 自 go-captcha v2.0.5，上游已停更，由本项目自行维护）；字体、图形等素材仍引用 `github.com/wenlng/go-captcha-assets`
 *   **缓存与持久化**: Redis (`github.com/go-redis/redis/v8`)
 *   **开发语言**: Go 1.23+
 
@@ -43,6 +44,7 @@ simple-captcha/
 1. **分层架构**: 遵循 `Controller -> Service` 的线性调用链路。Controller 仅负责参数绑定、校验与组装响应，复杂的验证码生产、切图比对等硬核业务逻辑需统一定义在 Service 层。
 2. **错误处理机制**: 采用标准化且结构一致的 JSON 响应格式（例如包含 code/msg/data），确保前端 SDK `use-captcha-request.ts` 能够无缝兼容错误捕获。
 3. **接口高内聚**: 新增或调整特定验证码类型相关的 API（例如点选、滑块）时，保持 `routes` 的职责边界清晰，验证与生成接口分离。
+4. **内置引擎**: `internal/gocaptcha` 不再跟随上游升级。修改其中代码时，在同目录 `NOTICE.md` 的「修改记录」里补一条（Apache-2.0 要求标注改动）。
 
 ## 4. `sdk` (前端) 规范
 

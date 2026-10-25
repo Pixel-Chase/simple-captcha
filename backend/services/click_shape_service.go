@@ -6,8 +6,8 @@ import (
 	"simple-captcha/helper"
 
 	"github.com/wenlng/go-captcha-assets/resources/shapes"
-	"github.com/wenlng/go-captcha/v2/base/option"
-	"github.com/wenlng/go-captcha/v2/click"
+	"simple-captcha/internal/gocaptcha/base/option"
+	"simple-captcha/internal/gocaptcha/click"
 )
 
 // ClickShapeCaptchaService 点击形状验证码服务

@@ -1,7 +1,7 @@
 package services
 
 import (
-	"github.com/wenlng/go-captcha/v2/base/option"
+	"simple-captcha/internal/gocaptcha/base/option"
 )
 
 // 难度与倍率边界

@@ -5,8 +5,8 @@ import (
 	"simple-captcha/helper"
 
 	"github.com/wenlng/go-captcha-assets/resources/tiles"
-	"github.com/wenlng/go-captcha/v2/base/imagedata"
-	"github.com/wenlng/go-captcha/v2/slide"
+	"simple-captcha/internal/gocaptcha/base/imagedata"
+	"simple-captcha/internal/gocaptcha/slide"
 )
 
 // loadSlideGraphs 加载滑块拼图块资源

@@ -7,9 +7,9 @@ import (
 	"github.com/golang/freetype/truetype"
 	"github.com/wenlng/go-captcha-assets/bindata/chars"
 	"github.com/wenlng/go-captcha-assets/resources/fonts/fzshengsksjw"
-	"github.com/wenlng/go-captcha/v2/base/imagedata"
-	"github.com/wenlng/go-captcha/v2/base/option"
-	"github.com/wenlng/go-captcha/v2/click"
+	"simple-captcha/internal/gocaptcha/base/imagedata"
+	"simple-captcha/internal/gocaptcha/base/option"
+	"simple-captcha/internal/gocaptcha/click"
 )
 
 // 点选文字的配色：暗色主题使用浅色文字 + 深色提示图，亮色主题使用默认文字色 + 鲜艳提示图

@@ -94,8 +94,6 @@ github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65E
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/wenlng/go-captcha-assets v1.0.1 h1:AdjRFMKmadPRWRTv0XEYfjDvcaayZ2yExITDvlK/7bk=
 github.com/wenlng/go-captcha-assets v1.0.1/go.mod h1:yQqc7rRbxgLCg+tWtVp+7Y317D1wIZDan/yIwt8wSac=
-github.com/wenlng/go-captcha/v2 v2.0.5 h1:+1FpVwJZmLCqEHxOt+HvpUArFGo107nRxOeRVHkZhTc=
-github.com/wenlng/go-captcha/v2 v2.0.5/go.mod h1:5hac1em3uXoyC5ipZ0xFv9umNM/waQvYAQdr0cx/h34=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/arch v0.12.0 h1:UsYJhbzPYGsT0HbEdmYcqtCv8UNGvnaL561NnIUvaKg=
 golang.org/x/arch v0.12.0/go.mod h1:FEVrYAQjsQXMVJ1nsMoVVXPZg6p2JE2mx8psSWTDQys=
