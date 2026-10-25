@@ -12,44 +12,17 @@ import (
 	"errors"
 	"image/color"
 	"math"
-	"os"
-	"strconv"
 	"unicode"
 	"unicode/utf8"
 
 	"simple-captcha/internal/gocaptcha/base/random"
 )
 
-// t2x converts an integer to a hexadecimal string
-func t2x(t int64) string {
-	result := strconv.FormatInt(t, 16)
-	if len(result) == 1 {
-		result = "0" + result
-	}
-	return result
-}
-
 // FormatAlpha formats the alpha value
 func FormatAlpha(val float32) uint8 {
 	a := math.Min(float64(val), 1)
 	alpha := a * 255
 	return uint8(alpha)
-}
-
-// RgbToHex converts RGB color to hexadecimal color
-func RgbToHex(red int64, green int64, blue int64) string {
-	r := t2x(red)
-	g := t2x(green)
-	b := t2x(blue)
-	return r + g + b
-}
-
-// HexToRgb converts hexadecimal color to RGB color
-func HexToRgb(hex string) (int64, int64, int64) {
-	r, _ := strconv.ParseInt(hex[:2], 16, 10)
-	g, _ := strconv.ParseInt(hex[2:4], 16, 18)
-	b, _ := strconv.ParseInt(hex[4:], 16, 10)
-	return r, g, b
 }
 
 var (
@@ -91,18 +64,6 @@ func ParseHexColor(s string) (c color.RGBA, err error) {
 		err = ErrColorInvalid
 	}
 	return
-}
-
-// PathExists checks if a file path exists
-func PathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
 }
 
 // InArrayWithStr checks if a string is in an array

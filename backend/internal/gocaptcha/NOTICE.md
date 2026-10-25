@@ -23,3 +23,4 @@
 - `base/random`：池化生成器由“时间 + math/rand”播种改为以 crypto/rand 为种子的 math/rand/v2 ChaCha8，答案相关的位置、角度与排列不再可从已解题目反推；删除未使用且同样以时间播种的全局生成器 `rnd/getRnd`
 - `click.Validate`：修正容差偏移。上游以 `max(dx, dx-padding)` 计算左上角，结果恒为 `dx`，有效区间变成 `[dx, dx+w+2p]`；现改为四边各放宽 `padding`，即 `[dx-p, dx+w+p]`（纵向同理）
 - 清理 staticcheck 告警：导出的错误变量按 Go 惯例由 `XxxErr` 改名为 `ErrXxx`（如 `ImageTypeErr` → `ErrImageType`）；删除未使用的 `click.wrapError` 与 click/rotate/slide 中从未读写的 `version` 字段
+- 删除本项目不使用的工具函数：`canvas.MakeAreaRect/MakePositionRect`（对应类型保留）、`codec.DecodeByteToJpeg/DecodeByteToPng`、`helper.RgbToHex/HexToRgb/PathExists` 及仅供 `RgbToHex` 使用的 `t2x`

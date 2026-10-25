@@ -95,24 +95,6 @@ func EncodeJPEGToByte(img image.Image, quality int) ([]byte, error) {
 	return result, nil
 }
 
-// DecodeByteToJpeg decodes a byte array to a JPEG image
-func DecodeByteToJpeg(b []byte) (img image.Image, err error) {
-	var buf bytes.Buffer
-	buf.Write(b)
-	img, err = jpeg.Decode(&buf)
-	buf.Reset()
-	return
-}
-
-// DecodeByteToPng decodes a byte array to a PNG image
-func DecodeByteToPng(b []byte) (img image.Image, err error) {
-	var buf bytes.Buffer
-	buf.Write(b)
-	img, err = png.Decode(&buf)
-	buf.Reset()
-	return
-}
-
 // EncodePNGToBase64 encodes a PNG image to a Base64 string
 func EncodePNGToBase64(img image.Image) (string, error) {
 	base64Str, err := EncodePNGToBase64Data(img)
