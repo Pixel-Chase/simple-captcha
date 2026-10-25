@@ -356,25 +356,31 @@ function App() {
 |-----|--------|------|
 | `userCancel` | `用户取消` | 用户取消时的提示 |
 | `loading` | `加载中...` | 加载状态文案 |
-| `clickTitle` | `安全验证` | 点选模式标题 |
+| `clickTitle` | `安全点选验证` | 点选模式标题 |
 | `slideTitle` | `拼图验证` | 滑块拼图模式标题 |
 | `regionTitle` | `空间拼图` | 滑动区域模式标题 |
 | `rotateTitle` | `旋转验证` | 旋转模式标题 |
-| `clickSubtitle` | `请依次点击图中的文字` | 点选标题下的副标题 |
-| `slideSubtitle` | `拖动滑块使拼图吻合` | 滑块拼图副标题 |
-| `regionSubtitle` | `直接拖动图块至缺口，松手提交` | 滑动区域副标题 |
+| `clickSubtitle` | `请依序点击图中的指定汉字` | 点选标题下的副标题 |
+| `slideSubtitle` | `拖动滑块使拼图完全吻合` | 滑块拼图副标题 |
+| `regionSubtitle` | `自由拖动图块至缺口，松手提交` | 滑动区域副标题 |
 | `rotateSubtitle` | `拖动滑块使图片角度摆正` | 旋转副标题 |
-| `confirmButton` | `确认提交` | 点选确认按钮 |
+| `clickTag` | `风控防护` | 点选标题右侧的小标签，设为空字符串可隐藏 |
+| `slideTag` | `高精咬合` | 滑块拼图标题右侧的小标签 |
+| `regionTag` | `免滑条` | 滑动区域标题右侧的小标签 |
+| `rotateTag` | `角度矫正` | 旋转标题右侧的小标签 |
+| `confirmButton` | `确认点选` | 点选确认按钮 |
 | `buttonText` | `点击按键进行验证` | 触发验证按钮默认文案 |
-| `clickHint` | `请按顺序点选：` | 点选提示条文案 |
-| `clickMeta` | `已点击 {n} 处` | 点选计数，`{n}` 为已点击数量 |
-| `clickClear` | `清除重选` | 点选清除按钮 |
+| `clickHint` | `请依序点击：` | 点选提示条文案 |
+| `clickMeta` | `已依序选择 {n} 处` | 点选计数，`{n}` 为已点击数量 |
+| `clickClear` | `重选` | 点选清除按钮 |
 | `slideHint` | `向右拖动滑块完成拼图` | 滑块轨道内的待拖动提示 |
 | `rotateHint` | `向右拖动滑块使图片摆正` | 旋转轨道内的待拖动提示 |
-| `slideProgress` | `拖动至与缺口精准咬合` | 滑块轨道下方的说明（右侧显示真实拖动进度） |
-| `rotateProgress` | `松手自动校准判定` | 旋转轨道下方的说明（右侧显示当前角度） |
-| `regionHint` | `按住图块拖入缺口` | 滑动区域图片底部的操作提示 |
+| `slideProgress` | `拖动至与缺口精准咬合` | 滑块轨道下方左侧的说明 |
+| `slidePercent` | `当前进度 {p}%` | 滑块轨道下方右侧的真实拖动进度，`{p}` 为百分比 |
+| `rotateProgress` | `松手自动校准判定` | 旋转轨道下方右侧的说明（左侧显示当前角度） |
+| `regionHint` | `按住图块自由拖拽入框` | 滑动区域图片下方的操作提示 |
 | `regionBadge` | `松手即验` | 滑动区域操作提示右侧的角标 |
+| `regionReset` | `原位重置` | 滑动区域把图块移回初始位置的按钮 |
 | `rotateAngle` | `当前偏移` | 旋转图片下方的角度标签前缀 |
 | `successText` | `验证通过` | 校验通过画面的文案 |
 | `elapsedText` | `耗时 {s}s` | 校验通过画面的耗时，`{s}` 为秒数 |
@@ -383,7 +389,9 @@ function App() {
 | `failBanner` | `正在重新生成验证码…` | 校验未通过时图片上的提示条 |
 | `trackSuccess` | `验证已通过` | 校验通过时轨道内的文案 |
 | `trackFail` | `验证未通过，请重新拖动` | 校验未通过时轨道内的文案 |
-| `poweredBy` | `行为验证保护中` | 滑动区域底部的安全提示，设为空字符串可隐藏 |
+| `poweredBy` | `二维拖拽轨迹与运动特征分析` | 滑动区域底部的安全提示，设为空字符串可隐藏 |
+| `slideNote` | `多维速度曲线与轨迹时序分析` | 滑块拼图底部的安全提示，设为空字符串可隐藏 |
+| `rotateNote` | `拖动速度与微抖动行为分析` | 旋转底部的安全提示，设为空字符串可隐藏 |
 | `refreshLabel` | `刷新` | 刷新按钮的无障碍标签 |
 | `closeLabel` | `关闭` | 关闭按钮的无障碍标签 |
 
@@ -392,11 +400,11 @@ function App() {
 ```tsx
 <CaptchaProvider
   theme={{
-    primaryColor: '#4f46e5',
+    primaryColor: '#3904e7',
     backgroundColor: '#ffffff',
-    textColor: '#0f172a',
-    borderColor: '#e2e8f0',
-    borderRadius: 16,
+    textColor: '#1b1a25',
+    borderColor: '#e3e8ee',
+    borderRadius: 24,
   }}
 >
   <App />

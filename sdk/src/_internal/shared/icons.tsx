@@ -70,14 +70,35 @@ export const UiDoubleChevronIcon = (props: IconProps) => (
   </Svg>
 );
 
-export const UiHandIcon = (props: IconProps) => (
-  <Svg {...props}>
-    <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5S19 1.67 19 2.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z" />
-  </Svg>
-);
-
 export const UiCheckCircleIcon = (props: IconProps) => (
   <Svg {...props}>
     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+  </Svg>
+);
+
+/** 点按手势：空间拼图图块上的拖动提示 */
+export const UiPointerIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z" />
+  </Svg>
+);
+
+/** 左右双向箭头：滑块轨道下方的说明行 */
+export const UiArrowsHorizontalIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="m2 12 4-4v3h12V8l4 4-4 4v-3H6v3z" />
+  </Svg>
+);
+
+export const UiShieldIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
+  </Svg>
+);
+
+/** 带缺口的圆环：旋转题底部的安全提示 */
+export const UiNotchIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M12 2A10 10 0 1 0 22 12h-2.5A7.5 7.5 0 1 1 12 4.5z" />
   </Svg>
 );

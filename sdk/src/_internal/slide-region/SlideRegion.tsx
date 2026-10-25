@@ -7,7 +7,7 @@ import { LoadingIcon } from '../icons';
 import { useSlideRegionHandler } from './use-slide-region-handler';
 import { useCaptchaConfig } from '../../CaptchaProvider';
 import { CardHeader, ResultOverlay, SecureNote } from '../shared/parts';
-import { UiHandIcon } from '../shared/icons';
+import { UiFingerprintIcon, UiPointerIcon, UiSyncIcon } from '../shared/icons';
 import type { StatusProps } from '../shared/status.types';
 
 export interface SlideRegionRef {
@@ -86,6 +86,11 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
     };
   }, [tileRef]);
 
+  // 图块相对初始位置的位移，仅反映用户自己的拖动，不涉及缺口位置
+  const formatOffset = (value: number) => `${value >= 0 ? '+' : ''}${Math.round(value)}px`;
+  const offsetX = formatOffset(handler.thumbPoint.x - (localData.thumbX || 0));
+  const offsetY = formatOffset(handler.thumbPoint.y - (localData.thumbY || 0));
+
   return (
     <div
       className={`gc-wrapper gc-type-region gc-status-${status} ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
@@ -103,6 +108,8 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
         icon="move"
         title={localConfig.title || locale.regionTitle}
         subtitle={locale.regionSubtitle}
+        tag={locale.regionTag}
+        tagTone="success"
         status={status}
         onRefresh={handler.refreshEvent}
         onClose={handler.closeEvent}
@@ -125,6 +132,20 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
           }}
           alt=""
         />
+        <svg className="gc-region-grid" aria-hidden="true">
+          <line x1="0" x2="100%" y1="50%" y2="50%" />
+          <line x1="50%" x2="50%" y1="0" y2="100%" />
+        </svg>
+        {hasDisplayImageState && status === 'idle' && (
+          <div className="gc-region-offset gc-glass">
+            <span>
+              ΔX: <strong>{offsetX}</strong>
+            </span>
+            <span>
+              ΔY: <strong>{offsetY}</strong>
+            </span>
+          </div>
+        )}
         <div
           className="gc-tile gc-tile-region"
           ref={tileRef}
@@ -143,17 +164,27 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
             src={localData.thumb}
             alt=""
           />
-        </div>
-        {status === 'idle' && (
-          <div className="gc-region-tip">
-            <span>
-              <UiHandIcon width={10} height={10} />
-              {locale.regionHint}
+          {hasDisplayImageState && (
+            <span className="gc-tile-grip">
+              <UiPointerIcon width={14} height={14} />
             </span>
-            <em>{locale.regionBadge}</em>
-          </div>
-        )}
+          )}
+        </div>
         <ResultOverlay status={status} elapsed={props.elapsed} />
+      </div>
+      {/* 放在图片下方而非叠在图上，避免遮挡停靠在底部的图块；结果态仅隐藏不卸载，保持卡片高度不跳动 */}
+      <div className="gc-region-tip">
+        <span>
+          <UiFingerprintIcon width={12} height={12} />
+          {locale.regionHint}
+        </span>
+        <em>{locale.regionBadge}</em>
+      </div>
+      <div className="gc-region-actions">
+        <button type="button" onClick={handler.resetData}>
+          <UiSyncIcon width={11} height={11} />
+          {locale.regionReset}
+        </button>
       </div>
       <SecureNote>{locale.poweredBy}</SecureNote>
     </div>

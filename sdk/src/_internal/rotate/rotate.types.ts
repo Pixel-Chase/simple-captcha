@@ -13,7 +13,7 @@ export interface RotateConfig {
 export const defaultRotateConfig = (): RotateConfig => ({
   width: 300,
   height: 220,
-  size: 176,
+  size: 128,
   verticalPadding: 20,
   horizontalPadding: 20,
   showTheme: true,

@@ -6,7 +6,7 @@ import { defaultRotateConfig, defaultRotateData } from './rotate.types';
 import { LoadingIcon } from '../icons';
 import { useRotateHandler } from './use-rotate-handler';
 import { useCaptchaConfig } from '../../CaptchaProvider';
-import { CardHeader, DragTrack, ResultOverlay } from '../shared/parts';
+import { CardHeader, DragTrack, ResultOverlay, SecureNote } from '../shared/parts';
 import type { StatusProps } from '../shared/status.types';
 
 export interface RotateRef {
@@ -16,8 +16,10 @@ export interface RotateRef {
   close: () => void;
 }
 
-/** 虚线外环比图片圆大出的直径（两侧各 16px） */
+/** 虚线刻度环比图片圆大出的直径（两侧各 16px） */
 const RING_GAP = 32;
+/** 最外圈实线刻度环比图片圆大出的直径（两侧各 24px） */
+const OUTER_RING_GAP = 48;
 /** 旋转区域上下留白合计 */
 const ROTATE_PAD = 20;
 
@@ -93,6 +95,7 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
 
   const angle = handler.getState().thumbAngle;
   const ringSize = (size || 0) + RING_GAP;
+  const outerRingSize = (size || 0) + OUTER_RING_GAP;
   const angleText = `${Math.round(angle)}`;
 
   return (
@@ -112,6 +115,7 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
         icon="rotate"
         title={localConfig.title || locale.rotateTitle}
         subtitle={locale.rotateSubtitle}
+        tag={locale.rotateTag}
         status={status}
         onRefresh={handler.refreshEvent}
         onClose={handler.closeEvent}
@@ -121,6 +125,10 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
         style={{ width: localConfig.width + 'px', height: ringSize + ROTATE_PAD + 'px' }}
       >
         <div className="gc-dial" style={{ width: ringSize + 'px', height: ringSize + 'px' }}>
+          <i
+            className="gc-dial-ring"
+            style={{ width: outerRingSize + 'px', height: outerRingSize + 'px' }}
+          />
           <i className="gc-dial-dot gc-dial-dot-top" />
           <i className="gc-dial-dot gc-dial-dot-right" />
           <i className="gc-dial-dot gc-dial-dot-bottom" />
@@ -166,9 +174,12 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
           <i className="gc-dial-cross" />
         </div>
         {hasDisplayImageState && status === 'idle' && (
-          <div className="gc-angle-badge">
-            {locale.rotateAngle} {angle >= 0 ? '+' : ''}
-            {angleText}°
+          <div className="gc-angle-badge gc-glass">
+            {locale.rotateAngle}
+            <strong>
+              {angle >= 0 ? '+' : ''}
+              {angleText}°
+            </strong>
           </div>
         )}
       </div>
@@ -181,9 +192,10 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
         status={status}
         handleIcon="sync"
         onDragStart={handler.dragEvent}
-        metaLeft={locale.rotateProgress}
-        metaRight={`${angleText} / 360°`}
+        metaLeft={`${angleText}° / 360°`}
+        metaRight={locale.rotateProgress}
       />
+      <SecureNote icon="notch">{locale.rotateNote}</SecureNote>
     </div>
   );
 });

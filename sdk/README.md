@@ -140,25 +140,31 @@ export default () => {
 
 | 属性 | 说明 |
 |---|---|
-| clickTitle | 点选模式标题，默认 `安全验证` |
+| clickTitle | 点选模式标题，默认 `安全点选验证` |
 | slideTitle | 滑块拼图模式标题，默认 `拼图验证` |
 | regionTitle | 滑动区域模式标题，默认 `空间拼图` |
 | rotateTitle | 旋转模式标题，默认 `旋转验证` |
-| clickSubtitle | 点选标题下的副标题，默认 `请依次点击图中的文字` |
-| slideSubtitle | 滑块拼图副标题，默认 `拖动滑块使拼图吻合` |
-| regionSubtitle | 滑动区域副标题，默认 `直接拖动图块至缺口，松手提交` |
+| clickSubtitle | 点选标题下的副标题，默认 `请依序点击图中的指定汉字` |
+| slideSubtitle | 滑块拼图副标题，默认 `拖动滑块使拼图完全吻合` |
+| regionSubtitle | 滑动区域副标题，默认 `自由拖动图块至缺口，松手提交` |
 | rotateSubtitle | 旋转副标题，默认 `拖动滑块使图片角度摆正` |
-| confirmButton | 点选确认按钮，默认 `确认提交` |
+| clickTag | 点选标题右侧的小标签，设为空字符串可隐藏，默认 `风控防护` |
+| slideTag | 滑块拼图标题右侧的小标签，默认 `高精咬合` |
+| regionTag | 滑动区域标题右侧的小标签，默认 `免滑条` |
+| rotateTag | 旋转标题右侧的小标签，默认 `角度矫正` |
+| confirmButton | 点选确认按钮，默认 `确认点选` |
 | buttonText | 触发验证按钮默认文案，默认 `点击按键进行验证` |
-| clickHint | 点选提示条文案，默认 `请按顺序点选：` |
-| clickMeta | 点选计数，`{n}` 为已点击数量，默认 `已点击 {n} 处` |
-| clickClear | 点选清除按钮，默认 `清除重选` |
+| clickHint | 点选提示条文案，默认 `请依序点击：` |
+| clickMeta | 点选计数，`{n}` 为已点击数量，默认 `已依序选择 {n} 处` |
+| clickClear | 点选清除按钮，默认 `重选` |
 | slideHint | 滑块轨道内的待拖动提示，默认 `向右拖动滑块完成拼图` |
 | rotateHint | 旋转轨道内的待拖动提示，默认 `向右拖动滑块使图片摆正` |
-| slideProgress | 滑块轨道下方的说明（右侧显示真实拖动进度），默认 `拖动至与缺口精准咬合` |
-| rotateProgress | 旋转轨道下方的说明（右侧显示当前角度），默认 `松手自动校准判定` |
-| regionHint | 滑动区域图片底部的操作提示，默认 `按住图块拖入缺口` |
+| slideProgress | 滑块轨道下方左侧的说明，默认 `拖动至与缺口精准咬合` |
+| slidePercent | 滑块轨道下方右侧的真实拖动进度，`{p}` 为百分比，默认 `当前进度 {p}%` |
+| rotateProgress | 旋转轨道下方右侧的说明（左侧显示当前角度），默认 `松手自动校准判定` |
+| regionHint | 滑动区域图片下方的操作提示，默认 `按住图块自由拖拽入框` |
 | regionBadge | 滑动区域操作提示右侧的角标，默认 `松手即验` |
+| regionReset | 滑动区域把图块移回初始位置的按钮，默认 `原位重置` |
 | rotateAngle | 旋转图片下方的角度标签前缀，默认 `当前偏移` |
 | successText | 校验通过画面的文案，默认 `验证通过` |
 | elapsedText | 校验通过画面的耗时，`{s}` 为秒数，默认 `耗时 {s}s` |
@@ -167,7 +173,9 @@ export default () => {
 | failBanner | 校验未通过时图片上的提示条，默认 `正在重新生成验证码…` |
 | trackSuccess | 校验通过时轨道内的文案，默认 `验证已通过` |
 | trackFail | 校验未通过时轨道内的文案，默认 `验证未通过，请重新拖动` |
-| poweredBy | 滑动区域底部的安全提示，设为空字符串可隐藏，默认 `行为验证保护中` |
+| poweredBy | 滑动区域底部的安全提示，设为空字符串可隐藏，默认 `二维拖拽轨迹与运动特征分析` |
+| slideNote | 滑块拼图底部的安全提示，设为空字符串可隐藏，默认 `多维速度曲线与轨迹时序分析` |
+| rotateNote | 旋转底部的安全提示，设为空字符串可隐藏，默认 `拖动速度与微抖动行为分析` |
 | refreshLabel | 刷新按钮的无障碍标签，默认 `刷新` |
 | closeLabel | 关闭按钮的无障碍标签，默认 `关闭` |
 | userCancel | 用户取消提示，默认 `用户取消` |
@@ -177,11 +185,11 @@ export default () => {
 
 | 属性 | 说明 | 默认值 |
 |---|---|---|
-| primaryColor | 主题色 | `#4f46e5` |
+| primaryColor | 主题色 | `#3904e7` |
 | backgroundColor | 弹窗背景色 | `#ffffff` |
 | textColor | 文本颜色 | `#1b1a25` |
-| borderColor | 边框颜色 | `#e4e0ef` |
-| borderRadius | 圆角大小 | `16` |
+| borderColor | 边框颜色 | `#e3e8ee` |
+| borderRadius | 圆角大小 | `24` |
 
 ## 二次验证（S2S）
 

@@ -27,7 +27,7 @@ const DEFAULT_MAX_RETRY_COUNT = 5;
 /** 与各验证模式默认配置一致的渲染尺寸（CSS 像素） */
 const DEFAULT_RENDER_WIDTH = 300;
 const DEFAULT_RENDER_HEIGHT = 220;
-const DEFAULT_ROTATE_SIZE = 176;
+const DEFAULT_ROTATE_SIZE = 128;
 /** 校验结果画面的停留时长（毫秒） */
 const SUCCESS_HOLD_MS = 900;
 const FAIL_HOLD_MS = 1000;

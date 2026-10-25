@@ -6,7 +6,8 @@ import { defaultSlideConfig, defaultSlideData } from './slide.types';
 import { LoadingIcon } from '../icons';
 import { useSlideHandler } from './use-slide-handler';
 import { useCaptchaConfig } from '../../CaptchaProvider';
-import { CardHeader, DragTrack, ResultOverlay } from '../shared/parts';
+import { CardHeader, DragTrack, ResultOverlay, SecureNote } from '../shared/parts';
+import { UiArrowsHorizontalIcon } from '../shared/icons';
 import type { StatusProps } from '../shared/status.types';
 
 export interface SlideRef {
@@ -89,6 +90,10 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
     };
   }, [dragBlockRef]);
 
+  const { dragLeft, thumbLeft } = handler.getState();
+  // 未拖动时图块与轨道把手同步做引导微摆
+  const nudging = status === 'idle' && hasDisplayImageState && dragLeft <= 4;
+
   return (
     <div
       className={`gc-wrapper gc-type-slide gc-status-${status} ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
@@ -106,6 +111,7 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
         icon="puzzle"
         title={localConfig.title || locale.slideTitle}
         subtitle={locale.slideSubtitle}
+        tag={locale.slideTag}
         status={status}
         onRefresh={handler.refreshEvent}
         onClose={handler.closeEvent}
@@ -129,13 +135,13 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
           alt=""
         />
         <div
-          className="gc-tile"
+          className={`gc-tile ${nudging ? 'gc-tile-nudge' : ''}`}
           ref={tileRef}
           style={{
             width: (localData.thumbWidth || 0) + 'px',
             height: (localData.thumbHeight || 0) + 'px',
             top: (localData.thumbY || 0) + 'px',
-            left: handler.getState().thumbLeft + 'px',
+            left: thumbLeft + 'px',
           }}
         >
           <img
@@ -150,14 +156,20 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
       <DragTrack
         barRef={dragBarRef}
         blockRef={dragBlockRef}
-        dragLeft={handler.getState().dragLeft}
+        dragLeft={dragLeft}
         disabled={!hasDisplayImageState}
         hint={locale.slideHint}
         status={status}
         onDragStart={handler.dragEvent}
-        metaLeft={locale.slideProgress}
-        showPercent
+        metaLeft={
+          <>
+            <UiArrowsHorizontalIcon width={11} height={11} />
+            {locale.slideProgress}
+          </>
+        }
+        percentText={locale.slidePercent}
       />
+      <SecureNote>{locale.slideNote}</SecureNote>
     </div>
   );
 });

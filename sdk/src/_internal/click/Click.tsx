@@ -6,7 +6,7 @@ import { LoadingIcon } from '../icons';
 import { useClickHandler } from './use-click-handler';
 import { useCaptchaConfig } from '../../CaptchaProvider';
 import { CardHeader, ResultOverlay } from '../shared/parts';
-import { UiArrowIcon, UiCheckCircleIcon, UiCheckIcon } from '../shared/icons';
+import { UiArrowIcon, UiCheckCircleIcon, UiCheckIcon, UiRefreshIcon } from '../shared/icons';
 import type { StatusProps } from '../shared/status.types';
 
 export interface ClickRef {
@@ -64,6 +64,8 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
   }));
 
   const [countBefore, countAfter = ''] = (locale.clickMeta || '').split('{n}');
+  // 按点击顺序把相邻标记连成虚线，坐标与标记中心对齐
+  const dotPath = dots.map((dot: ClickDot) => `${dot.x - 1},${dot.y - 1}`).join(' ');
 
   return (
     <div
@@ -81,6 +83,7 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
         icon="fingerprint"
         title={localConfig.title || locale.clickTitle}
         subtitle={locale.clickSubtitle}
+        tag={locale.clickTag}
         status={status}
         onRefresh={handler.refreshEvent}
         onClose={handler.closeEvent}
@@ -113,6 +116,11 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
           onClick={handler.clickEvent}
         />
         <div className="gc-dots">
+          {dots.length > 1 && (
+            <svg className="gc-dot-path" aria-hidden="true">
+              <polyline points={dotPath} />
+            </svg>
+          )}
           {dots.map((dot: ClickDot) => (
             <div
               className="gc-dot"
@@ -141,6 +149,7 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
           </span>
         </span>
         <button type="button" className="gc-clear" onClick={handler.resetData}>
+          <UiRefreshIcon width={11} height={11} />
           {locale.clickClear}
         </button>
       </div>

@@ -34,6 +34,11 @@ export interface LocaleTexts {
   slideSubtitle?: string;
   regionSubtitle?: string;
   rotateSubtitle?: string;
+  /** 各题型标题右侧的小标签，设为空字符串可隐藏 */
+  clickTag?: string;
+  slideTag?: string;
+  regionTag?: string;
+  rotateTag?: string;
   /** 点选：提示条文案 / 已点击计数（{n} 为数量） / 清除重选 */
   clickHint?: string;
   clickMeta?: string;
@@ -43,9 +48,12 @@ export interface LocaleTexts {
   rotateHint?: string;
   slideProgress?: string;
   rotateProgress?: string;
-  /** 滑动区域：图片底部的操作提示与角标 */
+  /** 滑块：轨道下方右侧的拖动进度，{p} 为百分比数值 */
+  slidePercent?: string;
+  /** 滑动区域：图片下方的操作提示与角标，以及图块复位按钮 */
   regionHint?: string;
   regionBadge?: string;
+  regionReset?: string;
   /** 旋转：角度角标前缀 */
   rotateAngle?: string;
   /** 校验结果态文案；elapsedText 中 {s} 为耗时秒数 */
@@ -56,8 +64,10 @@ export interface LocaleTexts {
   failBanner?: string;
   trackSuccess?: string;
   trackFail?: string;
-  /** 滑动区域底部的安全提示，设为空字符串可隐藏 */
+  /** 卡片底部的安全提示（poweredBy 用于滑动区域），设为空字符串可隐藏 */
   poweredBy?: string;
+  slideNote?: string;
+  rotateNote?: string;
   refreshLabel?: string;
   closeLabel?: string;
 }

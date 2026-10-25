@@ -7,8 +7,10 @@ import {
   UiDoubleChevronIcon,
   UiFingerprintIcon,
   UiMoveIcon,
+  UiNotchIcon,
   UiPuzzleIcon,
   UiRefreshIcon,
+  UiShieldIcon,
   UiSyncIcon,
 } from './icons';
 import type { CaptchaStatus } from './status.types';
@@ -23,6 +25,10 @@ const HEADER_ICONS = {
 export interface CardHeaderProps {
   title?: string;
   subtitle?: string;
+  /** 标题右侧的小标签，空字符串不显示 */
+  tag?: string;
+  /** 标签配色：默认跟随主题色，success 为绿色 */
+  tagTone?: 'primary' | 'success';
   /** 标题左侧图标瓷砖里的图标，随题型变化 */
   icon: keyof typeof HEADER_ICONS;
   status?: CaptchaStatus;
@@ -33,6 +39,8 @@ export interface CardHeaderProps {
 export const CardHeader = ({
   title,
   subtitle,
+  tag,
+  tagTone = 'primary',
   icon,
   status = 'idle',
   onRefresh,
@@ -49,7 +57,16 @@ export const CardHeader = ({
           <Icon />
         </span>
         <div className="gc-title-text">
-          <h3 className="gc-title-main">{title}</h3>
+          <div className="gc-title-row">
+            <h3 className="gc-title-main">{title}</h3>
+            {tag && (
+              <span
+                className={`gc-title-tag ${tagTone === 'success' ? 'gc-title-tag-success' : ''}`}
+              >
+                {tag}
+              </span>
+            )}
+          </div>
           <p className="gc-subtitle">{failed ? locale.failTitle : subtitle}</p>
         </div>
       </div>
@@ -131,10 +148,11 @@ export interface DragTrackProps {
   onDragStart: (e: any) => void;
   /** 把手图标：滑块为双箭头，旋转为循环箭头 */
   handleIcon?: 'chevrons' | 'sync';
-  /** 轨道下方的说明行：左侧文案，右侧为拖动进度百分比或自定义文本 */
-  metaLeft?: string;
-  metaRight?: string;
-  showPercent?: boolean;
+  /** 轨道下方的说明行：左侧为辅助说明，右侧为主题色的强调文本 */
+  metaLeft?: ReactNode;
+  metaRight?: ReactNode;
+  /** 提供时右侧显示真实拖动进度，{p} 为百分比数值 */
+  percentText?: string;
 }
 
 export const DragTrack = ({
@@ -148,17 +166,17 @@ export const DragTrack = ({
   handleIcon = 'chevrons',
   metaLeft,
   metaRight,
-  showPercent = false,
+  percentText,
 }: DragTrackProps) => {
   const { locale } = useCaptchaConfig();
   const done = status !== 'idle';
   const Icon = handleIcon === 'sync' ? UiSyncIcon : UiDoubleChevronIcon;
 
   let right = metaRight;
-  if (showPercent) {
+  if (percentText) {
     const max = (barRef.current?.offsetWidth ?? 0) - (blockRef.current?.offsetWidth ?? 0);
     const percent = max > 0 ? Math.min(100, Math.round((dragLeft / max) * 100)) : 0;
-    right = `${percent}%`;
+    right = percentText.replace('{p}', `${percent}`);
   }
 
   return (
@@ -210,18 +228,23 @@ export const DragTrack = ({
   );
 };
 
-export const SecureNote = ({ children }: { children: ReactNode }) => (
-  <div className="gc-secure-note">
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      width={10}
-      height={10}
-      fill="currentColor"
-      className="gc-secure-icon"
-    >
-      <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
-    </svg>
-    <span>{children}</span>
-  </div>
-);
+export interface SecureNoteProps {
+  children?: ReactNode;
+  /** 盾牌用于滑块 / 空间拼图，缺口圆环用于旋转 */
+  icon?: 'shield' | 'notch';
+}
+
+/** 卡片底部的安全提示，文案为空时不渲染 */
+export const SecureNote = ({ children, icon = 'shield' }: SecureNoteProps) => {
+  if (!children) {
+    return null;
+  }
+  const Icon = icon === 'notch' ? UiNotchIcon : UiShieldIcon;
+
+  return (
+    <div className="gc-secure-note">
+      <Icon width={10} height={10} />
+      <span>{children}</span>
+    </div>
+  );
+};
