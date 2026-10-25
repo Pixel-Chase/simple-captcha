@@ -8,23 +8,22 @@
 
 package click
 
-import (
-	"math"
-)
-
 // Validate checks if a click point is within the specified area
 // params:
 //   - sx, sy: Coordinates of the click point
 //   - dx, dy: Top-left coordinates of the target area
 //   - width, height: Width and height of the target area
-//   - padding: Padding of the area
+//   - padding: Padding of the area, applied evenly on all four sides
 //
 // return: Whether the point is within the area
+//
+// 上游以 max(dx, dx-padding) 计算左上角，结果恒为 dx，导致容差全部堆到右侧与下方：
+// 有效区间是 [dx, dx+width+2p] 而非 [dx-p, dx+width+p]。这里改为四边各放宽 padding。
 func Validate(sx, sy, dx, dy, width, height, padding int) bool {
 	newWidth := width + (padding * 2)
 	newHeight := height + (padding * 2)
-	newDx := int(math.Max(float64(dx), float64(dx-padding)))
-	newDy := int(math.Max(float64(dy), float64(dy-padding)))
+	newDx := dx - padding
+	newDy := dy - padding
 
 	return sx >= newDx &&
 		sx <= newDx+newWidth &&
