@@ -12,8 +12,8 @@ const Popup = ({ className, style, visible = false, children }: PopupProps) => {
   if (!visible) return null;
 
   return (
-    <div 
-      className={className} 
+    <div
+      className={className}
       style={{
         position: 'fixed',
         left: 0,
@@ -24,17 +24,18 @@ const Popup = ({ className, style, visible = false, children }: PopupProps) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        ...style
+        ...style,
       }}
     >
-      <div 
+      <div
         style={{
           position: 'absolute',
           left: 0,
           top: 0,
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)'
+          backgroundColor: 'rgba(28, 30, 84, 0.45)',
+          backdropFilter: 'blur(2px)',
         }}
       />
       <div style={{ position: 'relative', zIndex: 1, backgroundColor: 'transparent' }}>

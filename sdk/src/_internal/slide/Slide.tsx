@@ -1,10 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { CSSProperties } from 'react';
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { SlideConfig, SlideData, SlideEvent } from './slide.types';
 import { defaultSlideConfig, defaultSlideData } from './slide.types';
-import { CloseIcon, RefreshIcon, LoadingIcon, ArrowsIcon } from '../icons';
+import { LoadingIcon } from '../icons';
 import { useSlideHandler } from './use-slide-handler';
 import { useCaptchaConfig } from '../../CaptchaProvider';
+import { CardHeader, DragTrack, ResultOverlay, SecureNote } from '../shared/parts';
+import { UiArrowsHorizontalIcon } from '../shared/icons';
+import type { StatusProps } from '../shared/status.types';
 
 export interface SlideRef {
   reset: () => void;
@@ -13,7 +17,7 @@ export interface SlideRef {
   close: () => void;
 }
 
-export interface SlideProps extends React.HTMLAttributes<HTMLElement> {
+export interface SlideProps extends React.HTMLAttributes<HTMLElement>, StatusProps {
   data: SlideData;
   config?: SlideConfig;
   events?: SlideEvent;
@@ -21,8 +25,15 @@ export interface SlideProps extends React.HTMLAttributes<HTMLElement> {
 
 const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
   const { locale } = useCaptchaConfig();
-  const [localConfig, setLocalConfig] = useState<SlideConfig>({ ...defaultSlideConfig(), ...(props.config || {}) });
-  const [localData, setLocalData] = useState<SlideData>({ ...defaultSlideData(), ...(props.data || {}) });
+  const status = props.status || 'idle';
+  const [localConfig, setLocalConfig] = useState<SlideConfig>({
+    ...defaultSlideConfig(),
+    ...(props.config || {}),
+  });
+  const [localData, setLocalData] = useState<SlideData>({
+    ...defaultSlideData(),
+    ...(props.data || {}),
+  });
   const [localEvents, setLocalEvents] = useState<SlideEvent>({ ...(props.events || {}) });
 
   useEffect(() => {
@@ -44,70 +55,121 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
   const tileRef = useRef<any>(null);
 
   const handler = useSlideHandler(
-    localData, localEvents, localConfig,
-    rootRef, containerRef, tileRef, dragBlockRef, dragBarRef,
-    () => { setLocalData((prev) => ({ ...prev, ...defaultSlideData() })); },
+    localData,
+    localEvents,
+    localConfig,
+    rootRef,
+    containerRef,
+    tileRef,
+    dragBlockRef,
+    dragBarRef,
+    () => {
+      setLocalData((prev) => ({ ...prev, ...defaultSlideData() }));
+    },
   );
 
   const hPadding = localConfig.horizontalPadding || 0;
   const vPadding = localConfig.verticalPadding || 0;
-  const width = (localConfig.width || 0) + (hPadding * 2) + (localConfig.showTheme ? 2 : 0);
+  const width = (localConfig.width || 0) + hPadding * 2;
   const hasDisplayWrapperState = (localConfig.width || 0) > 0 || (localConfig.height || 0) > 0;
-  const hasDisplayImageState = (localData.image && localData.image.length > 0) && (localData.thumb && localData.thumb.length > 0);
+  const hasDisplayImageState =
+    localData.image && localData.image.length > 0 && localData.thumb && localData.thumb.length > 0;
 
   useImperativeHandle(ref, () => ({
-    reset: handler.resetData, clear: handler.clearData,
-    refresh: handler.refresh, close: handler.close,
+    reset: handler.resetData,
+    clear: handler.clearData,
+    refresh: handler.refresh,
+    close: handler.close,
   }));
 
   useEffect(() => {
     const fn = (event: Event) => event.preventDefault();
     dragBlockRef.current && dragBlockRef.current.addEventListener('dragstart', fn);
-    return () => { dragBlockRef.current && dragBlockRef.current.removeEventListener('dragstart', fn); };
+    return () => {
+      dragBlockRef.current && dragBlockRef.current.removeEventListener('dragstart', fn);
+    };
   }, [dragBlockRef]);
+
+  const { dragLeft, thumbLeft } = handler.getState();
+  // 未拖动时图块与轨道把手同步做引导微摆
+  const nudging = status === 'idle' && hasDisplayImageState && dragLeft <= 4;
 
   return (
     <div
-      className={`gc-wrapper ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
-      style={{
-        width: width + 'px', paddingLeft: hPadding + 'px', paddingRight: hPadding + 'px',
-        paddingTop: vPadding + 'px', paddingBottom: vPadding + 'px',
-        display: hasDisplayWrapperState ? 'block' : 'none',
-      }}
+      className={`gc-wrapper gc-type-slide gc-status-${status} ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
+      style={
+        {
+          width: width + 'px',
+          '--gc-px': hPadding + 'px',
+          '--gc-py': vPadding + 'px',
+          display: hasDisplayWrapperState ? 'flex' : 'none',
+        } as CSSProperties
+      }
       ref={rootRef}
     >
-      <div className="gc-header">
-        <span>{localConfig.title || locale.slideTitle}</span>
-        <div className="gc-icon-block">
-          <CloseIcon width={localConfig.iconSize} height={localConfig.iconSize} onClick={handler.closeEvent} />
-          <RefreshIcon width={localConfig.iconSize} height={localConfig.iconSize} onClick={handler.refreshEvent} />
+      <CardHeader
+        icon="puzzle"
+        title={locale.slideTitle}
+        subtitle={locale.slideSubtitle}
+        tag={locale.slideTag}
+        status={status}
+        onRefresh={handler.refreshEvent}
+        onClose={handler.closeEvent}
+      />
+      <div
+        className="gc-body"
+        ref={containerRef}
+        style={{ width: localConfig.width + 'px', height: localConfig.height + 'px' }}
+      >
+        <div className="gc-loading">
+          <LoadingIcon />
         </div>
-      </div>
-      <div className="gc-body" ref={containerRef}
-        style={{ width: localConfig.width + 'px', height: localConfig.height + 'px' }}>
-        <div className="gc-loading"><LoadingIcon /></div>
-        <img className={`gc-picture ${localData.image === '' ? 'gc-hide' : ''}`}
-          style={{ width: localConfig.width + 'px', height: localConfig.height + 'px', display: hasDisplayImageState ? 'block' : 'none' }}
-          src={localData.image} alt="" />
-        <div className="gc-tile" ref={tileRef}
-          style={{ width: (localData.thumbWidth || 0) + 'px', height: (localData.thumbHeight || 0) + 'px',
-            top: (localData.thumbY || 0) + 'px', left: handler.getState().thumbLeft + 'px' }}>
-          <img className={localData.thumb === '' ? 'gc-hide' : ''}
-            style={{ display: hasDisplayImageState ? 'block' : 'none' }} src={localData.thumb} alt="" />
+        <img
+          className={`gc-picture ${localData.image === '' ? 'gc-hide' : ''}`}
+          style={{
+            width: localConfig.width + 'px',
+            height: localConfig.height + 'px',
+            display: hasDisplayImageState ? 'block' : 'none',
+          }}
+          src={localData.image}
+          alt=""
+        />
+        <div
+          className={`gc-tile ${nudging ? 'gc-tile-nudge' : ''}`}
+          ref={tileRef}
+          style={{
+            width: (localData.thumbWidth || 0) + 'px',
+            height: (localData.thumbHeight || 0) + 'px',
+            top: (localData.thumbY || 0) + 'px',
+            left: thumbLeft + 'px',
+          }}
+        >
+          <img
+            className={localData.thumb === '' ? 'gc-hide' : ''}
+            style={{ display: hasDisplayImageState ? 'block' : 'none' }}
+            src={localData.thumb}
+            alt=""
+          />
         </div>
+        <ResultOverlay status={status} elapsed={props.elapsed} />
       </div>
-      <div className="gc-footer">
-        <div className="gc-drag-slide-bar" ref={dragBarRef}>
-          <div className="gc-drag-line" />
-          <div className={`gc-drag-block ${!hasDisplayImageState ? 'gc-disabled' : ''}`}
-            ref={dragBlockRef} onMouseDown={handler.dragEvent}
-            style={{ left: handler.getState().dragLeft + 'px' }}>
-            <div className="gc-drag-block-inline" onTouchStart={handler.dragEvent}>
-              <ArrowsIcon />
-            </div>
-          </div>
-        </div>
-      </div>
+      <DragTrack
+        barRef={dragBarRef}
+        blockRef={dragBlockRef}
+        dragLeft={dragLeft}
+        disabled={!hasDisplayImageState}
+        hint={locale.slideHint}
+        status={status}
+        onDragStart={handler.dragEvent}
+        metaLeft={
+          <>
+            <UiArrowsHorizontalIcon width={11} height={11} />
+            {locale.slideProgress}
+          </>
+        }
+        percentText={locale.slidePercent}
+      />
+      <SecureNote>{locale.slideNote}</SecureNote>
     </div>
   );
 });

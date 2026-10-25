@@ -1,0 +1,42 @@
+// 本文件源自 github.com/wenlng/go-captcha v2.0.5（Apache-2.0），已修改，改动见 internal/gocaptcha/NOTICE.md
+
+/**
+ * @Author Awen
+ * @Date 2024/06/01
+ * @Email wengaolng@gmail.com
+ **/
+
+package rotate
+
+import "simple-captcha/internal/gocaptcha/base/imagedata"
+
+// CaptchaData defines the interface for rotate CAPTCHA data
+type CaptchaData interface {
+	GetData() *Block
+	GetMasterImage() imagedata.PNGImageData
+	GetThumbImage() imagedata.PNGImageData
+}
+
+// CaptData is the concrete implementation of the CaptchaData interface
+type CaptData struct {
+	block       *Block
+	masterImage imagedata.PNGImageData
+	thumbImage  imagedata.PNGImageData
+}
+
+var _ CaptchaData = (*CaptData)(nil)
+
+// GetData is to get block
+func (c CaptData) GetData() *Block {
+	return c.block
+}
+
+// GetMasterImage is to get master image
+func (c CaptData) GetMasterImage() imagedata.PNGImageData {
+	return c.masterImage
+}
+
+// GetThumbImage is to get thumb image
+func (c CaptData) GetThumbImage() imagedata.PNGImageData {
+	return c.thumbImage
+}

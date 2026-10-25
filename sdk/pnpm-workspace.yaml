@@ -1,0 +1,7 @@
+# pnpm 10+ 把全部设置挪到了这个文件，package.json 里的 pnpm 字段不再被读取。
+# 安装阶段允许执行构建脚本的依赖白名单（allowBuilds 取代了旧的 onlyBuiltDependencies）：
+#   esbuild          vite / vitest 的编译器，postinstall 用于校验平台二进制
+#   @parcel/watcher  vite 经 sass 间接引入，仅文件监听可选加速；预编译二进制已随包提供，明确禁止其构建脚本
+allowBuilds:
+  esbuild: true
+  '@parcel/watcher': false

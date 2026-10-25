@@ -1,40 +1,47 @@
 package middleware
 
 import (
-	"net/http"
-	"simple-captcha/config"
+	"simple-captcha/helper"
+	"simple-captcha/services"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-// APIKeyMiddleware S2S API鉴权中间件
-func APIKeyMiddleware() gin.HandlerFunc {
+// BearerToken 从 Authorization 头中提取 Bearer 令牌，格式不符时返回空串
+func BearerToken(c *gin.Context) string {
+	const prefix = "Bearer "
+	header := c.GetHeader("Authorization")
+	if !strings.HasPrefix(header, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
+}
+
+const appContextKey = "s2s_app"
+
+// AppAuthMiddleware S2S 接口鉴权：校验 Authorization: Bearer <应用密钥>。
+// 应用在管理后台创建；密钥缺失、无效或应用已停用一律 401，没有任何应用时同样全部拒绝
+func AppAuthMiddleware(apps *services.AppService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		cfg := config.GetConfig()
-		expectedKey := cfg.Security.APIKey
-
-		// 如果未配置 API Key，则直接放行（适用于完全内网隔离或者关闭鉴权的情况）
-		if expectedKey == "" {
-			c.Next()
-			return
-		}
-
-		// 仅检查标准的 Authorization: Bearer <Token>
-		authHeader := c.GetHeader("Authorization")
-		var apiKey string
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-
-		if apiKey == "" || apiKey != expectedKey {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Unauthorized: Invalid or missing Bearer token in Authorization header",
-			})
+		app, ok := apps.Authenticate(BearerToken(c))
+		if !ok {
+			c.Header("WWW-Authenticate", "Bearer")
+			helper.ErrorResponse(c, helper.ErrAppUnauthorized)
 			c.Abort()
 			return
 		}
-
+		c.Set(appContextKey, app)
 		c.Next()
 	}
+}
+
+// GetAppID 返回通过 S2S 鉴权的应用 ID，用于日志追溯；未经过鉴权时返回 "-"
+func GetAppID(c *gin.Context) string {
+	if app, ok := c.Get(appContextKey); ok {
+		if info, ok := app.(*services.AppInfo); ok {
+			return info.ID
+		}
+	}
+	return "-"
 }

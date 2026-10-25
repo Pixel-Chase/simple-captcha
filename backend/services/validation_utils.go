@@ -3,9 +3,9 @@ package services
 import (
 	"strconv"
 
-	"github.com/wenlng/go-captcha/v2/click"
-	"github.com/wenlng/go-captcha/v2/rotate"
-	"github.com/wenlng/go-captcha/v2/slide"
+	"simple-captcha/internal/gocaptcha/click"
+	"simple-captcha/internal/gocaptcha/rotate"
+	"simple-captcha/internal/gocaptcha/slide"
 )
 
 // ValidationUtils 验证工具类
@@ -58,8 +58,7 @@ func (vu *ValidationUtils) ValidateClickData(userDots []map[string]interface{}, 
 			return false
 		}
 
-		// 使用框架的CheckPoint方法进行验证
-		if !click.CheckPoint(int64(userX), int64(userY), int64(correctX), int64(correctY), int64(correctWidth), int64(correctHeight), int64(tolerance)) {
+		if !click.Validate(int(userX), int(userY), int(correctX), int(correctY), int(correctWidth), int(correctHeight), int(tolerance)) {
 			return false
 		}
 	}
@@ -99,8 +98,7 @@ func (vu *ValidationUtils) ValidateSlidePosition(userSlide map[string]interface{
 		return false
 	}
 
-	// 使用框架的CheckPoint方法进行验证
-	return slide.CheckPoint(int64(userX), int64(userY), int64(correctX), int64(correctY), int64(tolerance))
+	return slide.Validate(int(userX), int(userY), int(correctX), int(correctY), int(tolerance))
 }
 
 // ValidateRotateAngle 验证旋转角度
@@ -123,6 +121,5 @@ func (vu *ValidationUtils) ValidateRotateAngle(userAngle map[string]interface{},
 		return false
 	}
 
-	// 使用框架的CheckAngle方法进行验证
-	return rotate.CheckAngle(int64(userAngleVal), int64(correctAngleVal), int64(tolerance))
+	return rotate.Validate(int(userAngleVal), int(correctAngleVal), int(tolerance))
 }

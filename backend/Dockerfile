@@ -1,7 +1,24 @@
 # syntax=docker/dockerfile:1
+# 构建上下文为仓库根目录（同时需要 backend 与 sdk）：docker build -f backend/Dockerfile .
 
 # ----------------------------
-# 第一阶段：构建阶段
+# 第一阶段：构建管理后台前端（sdk/playground/console），产物内嵌进二进制
+# ----------------------------
+FROM --platform=$BUILDPLATFORM node:24-slim AS console
+
+WORKDIR /src/sdk
+RUN npm install -g pnpm@11.21.0
+
+# 先只复制依赖清单，源码变化时依赖层仍可复用缓存
+COPY sdk/package.json sdk/pnpm-lock.yaml sdk/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY sdk/ ./
+# 产物输出到 /src/backend/console/dist（见 sdk/vite.console.config.ts）
+RUN pnpm build:console
+
+# ----------------------------
+# 第二阶段：编译 Go 服务
 # ----------------------------
 FROM --platform=$BUILDPLATFORM golang:1.23.4-alpine AS builder
 
@@ -15,11 +32,12 @@ RUN apk add --no-cache git ca-certificates
 WORKDIR /app
 
 # 复制 go.mod 和 go.sum 文件并下载依赖
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download && go mod verify
 
-# 复制源代码
-COPY . .
+# 复制源代码与管理后台前端产物（go:embed 在编译期读取 console/dist）
+COPY backend/ ./
+COPY --from=console /src/backend/console/dist ./console/dist
 
 # 编译应用程序（优化编译参数）
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
@@ -28,7 +46,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -o simple-captcha .
 
 # ----------------------------
-# 第二阶段：运行阶段
+# 第三阶段：运行阶段
 # ----------------------------
 FROM alpine:3.19
 
@@ -44,8 +62,9 @@ WORKDIR /app
 COPY --from=builder /app/simple-captcha .
 COPY --from=builder /app/images ./images
 
-# 设置文件权限
+# 设置文件权限；/app/data 保存管理员凭据与接入应用，预先创建以便具名卷继承属主
 RUN chmod +x simple-captcha && \
+    mkdir -p /app/data && chmod 700 /app/data && \
     chown -R appuser:appgroup /app
 
 # 切换到非root用户

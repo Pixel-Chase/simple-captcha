@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -155,11 +154,15 @@ func SecurityMiddleware() gin.HandlerFunc {
 			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 
-		// 检查请求大小
+		// 检查请求大小：ContentLength 只能拦住声明了长度的请求，chunked 编码时为 -1，
+		// 因此再用 MaxBytesReader 在读取阶段硬性截断
 		if c.Request.ContentLength > cfg.Security.MaxRequestSize {
 			helper.SimpleErrorResponse(c, 413, "请求体过大")
 			c.Abort()
 			return
+		}
+		if c.Request.Body != nil && cfg.Security.MaxRequestSize > 0 {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, cfg.Security.MaxRequestSize)
 		}
 
 		c.Next()
@@ -200,36 +203,12 @@ func CompressionMiddleware() gin.HandlerFunc {
 	}
 }
 
-// CacheMiddleware 缓存中间件
-func CacheMiddleware(duration time.Duration) gin.HandlerFunc {
+// NoCacheMiddleware 禁止缓存中间件：验证码题目与错误响应都不允许被浏览器或 CDN 缓存
+func NoCacheMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 只对GET请求启用缓存
-		if c.Request.Method != "GET" {
-			c.Next()
-			return
-		}
-
-		// 设置缓存头
-		c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(duration.Seconds())))
-		c.Header("Expires", time.Now().Add(duration).Format(http.TimeFormat))
-
-		c.Next()
-	}
-}
-
-// TimeoutMiddleware 超时中间件
-func TimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 创建带超时的上下文
-		ctx := c.Request.Context()
-		cancel := func() {}
-
-		if timeout > 0 {
-			ctx, cancel = context.WithTimeout(c.Request.Context(), timeout)
-		}
-		defer cancel()
-
-		c.Request = c.Request.WithContext(ctx)
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
 		c.Next()
 	}
 }
@@ -263,19 +242,6 @@ func RequestBodyLoggerMiddleware() gin.HandlerFunc {
 	}
 }
 
-// HealthCheckMiddleware 健康检查中间件
-func HealthCheckMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 为健康检查路径跳过其他中间件
-		if c.Request.URL.Path == "/health" || c.Request.URL.Path == "/metrics" {
-			c.Next()
-			return
-		}
-
-		c.Next()
-	}
-}
-
 // GetMetrics 获取指标数据
 func GetMetrics() map[string]interface{} {
 	globalMetrics.mu.RLock()
@@ -294,17 +260,6 @@ func GetMetrics() map[string]interface{} {
 		"total_latency":   globalMetrics.TotalLatency.String(),
 		"error_rate":      float64(globalMetrics.ErrorCount) / float64(globalMetrics.RequestCount),
 	}
-}
-
-// ResetMetrics 重置指标
-func ResetMetrics() {
-	globalMetrics.mu.Lock()
-	defer globalMetrics.mu.Unlock()
-
-	globalMetrics.RequestCount = 0
-	globalMetrics.ErrorCount = 0
-	globalMetrics.TotalLatency = 0
-	globalMetrics.ActiveRequests = 0
 }
 
 // 辅助函数

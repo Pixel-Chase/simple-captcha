@@ -1,32 +1,20 @@
 {
   "compilerOptions": {
-    "experimentalDecorators": true,
-    "target": "esnext",
-    "module": "esnext",
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "importHelpers": true,
-    "declaration": true,
-    "declarationDir": "es",
     "jsx": "react-jsx",
-    "esModuleInterop": true,
-    "allowJs": true,
-    "sourceMap": true,
     "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "skipLibCheck": true
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@aetherlib/g-captcha": ["./src/index.tsx"]
+    }
   },
-  "exclude": [
-    "node_modules",
-    "lib",
-    "es",
-    "dist",
-    "**/__test__",
-    "test",
-    "docs",
-    "tests"
-  ],
-  "include": [
-    ".dumirc.ts",
-    "src/**/*"
-  ]
+  "include": ["src", "playground", "*.config.ts"]
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -11,13 +12,13 @@ import (
 	"simple-captcha/routes"
 	"simple-captcha/services"
 	"syscall"
-	"time"
 )
 
-var startTime time.Time
-
 func main() {
-	startTime = time.Now()
+	// 子命令：重置管理员密码（遗失初始密码或忘记密码时使用），不启动服务
+	if len(os.Args) > 1 && os.Args[1] == "reset-admin-password" {
+		os.Exit(runResetAdminPassword(config.LoadConfig().Admin, os.Stdout, os.Stderr))
+	}
 
 	// 初始化配置
 	cfg := config.LoadConfig()
@@ -78,7 +79,15 @@ func main() {
 	serviceManager.Shutdown()
 }
 
-// GetUptime 获取运行时间
-func GetUptime() time.Duration {
-	return time.Since(startTime)
+// runResetAdminPassword 子命令 `simple-captcha reset-admin-password`：
+// 重新生成随机管理员密码并打印到标准输出，下次登录后必须修改。数据目录与服务一致取自 ADMIN_DATA_DIR，
+// 服务运行中执行也会立即生效，已有会话全部失效；容器部署时用 docker compose exec 在容器内执行。
+func runResetAdminPassword(cfg config.AdminConfig, stdout, stderr io.Writer) int {
+	password, err := services.ResetAdminPassword(cfg.DataDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "重置管理员密码失败:", err)
+		return 1
+	}
+	fmt.Fprint(stdout, services.AdminPasswordNotice(cfg.Username, password))
+	return 0
 }

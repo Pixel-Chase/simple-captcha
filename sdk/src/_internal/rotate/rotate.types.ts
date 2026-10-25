@@ -5,19 +5,16 @@ export interface RotateConfig {
   verticalPadding?: number;
   horizontalPadding?: number;
   showTheme?: boolean;
-  title?: string;
-  iconSize?: number;
   scope?: boolean;
 }
 
 export const defaultRotateConfig = (): RotateConfig => ({
   width: 300,
   height: 220,
-  size: 220,
-  verticalPadding: 16,
-  horizontalPadding: 12,
+  size: 128,
+  verticalPadding: 20,
+  horizontalPadding: 20,
   showTheme: true,
-  iconSize: 22,
   scope: true,
 });
 

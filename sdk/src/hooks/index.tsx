@@ -1,2 +1,2 @@
-export * from './use-captcha'
-export * from './use-captcha-request'
+export * from './use-captcha';
+export * from './use-captcha-request';

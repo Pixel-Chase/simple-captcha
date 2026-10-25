@@ -9,7 +9,8 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/stretchr/testify v1.10.0
 	github.com/wenlng/go-captcha-assets v1.0.1
-	github.com/wenlng/go-captcha/v2 v2.0.5
+	golang.org/x/crypto v0.31.0
+	golang.org/x/image v0.23.0
 )
 
 require (
@@ -39,8 +40,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	golang.org/x/arch v0.12.0 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect

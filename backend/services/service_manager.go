@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"simple-captcha/config"
 	"simple-captcha/helper"
 	"sync"
 )
@@ -11,8 +12,14 @@ import (
 type ServiceManagerImpl struct {
 	captchaServices map[string]CaptchaService
 	verifyServices  map[string]VerifyService
+	backgrounds     *BackgroundStore
+	admin           *AdminService
+	apps            *AppService
 	riskControl     RiskControlService
 	cache           CacheService
+	clientRisk      *ClientRiskStore
+	riskEngine      *RiskEngine
+	policy          *ChallengePolicy
 	mutex           sync.RWMutex
 	initialized     bool
 }
@@ -42,44 +49,51 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	// 初始化缓存服务
 	sm.cache = NewRedisCacheService()
 
-	// 初始化风险控制服务
+	// 初始化风险控制服务（IP 限流 + 二次验证令牌）
 	sm.riskControl = NewRiskControlService()
 
+	// 初始化客户端风控状态、评分引擎与出题策略
+	sm.clientRisk = NewClientRiskStore()
+	sm.riskEngine = NewRiskEngine(sm.clientRisk)
+	sm.policy = NewChallengePolicy(sm.clientRisk)
+
+	// 背景图仓库：全部题型共用一份解码后的素材，管理接口增删素材后可热重载
+	cfg := config.LoadConfig()
+	backgrounds, err := NewBackgroundStore(helper.ResolveImageDir(cfg.Captcha.ImagePath))
+	if err != nil {
+		log.Fatalln("加载背景图失败:", err)
+	}
+	sm.backgrounds = backgrounds
+
 	// 注册验证码服务
-	sm.captchaServices["click-text"] = NewClickTextCaptchaService()
-	sm.captchaServices["click-shape"] = NewClickShapeCaptchaService()
-	sm.captchaServices["rotate"] = NewRotateCaptchaService()
-	sm.captchaServices["slide-text"] = &SlideTextService{}
-	sm.captchaServices["slide-region"] = &SlideRegionService{}
+	sm.captchaServices["click-text"] = NewClickTextCaptchaService(backgrounds)
+	sm.captchaServices["click-shape"] = NewClickShapeCaptchaService(backgrounds)
+	sm.captchaServices["rotate"] = NewRotateCaptchaService(backgrounds)
+	sm.captchaServices["slide-text"] = NewSlideTextCaptchaService(backgrounds)
+	sm.captchaServices["slide-region"] = NewSlideRegionCaptchaService(backgrounds)
+
+	// 管理后台：管理员凭据与接入应用持久化在 ADMIN_DATA_DIR；登录前置验证码由风控服务消费，素材增删作用于同一个仓库
+	admin, err := NewAdminService(cfg.Admin, backgrounds, sm.riskControl)
+	if err != nil {
+		log.Fatalln("初始化管理后台失败:", err)
+	}
+	sm.admin = admin
+	apps, err := NewAppService(cfg.Admin.DataDir)
+	if err != nil {
+		log.Fatalln("加载接入应用失败:", err)
+	}
+	sm.apps = apps
 
 	// 注册验证服务
 	sm.verifyServices["click-text"] = NewClickTextVerifyService()
 	sm.verifyServices["click-shape"] = NewClickShapeVerifyService()
-	sm.verifyServices["rotate"] = &RotateVerifyService{}
-	sm.verifyServices["slide-text"] = &SlideTextVerifyService{}
-	sm.verifyServices["slide-region"] = &SlideVerifyService{}
+	sm.verifyServices["rotate"] = NewRotateVerifyServiceImpl()
+	sm.verifyServices["slide-text"] = NewSlideTextVerifyServiceImpl()
+	sm.verifyServices["slide-region"] = NewSlideRegionVerifyServiceImpl()
 
 	sm.initialized = true
 
 	log.Println("服务管理器初始化完成")
-}
-
-// RegisterCaptchaService 注册验证码服务
-func (sm *ServiceManagerImpl) RegisterCaptchaService(serviceType string, service CaptchaService) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	sm.captchaServices[serviceType] = service
-	log.Printf("注册验证码服务: %s", serviceType)
-}
-
-// RegisterVerifyService 注册验证服务
-func (sm *ServiceManagerImpl) RegisterVerifyService(serviceType string, service VerifyService) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	sm.verifyServices[serviceType] = service
-	log.Printf("注册验证服务: %s", serviceType)
 }
 
 // GetCaptchaService 获取验证码服务
@@ -100,15 +114,6 @@ func (sm *ServiceManagerImpl) GetVerifyService(serviceType string) (VerifyServic
 	return service, exists
 }
 
-// SetRiskControlService 设置风险控制服务
-func (sm *ServiceManagerImpl) SetRiskControlService(service RiskControlService) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	sm.riskControl = service
-	log.Println("设置风险控制服务")
-}
-
 // GetRiskControlService 获取风险控制服务
 func (sm *ServiceManagerImpl) GetRiskControlService() RiskControlService {
 	sm.mutex.RLock()
@@ -117,21 +122,60 @@ func (sm *ServiceManagerImpl) GetRiskControlService() RiskControlService {
 	return sm.riskControl
 }
 
-// SetCacheService 设置缓存服务
-func (sm *ServiceManagerImpl) SetCacheService(service CacheService) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	sm.cache = service
-	log.Println("设置缓存服务")
-}
-
 // GetCacheService 获取缓存服务
 func (sm *ServiceManagerImpl) GetCacheService() CacheService {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 
 	return sm.cache
+}
+
+// GetRiskEngine 获取风控评分引擎
+func (sm *ServiceManagerImpl) GetRiskEngine() *RiskEngine {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.riskEngine
+}
+
+// GetChallengePolicy 获取出题策略
+func (sm *ServiceManagerImpl) GetChallengePolicy() *ChallengePolicy {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.policy
+}
+
+// GetClientRiskStore 获取客户端风控状态存储
+func (sm *ServiceManagerImpl) GetClientRiskStore() *ClientRiskStore {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.clientRisk
+}
+
+// GetBackgroundStore 获取全部题型共用的背景图仓库
+func (sm *ServiceManagerImpl) GetBackgroundStore() *BackgroundStore {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.backgrounds
+}
+
+// GetAdminService 获取管理后台服务
+func (sm *ServiceManagerImpl) GetAdminService() *AdminService {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.admin
+}
+
+// GetAppService 获取接入应用服务（S2S 接口鉴权）
+func (sm *ServiceManagerImpl) GetAppService() *AppService {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.apps
 }
 
 // GetAllCaptchaServices 获取所有验证码服务
@@ -172,6 +216,10 @@ func (sm *ServiceManagerImpl) ValidateServices() *helper.CaptchaError {
 		return helper.NewCaptchaError(helper.ErrCodeInternalError, "缓存服务未初始化")
 	}
 
+	if sm.admin == nil || sm.apps == nil {
+		return helper.NewCaptchaError(helper.ErrCodeInternalError, "管理后台服务未初始化")
+	}
+
 	// 检查验证码服务
 	requiredCaptchaServices := []string{"click-text", "click-shape", "rotate", "slide-text", "slide-region"}
 	for _, serviceType := range requiredCaptchaServices {
@@ -207,6 +255,14 @@ func (sm *ServiceManagerImpl) GetServiceStatistics() map[string]interface{} {
 		stats["risk_control"] = riskService.GetStatistics()
 	}
 
+	// 背景素材与接入应用数量
+	if sm.backgrounds != nil {
+		stats["background_count"] = sm.backgrounds.Count()
+	}
+	if sm.apps != nil {
+		stats["app_count"] = sm.apps.Count()
+	}
+
 	// 添加服务列表
 	captchaTypes := make([]string, 0, len(sm.captchaServices))
 	for serviceType := range sm.captchaServices {
@@ -233,8 +289,14 @@ func (sm *ServiceManagerImpl) Shutdown() {
 	// 清理资源
 	sm.captchaServices = make(map[string]CaptchaService)
 	sm.verifyServices = make(map[string]VerifyService)
+	sm.backgrounds = nil
+	sm.admin = nil
+	sm.apps = nil
 	sm.riskControl = nil
 	sm.cache = nil
+	sm.clientRisk = nil
+	sm.riskEngine = nil
+	sm.policy = nil
 	sm.initialized = false
 
 	log.Println("服务管理器已关闭")

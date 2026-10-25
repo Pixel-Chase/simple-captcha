@@ -20,15 +20,6 @@ func ErrorResponse(c *gin.Context, err *CaptchaError) {
 	})
 }
 
-// ErrorResponseWithDetail 带详细信息的错误响应
-func ErrorResponseWithDetail(c *gin.Context, err *CaptchaError, detail string) {
-	statusCode := HTTPStatusFromError(err)
-	c.JSON(statusCode, gin.H{
-		"code":  err.Code,
-		"error": err.Message + ": " + detail,
-	})
-}
-
 // SimpleErrorResponse 简单错误响应
 func SimpleErrorResponse(c *gin.Context, code int, message string) {
 	var statusCode int
@@ -39,6 +30,8 @@ func SimpleErrorResponse(c *gin.Context, code int, message string) {
 		statusCode = http.StatusUnauthorized
 	case 403:
 		statusCode = http.StatusForbidden
+	case 413:
+		statusCode = http.StatusRequestEntityTooLarge
 	case 429:
 		statusCode = http.StatusTooManyRequests
 	case 500:

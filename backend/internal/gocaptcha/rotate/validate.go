@@ -1,0 +1,24 @@
+// 本文件源自 github.com/wenlng/go-captcha v2.0.5（Apache-2.0），已修改，改动见 internal/gocaptcha/NOTICE.md
+
+/**
+ * @Author Awen
+ * @Date 2024/06/01
+ * @Email wengaolng@gmail.com
+ **/
+
+package rotate
+
+// Validate checks if the rotation angle is within the specified range
+// params:
+//   - angle: Current angle
+//   - dAngle: Target angle
+//   - padding: Angle padding
+//
+// return: Whether within range
+func Validate(angle, dAngle, padding int) bool {
+	minAngle := 360 - padding
+	maxAngle := 360 + padding
+	angle += dAngle
+
+	return angle >= minAngle && angle <= maxAngle
+}

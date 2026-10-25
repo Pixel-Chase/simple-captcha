@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import Captcha from '../Captcha';
-import type {
-  CaptchaErrorResponse,
-  CaptchaRef,
-  CaptchaVerifyOptions,
-  CaptchaVerifySuccessData,
-} from '../Captcha.types';
+import { CaptchaInternal } from '../Captcha';
+import { CaptchaError } from '../CaptchaError';
+import type { CaptchaRef, CaptchaVerifyOptions, CaptchaVerifySuccessData } from '../Captcha.types';
 
 type PendingRequest = {
   resolve: (value: CaptchaVerifySuccessData) => void;
-  reject: (reason?: CaptchaErrorResponse | string) => void;
+  reject: (reason: CaptchaError) => void;
 };
 
 export interface UseCaptchaReturn {
@@ -24,35 +20,39 @@ export function useCaptcha(): UseCaptchaReturn {
   const [activeOptions, setActiveOptions] = useState<CaptchaVerifyOptions | null>(null);
   const [requestId, setRequestId] = useState(0);
 
-  const resetPending = useCallback(() => {
-    pendingRef.current = null;
+  // 结果先交给调用方，holder 留到弹窗自己关闭（onClosed）后再卸载，
+  // 这样校验通过 / 未通过的结果画面才有机会展示
+  const handleSuccess = useCallback(
+    (data: CaptchaVerifySuccessData) => {
+      activeOptions?.onSuccess?.(data);
+      pendingRef.current?.resolve(data);
+      pendingRef.current = null;
+    },
+    [activeOptions],
+  );
+
+  const handleFail = useCallback(
+    (error: CaptchaError) => {
+      activeOptions?.onFail?.(error);
+      pendingRef.current?.reject(error);
+      pendingRef.current = null;
+    },
+    [activeOptions],
+  );
+
+  const handleClosed = useCallback(() => {
     setActiveOptions(null);
   }, []);
 
-  const handleSuccess = useCallback((data: CaptchaVerifySuccessData) => {
-    activeOptions?.onSuccess?.(data);
-    pendingRef.current?.resolve(data);
-    resetPending();
-  }, [activeOptions, resetPending]);
-
-  const handleFail = useCallback((error: CaptchaErrorResponse | string) => {
-    activeOptions?.onFail?.(error);
-    pendingRef.current?.reject(error);
-    resetPending();
-  }, [activeOptions, resetPending]);
-
   const handleCancel = useCallback(() => {
     activeOptions?.onCancel?.();
+    pendingRef.current?.reject(new CaptchaError('CANCELLED', '用户取消'));
+    pendingRef.current = null;
   }, [activeOptions]);
-
-  const handleStartupError = useCallback((reason: CaptchaErrorResponse | string) => {
-    pendingRef.current?.reject(reason);
-    resetPending();
-  }, [resetPending]);
 
   const verify = useCallback((options?: CaptchaVerifyOptions) => {
     if (pendingRef.current) {
-      pendingRef.current.reject('验证码流程已被新的请求替换');
+      pendingRef.current.reject(new CaptchaError('ABORTED', '验证码流程已被新的请求替换'));
     }
 
     return new Promise<CaptchaVerifySuccessData>((resolve, reject) => {
@@ -67,18 +67,14 @@ export function useCaptcha(): UseCaptchaReturn {
       return;
     }
 
-    const verifyPromise = captchaRef.current?.verify();
-    if (!verifyPromise) {
-      return;
-    }
-
-    void verifyPromise.catch((error) => handleStartupError(error as CaptchaErrorResponse | string));
-  }, [activeOptions, handleStartupError, requestId]);
+    // 加载失败经由 onFail（handleFail）结束本次 Promise，open 本身不会 reject
+    void captchaRef.current?.open();
+  }, [activeOptions, requestId]);
 
   useEffect(() => {
     return () => {
       if (pendingRef.current) {
-        pendingRef.current.reject('验证码实例已卸载');
+        pendingRef.current.reject(new CaptchaError('ABORTED', '验证码实例已卸载'));
       }
     };
   }, []);
@@ -88,18 +84,24 @@ export function useCaptcha(): UseCaptchaReturn {
       return null;
     }
 
-    const { onCancel: _onCancel, onFail: _onFail, onSuccess: _onSuccess, ...captchaProps } = activeOptions;
+    const {
+      onCancel: _onCancel,
+      onFail: _onFail,
+      onSuccess: _onSuccess,
+      ...captchaProps
+    } = activeOptions;
 
     return (
-      <Captcha
+      <CaptchaInternal
         {...captchaProps}
         onCancel={handleCancel}
         onFail={handleFail}
         onSuccess={handleSuccess}
+        onClosed={handleClosed}
         ref={captchaRef}
       />
     );
-  }, [activeOptions, handleCancel, handleFail, handleSuccess]);
+  }, [activeOptions, handleCancel, handleClosed, handleFail, handleSuccess]);
 
   return {
     verify,
