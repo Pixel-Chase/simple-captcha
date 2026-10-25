@@ -31,16 +31,3 @@ func Validate(sx, sy, dx, dy, width, height, padding int) bool {
 		sy >= newDy &&
 		sy <= newDy+newHeight
 }
-
-// Deprecated: As of 2.1.0, it will be removed, please use [click.Validate]
-func CheckPoint(sx, sy, dx, dy, width, height, padding int64) bool {
-	newWidth := width + (padding * 2)
-	newHeight := height + (padding * 2)
-	newDx := int64(math.Max(float64(dx), float64(dx-padding)))
-	newDy := int64(math.Max(float64(dy), float64(dy-padding)))
-
-	return sx >= newDx &&
-		sx <= newDx+newWidth &&
-		sy >= newDy &&
-		sy <= newDy+newHeight
-}

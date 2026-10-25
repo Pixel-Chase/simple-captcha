@@ -198,9 +198,6 @@ func (c *captcha) genBlock(imageSize int, thumbImageSquareSize int) *Block {
 	block.Width = thumbWidth
 	block.Height = thumbHeight
 
-	block.ParentWidth = imageSize
-	block.ParentHeight = imageSize
-
 	return block
 }
 

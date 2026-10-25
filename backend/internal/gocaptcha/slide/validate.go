@@ -28,16 +28,3 @@ func Validate(sx, sy, dx, dy, padding int) bool {
 		sy >= newDy &&
 		sy <= newDy+newY
 }
-
-// Deprecated: As of 2.1.0, it will be removed, please use [slide.Validate]
-func CheckPoint(sx, sy, dx, dy, padding int64) bool {
-	newX := padding * 2
-	newY := padding * 2
-	newDx := dx - padding
-	newDy := dy - padding
-
-	return sx >= newDx &&
-		sx <= newDx+newX &&
-		sy >= newDy &&
-		sy <= newDy+newY
-}

@@ -153,13 +153,10 @@ func (c *captcha) Generate() (CaptchaData, error) {
 	}
 
 	if c.mode == ModeBasic {
-		block.TileY = block.Y
 		block.DY = block.Y
 	} else {
-		block.TileY = tilePoint.Y
 		block.DY = tilePoint.Y
 	}
-	block.TileX = tilePoint.X
 	block.DX = tilePoint.X
 
 	return &CaptData{

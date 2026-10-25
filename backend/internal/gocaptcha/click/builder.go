@@ -15,8 +15,6 @@ type Builder interface {
 	Clear()
 	Make() Captcha
 	MakeShape() Captcha
-	// Deprecated: As of 2.1.0, it will be removed, please use [MakeShape].
-	MakeWithShape() Captcha
 }
 
 // Ensure that the builder struct implements the Builder interface
@@ -80,15 +78,6 @@ func (b *builder) Make() Captcha {
 // MakeShape generates a shape-mode captcha
 // return: Captcha instance
 func (b *builder) MakeShape() Captcha {
-	capt := newWithMode(ModeShape)
-	capt.setOptions(b.opts...)
-	capt.setResources(b.resources...)
-	return capt
-}
-
-// MakeWithShape generates a shape-mode captcha (deprecated)
-// return: Captcha instance
-func (b *builder) MakeWithShape() Captcha {
 	capt := newWithMode(ModeShape)
 	capt.setOptions(b.opts...)
 	capt.setResources(b.resources...)

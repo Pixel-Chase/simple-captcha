@@ -58,7 +58,7 @@ func (s *ClickShapeCaptchaService) build(key instanceKey) click.Captcha {
 		click.WithShapes(s.shapes),
 		click.WithBackgrounds(s.backgrounds.Get(size.Width, size.Height)),
 	)
-	return builder.MakeWithShape()
+	return builder.MakeShape()
 }
 
 // GenerateCaptcha 生成验证码

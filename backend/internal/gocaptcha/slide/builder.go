@@ -15,8 +15,6 @@ type Builder interface {
 	Clear()
 	Make() Captcha
 	MakeDragDrop() Captcha
-	// Deprecated: As of 2.1.0, it will be removed, please use [MakeDrag].
-	MakeWithRegion() Captcha
 }
 
 var _ Builder = (*builder)(nil)
@@ -73,15 +71,6 @@ func (b *builder) SetResources(resources ...Resource) {
 // params: Captcha interface instance
 func (b *builder) Make() Captcha {
 	capt := newWithMode(ModeBasic)
-	capt.setOptions(b.opts...)
-	capt.setResources(b.resources...)
-	return capt
-}
-
-// MakeWithRegion generates a slide CAPTCHA in region mode (deprecated)
-// return: Captcha interface instance
-func (b *builder) MakeWithRegion() Captcha {
-	capt := newWithMode(ModeDrag)
 	capt.setOptions(b.opts...)
 	capt.setResources(b.resources...)
 	return capt

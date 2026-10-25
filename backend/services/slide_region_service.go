@@ -42,7 +42,7 @@ func (s *SlideRegionCaptchaService) build(key instanceKey) slide.Captcha {
 		slide.WithGraphImages(s.graphs),
 		slide.WithBackgrounds(s.backgrounds.Get(size.Width, size.Height)),
 	)
-	return builder.MakeWithRegion()
+	return builder.MakeDragDrop()
 }
 
 // GenerateCaptcha 生成验证码

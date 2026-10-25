@@ -18,3 +18,5 @@
 此后的修改逐条记录在下方，便于日后与上游对照。
 
 ## 修改记录
+
+- 删除上游标记为 Deprecated 的 API，调用方改用其等价替代：`click.CheckPoint`、`slide.CheckPoint`、`rotate.CheckAngle` → 各包的 `Validate`；`click.Builder.MakeWithShape` → `MakeShape`；`slide.Builder.MakeWithRegion` → `MakeDragDrop`（上游注释误写为 `MakeDrag`）；`slide.Block` 的 `TileX/TileY` → `DX/DY`；`rotate.Block` 的 `ParentWidth/ParentHeight` 字段删除

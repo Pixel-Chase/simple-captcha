@@ -22,12 +22,3 @@ func Validate(angle, dAngle, padding int) bool {
 
 	return angle >= minAngle && angle <= maxAngle
 }
-
-// Deprecated: As of 2.1.0, it will be removed, please use [rotate.Validate]
-func CheckAngle(angle, dAngle, padding int64) bool {
-	minAngle := 360 - padding
-	maxAngle := 360 + padding
-	angle += dAngle
-
-	return angle >= minAngle && angle <= maxAngle
-}

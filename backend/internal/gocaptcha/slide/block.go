@@ -19,10 +19,6 @@ type Block struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
 	Angle  int `json:"angle"`
-	// Deprecated: As of 2.1.0, it will be removed, please use [Block.DX].
-	TileX int `json:"tile_x"`
-	// Deprecated: As of 2.1.0, it will be removed, please use [Block.DY].
-	TileY int `json:"tile_y"`
 	// Display x,y
 	DX int `json:"dx"`
 	DY int `json:"dy"`
