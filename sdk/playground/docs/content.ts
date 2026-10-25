@@ -10,9 +10,6 @@ export const README_URL = `${REPO_BLOB_BASE}README.md`;
 export const DOCS_HASH_PREFIX = '#/docs/';
 export const docsHash = (id: string) => `${DOCS_HASH_PREFIX}${id}`;
 
-/** 在线体验区块的锚点 id，不来自 README */
-export const DEMO_ID = 'live-demo';
-
 export interface DocHeading {
   id: string;
   /** 去掉 Markdown 标记后的纯文本标题 */
@@ -39,13 +36,7 @@ const CURATED_GROUPS: ReadonlyArray<{ title: string; headings: string[] }> = [
   { title: '前端接入', headings: ['前端接入', 'API 参考'] },
   {
     title: '后端接入',
-    headings: [
-      '后端部署',
-      '二次验证（S2S）',
-      '管理后台（背景图 + 接入应用）',
-      '环境变量参考',
-      '安全机制',
-    ],
+    headings: ['后端部署', '二次验证（S2S）', '管理后台', '环境变量参考', '安全机制'],
   },
 ];
 
@@ -206,9 +197,6 @@ function buildDocs(): DocGroup[] {
 export const DOC_GROUPS: DocGroup[] = buildDocs();
 
 /** 页面上所有锚点 id，按出现顺序排列，供滚动高亮使用 */
-export const DOC_ANCHOR_IDS: string[] = [
-  DEMO_ID,
-  ...DOC_GROUPS.flatMap((group) =>
-    group.sections.flatMap((section) => [section.id, ...section.children.map((item) => item.id)]),
-  ),
-];
+export const DOC_ANCHOR_IDS: string[] = DOC_GROUPS.flatMap((group) =>
+  group.sections.flatMap((section) => [section.id, ...section.children.map((item) => item.id)]),
+);

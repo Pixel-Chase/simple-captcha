@@ -1,8 +1,6 @@
 # Simple Captcha
 
-一个开箱即用的行为验证码解决方案，包含 Go 后端服务和 React 前端 SDK。
-
-支持 **文字点选**、**图形点选**、**滑块拼图**、**滑块区域**、**旋转验证** 五种验证模式，采用标准 RESTful API 设计，通过 Docker 一键部署，前端通过 npm 包快速接入。
+开箱即用的行为验证码：Go 后端服务 + React 前端 SDK，支持 **文字点选**、**图形点选**、**滑块拼图**、**滑块区域**、**旋转验证** 五种模式。后端以 Docker 镜像部署，前端通过 npm 包接入。
 
 ## 目录
 
@@ -13,7 +11,7 @@
 - [API 参考](#api-参考)
 - [安全机制](#安全机制)
 - [二次验证（S2S）](#二次验证s2s)
-- [管理后台（背景图 + 接入应用）](#管理后台背景图--接入应用)
+- [管理后台](#管理后台)
 - [环境变量参考](#环境变量参考)
 - [本地开发](#本地开发)
 
@@ -65,42 +63,27 @@
 
 ## 后端部署
 
-### 前置要求
-
-- Docker & Docker Compose
-- 外部 Redis 服务（版本 6.0+）
-
 ### 快速启动
 
-**1. 拉取镜像**
+需要 Docker Compose 与一个外部 Redis（6.0+）。
 
-```bash
-docker pull ghcr.io/pixel-chase/simple-captcha:latest
-```
+**1. 准备 `.env`**
 
-**2. 准备配置文件 `.env`**
-
-完整模板见仓库中的 [`backend/.env.example`](backend/.env.example)，最少只需要填写 Redis。
-S2S 鉴权密钥与管理员密码都不走配置：前者在管理后台按应用创建，后者在首次启动时随机生成。
+最少只填 Redis，完整模板见 [`backend/.env.example`](backend/.env.example)。应用密钥与管理员密码都不走配置。
 
 ```dotenv
-# Redis 连接（必填，连接到你的业务 Redis）
 REDIS_HOST=your-redis-host
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 REDIS_DB=2
 
-# 允许的前端来源，多个用逗号分隔
+# 允许的前端来源，逗号分隔；其余可选项见「环境变量参考」
 CORS_ALLOW_ORIGINS=https://example.com,https://admin.example.com
-
-# 可选：API 路径前缀、频率限制、管理后台……见「环境变量参考」
-API_PREFIX=/api/v1
-CAPTCHA_EXPIRE_TIME=5m
 ```
 
 > 含 `$` 的值必须用单引号包裹，否则会被当作变量展开。
 
-**3. 创建 `docker-compose.yml`**
+**2. 创建 `docker-compose.yml`**
 
 ```yaml
 services:
@@ -112,9 +95,9 @@ services:
     env_file:
       - .env
     volumes:
-      # 管理员凭据与接入应用（只存哈希）。务必持久化：丢失后会重新生成管理员密码，全部应用密钥失效
+      # 管理员凭据与接入应用，必须持久化：丢失后管理员密码重新生成，全部应用密钥失效
       - captcha-data:/app/data
-      # 背景图素材：管理后台上传 / 删除直接写入，新卷首次挂载时自动带上镜像内置的素材
+      # 背景图素材，管理后台直接读写；新卷首次挂载时带上镜像内置素材
       - captcha-images:/app/images
     restart: unless-stopped
     healthcheck:
@@ -128,68 +111,52 @@ volumes:
   captcha-images:
 ```
 
-**4. 启动服务**
+**3. 启动并检查**
 
 ```bash
 docker compose up -d
+curl http://localhost:3321/health   # {"status":"ok","redis":{"status":"ok"}, ...}
 ```
 
-**5. 验证部署**
+**4. 登录管理后台，创建接入应用**
 
-```bash
-curl http://localhost:3321/health
-# 返回: {"status":"ok","redis":{"status":"ok"}, ...}
-```
-
-**6. 取出管理员初始密码，创建接入应用**
-
-首次启动时服务会随机生成管理员密码，并在日志里打印**一次**：
+管理员初始密码在首次启动时随机生成，只在日志里打印一次：
 
 ```bash
 docker compose logs captcha | grep -A6 管理后台初始密码
 ```
 
-打开 `http://<服务地址>:3321/console/` 用它登录管理后台，按提示改成自己的密码，再在「接入应用」里为每个业务后端创建一个应用，把生成的应用密钥配置到对应的业务后端。
-详见 [管理后台](#管理后台背景图--接入应用)。在创建第一个应用之前，S2S 状态查询会一律返回 401。
+用它登录 `http://<服务地址>:3321/console/` 并改密，再在「接入应用」里为每个业务后端创建应用、配置密钥。创建第一个应用之前，S2S 状态查询一律返回 401。详见 [管理后台](#管理后台)。
 
 ### 镜像发布
 
-后端镜像由 GitHub Actions 直接构建并发布到 GitHub Container Registry：
+镜像由 GitHub Actions 构建并发布到 `ghcr.io/pixel-chase/simple-captcha`（`linux/amd64` / `linux/arm64`）：推送默认分支生成 `latest`、分支名与 `sha-*` 标签，推送 `v*` 标签生成语义化版本并更新 `latest`。私有 Package 拉取前需先 `docker login ghcr.io`。
 
-- 镜像地址：`ghcr.io/pixel-chase/simple-captcha`
-- 推送到默认分支时生成 `latest`、分支名和 `sha-*` 标签
-- 推送 `v*` 版本标签时生成语义化版本标签，并同步更新 `latest`
-- 支持 `linux/amd64` 和 `linux/arm64` 两种架构
-- 构建上下文是仓库根目录：镜像内先构建 `sdk/playground/console` 的管理后台前端，再内嵌进 Go 二进制。本地手动构建用 `docker build -f backend/Dockerfile .`
-
-私有仓库或私有 Package 拉取前需要登录 GHCR：
-
-```bash
-echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
-```
+本地构建以仓库根目录为上下文（镜像内先构建管理后台前端，再内嵌进 Go 二进制）：`docker build -f backend/Dockerfile .`
 
 ### RESTful API 路由
 
+鉴权均为 `Authorization: Bearer <…>`：S2S 查询用应用密钥，`/admin/*` 用登录返回的会话令牌。
+
 | 方法 | 路径 | 说明 | 鉴权 |
 |------|------|------|------|
-| `GET` | `/api/v1/captchas/:type` | 获取验证码 | 无 |
-| `POST` | `/api/v1/captchas/:type/:key/attempts` | 提交验证答案 | 无 |
-| `GET` | `/api/v1/captchas/states/:key` | 查询验证状态 (S2S) | `Authorization: Bearer <应用密钥>` |
-| `GET` | `/health` | 健康检查 | 无 |
-| `POST` | `/api/v1/admin/login` | 管理员登录（需携带行为验证 `second_key`） | 无，叠加 IP 限流 |
-| `GET` / `DELETE` | `/api/v1/admin/session` | 查询 / 注销当前管理会话 | `Authorization: Bearer <会话令牌>` |
-| `PUT` | `/api/v1/admin/password` | 修改管理员密码（成功后旧会话全部失效，返回新会话） | `Authorization: Bearer <会话令牌>` |
-| `GET` / `POST` | `/api/v1/admin/backgrounds` | 列出 / 上传背景图 | `Authorization: Bearer <会话令牌>` |
-| `GET` / `DELETE` | `/api/v1/admin/backgrounds/:name` | 预览 / 删除单张背景图 | `Authorization: Bearer <会话令牌>` |
-| `GET` / `POST` | `/api/v1/admin/apps` | 列出 / 新建接入应用（新建时返回一次性明文密钥） | `Authorization: Bearer <会话令牌>` |
-| `PUT` / `DELETE` | `/api/v1/admin/apps/:id` | 修改名称与启用状态 / 删除应用 | `Authorization: Bearer <会话令牌>` |
-| `POST` | `/api/v1/admin/apps/:id/secret` | 重置应用密钥（旧密钥立即失效） | `Authorization: Bearer <会话令牌>` |
+| `GET` | `/api/v1/captchas/:type` | 获取验证码 | — |
+| `POST` | `/api/v1/captchas/:type/:key/attempts` | 提交答案 | — |
+| `GET` | `/api/v1/captchas/states/:key` | 查询验证状态（S2S） | 应用密钥 |
+| `GET` | `/health` | 健康检查 | — |
+| `POST` | `/api/v1/admin/login` | 管理员登录（需携带 `second_key`，叠加 IP 限流） | — |
+| `GET` / `DELETE` | `/api/v1/admin/session` | 查询 / 注销会话 | 会话令牌 |
+| `PUT` | `/api/v1/admin/password` | 修改密码（旧会话全部失效，返回新会话） | 会话令牌 |
+| `GET` / `POST` | `/api/v1/admin/backgrounds` | 列出 / 上传背景图 | 会话令牌 |
+| `GET` / `DELETE` | `/api/v1/admin/backgrounds/:name` | 预览 / 删除背景图 | 会话令牌 |
+| `GET` / `POST` | `/api/v1/admin/apps` | 列出 / 新建接入应用 | 会话令牌 |
+| `PUT` / `DELETE` | `/api/v1/admin/apps/:id` | 修改名称与启用状态 / 删除应用 | 会话令牌 |
+| `POST` | `/api/v1/admin/apps/:id/secret` | 重置应用密钥 | 会话令牌 |
 
-管理后台随服务常驻开启。仍在使用随机初始密码时，`/admin/*` 只开放会话查询、注销与改密，其余接口返回 HTTP 403（`code: 2008`），详见 [管理后台](#管理后台背景图--接入应用)。
+- 路径前缀由 `API_PREFIX` 决定（默认 `/api/v1`）：配置 `/captcha/api` 后为 `/captcha/api/captchas/:type`，配置 `/` 则挂在根路径。
+- 仍在使用初始密码时，`/admin/*` 只开放会话与改密接口，其余返回 HTTP 403（`code: 2008`）。
 
-以上验证码接口使用默认的 `API_PREFIX=/api/v1`。例如配置 `API_PREFIX=/captcha/api` 后，获取验证码接口将变为 `/captcha/api/captchas/:type`；配置 `/` 则直接挂载到 `/captchas`。
-
-**支持的验证码类型 (`:type`)**
+**验证码类型 (`:type`)**
 
 | 值 | 验证方式 |
 |---|---|
@@ -198,7 +165,7 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 | `slide-text` | 滑块验证 |
 | `slide-region` | 区域滑块 |
 | `rotate` | 旋转验证 |
-| `auto` | 由服务端根据该客户端的风险等级自动选择题型（低风险可得到滑块/旋转，高风险只给点选类） |
+| `auto` | 服务端按客户端风险等级选题：低风险可能是滑块 / 旋转，高风险只给点选类 |
 
 ### 接口字段说明
 
@@ -207,7 +174,7 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 | 查询参数 | 说明 |
 |---|---|
 | `mode` | `light` / `dark`，影响点选文字配色，可选 |
-| `dpr` | 前端 `devicePixelRatio`（1-3），服务端按此倍率出图以适配高清屏；最低按 2 倍出图（`CAPTCHA_MAX_SCALE` 更低时以它为准），可选 |
+| `dpr` | 前端 `devicePixelRatio`（1-3），服务端按此倍率出图（至少 2 倍，但不超过 `CAPTCHA_MAX_SCALE`），可选 |
 
 响应（HTTP 200）：
 
@@ -225,7 +192,7 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 }
 ```
 
-- `imageWidth` / `imageHeight`、`thumb*` 均为位图像素；SDK 以 CSS 像素渲染后，会按 `imageWidth / 渲染宽度` 把坐标换算回位图空间再提交，服务端的容差也在位图空间按倍率放大。
+- 尺寸与坐标均为位图像素。SDK 按 `imageWidth / 渲染宽度` 把坐标换算回位图空间再提交，服务端容差也按倍率放大。
 - `pow` 为工作量证明挑战：客户端需找到 `solution` 使 `SHA-256(nonce + ":" + key + ":" + solution)` 的前导零位数 ≥ `difficulty`。
 
 **`POST /captchas/:type/:key/attempts`**
@@ -239,7 +206,7 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 }
 ```
 
-答案字段按题型取其一：点选 `dots`（`"x1,y1,x2,y2"`）、滑块 `point`（`"x,y"`）、旋转 `angle`。`trace` / `env` / `pow` 由 SDK 自动填充，旧版 SDK 不携带时依旧可以验证，但会计入风险分。
+答案字段按题型取其一：点选 `dots`（`"x1,y1,x2,y2"`）、滑块 `point`（`"x,y"`）、旋转 `angle`。`trace` / `env` / `pow` 由 SDK 自动填充；旧版 SDK 不携带也能验证，但会计入风险分。
 
 **业务错误码**（HTTP 200 或 4xx，响应体为 `{ "code": …, "error": "…" }`）
 
@@ -254,7 +221,7 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 | `1007` | 提交客户端与出题客户端不一致 |
 | `1009` | 工作量证明缺失或无效 |
 
-> 风控评分超过拦截阈值时，接口对外返回与答案错误完全相同的 `1003`，并同样消耗一次尝试机会；真实原因（内部码 `1008` 与评分理由）只记录在服务端日志，避免成为脚本调参的探针。
+> 风控评分超过拦截阈值时，对外同样返回 `1003` 并消耗一次尝试机会；真实原因（内部码 `1008` 与评分理由）只记在服务端日志，避免成为脚本调参的探针。
 
 ---
 
@@ -263,22 +230,14 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 ### 安装
 
 ```bash
-npm install @aetherlib/g-captcha
-# 或
-yarn add @aetherlib/g-captcha
-# 或
-pnpm add @aetherlib/g-captcha
+pnpm add @aetherlib/g-captcha   # 或 npm install / yarn add
 ```
 
-> **要求**: React >= 18.0.0, React DOM >= 18.0.0（与 `peerDependencies` 一致；演示站与测试基于 React 19）
+要求 React 与 React DOM ≥ 18。
 
-### 推荐接法
+### 使用
 
-当前版本采用新的配置模型：
-
-- `CaptchaProvider` 负责全局 `api / locale / theme / zIndex`
-- `Captcha` 负责单个实例渲染
-- `useCaptcha()` 负责按次触发验证，并返回 `holder`
+`CaptchaProvider` 提供全局的 `api / locale / theme / zIndex`，`Captcha` 渲染单个实例，`useCaptcha()` 按次触发验证并返回需要渲染的 `holder`：
 
 ```tsx
 import { useRef } from 'react';
@@ -358,7 +317,7 @@ function App() {
 
 ### `LocaleTexts` 文案配置
 
-通过 `locale` 属性覆盖默认中文文案，实现国际化：
+通过 `locale` 覆盖默认中文文案：
 
 ```tsx
 <CaptchaProvider
@@ -375,46 +334,48 @@ function App() {
 </CaptchaProvider>
 ```
 
+`{n}`、`{p}`、`{s}` 为运行时替换的占位符；`*Tag`、`poweredBy`、`slideNote`、`rotateNote` 设为空字符串即隐藏。
+
 | Key | 默认值 | 说明 |
 |-----|--------|------|
 | `userCancel` | `用户取消` | 用户取消时的提示 |
-| `loading` | `加载中...` | 加载状态文案 |
-| `clickTitle` | `安全点选验证` | 点选模式标题 |
-| `slideTitle` | `拼图验证` | 滑块拼图模式标题 |
-| `regionTitle` | `空间拼图` | 滑动区域模式标题 |
-| `rotateTitle` | `旋转验证` | 旋转模式标题 |
-| `clickSubtitle` | `请依序点击图中的指定汉字` | 点选标题下的副标题 |
+| `loading` | `加载中...` | 加载状态 |
+| `clickTitle` | `安全点选验证` | 点选标题 |
+| `slideTitle` | `拼图验证` | 滑块拼图标题 |
+| `regionTitle` | `空间拼图` | 滑动区域标题 |
+| `rotateTitle` | `旋转验证` | 旋转标题 |
+| `clickSubtitle` | `请依序点击图中的指定汉字` | 点选副标题 |
 | `slideSubtitle` | `拖动滑块使拼图完全吻合` | 滑块拼图副标题 |
 | `regionSubtitle` | `自由拖动图块至缺口，松手提交` | 滑动区域副标题 |
 | `rotateSubtitle` | `拖动滑块使图片角度摆正` | 旋转副标题 |
-| `clickTag` | `风控防护` | 点选标题右侧的小标签，设为空字符串可隐藏 |
+| `clickTag` | `风控防护` | 点选标题右侧的小标签 |
 | `slideTag` | `高精咬合` | 滑块拼图标题右侧的小标签 |
 | `regionTag` | `免滑条` | 滑动区域标题右侧的小标签 |
 | `rotateTag` | `角度矫正` | 旋转标题右侧的小标签 |
 | `confirmButton` | `确认点选` | 点选确认按钮 |
-| `buttonText` | `点击按键进行验证` | 触发验证按钮默认文案 |
-| `clickHint` | `请依序点击：` | 点选提示条文案 |
+| `buttonText` | `点击按键进行验证` | 触发验证按钮的默认文案 |
+| `clickHint` | `请依序点击：` | 点选提示条 |
 | `clickMeta` | `已依序选择 {n} 处` | 点选计数，`{n}` 为已点击数量 |
 | `clickClear` | `重选` | 点选清除按钮 |
 | `slideHint` | `向右拖动滑块完成拼图` | 滑块轨道内的待拖动提示 |
 | `rotateHint` | `向右拖动滑块使图片摆正` | 旋转轨道内的待拖动提示 |
-| `slideProgress` | `拖动至与缺口精准咬合` | 滑块轨道下方左侧的说明 |
-| `slidePercent` | `当前进度 {p}%` | 滑块轨道下方右侧的真实拖动进度，`{p}` 为百分比 |
-| `rotateProgress` | `松手自动校准判定` | 旋转轨道下方右侧的说明（左侧显示当前角度） |
+| `slideProgress` | `拖动至与缺口精准咬合` | 滑块轨道下方左侧说明 |
+| `slidePercent` | `当前进度 {p}%` | 滑块轨道下方右侧的拖动进度 |
+| `rotateProgress` | `松手自动校准判定` | 旋转轨道下方右侧说明（左侧显示当前角度） |
 | `regionHint` | `按住图块自由拖拽入框` | 滑动区域图片下方的操作提示 |
 | `regionBadge` | `松手即验` | 滑动区域操作提示右侧的角标 |
-| `regionReset` | `原位重置` | 滑动区域把图块移回初始位置的按钮 |
-| `rotateAngle` | `当前偏移` | 旋转图片下方的角度标签前缀 |
+| `regionReset` | `原位重置` | 滑动区域把图块移回原位的按钮 |
+| `rotateAngle` | `当前偏移` | 旋转图片下方角度标签的前缀 |
 | `successText` | `验证通过` | 校验通过画面的文案 |
-| `elapsedText` | `耗时 {s}s` | 校验通过画面的耗时，`{s}` 为秒数 |
-| `doneText` | `已完成` | 点选校验通过后按钮文案 |
+| `elapsedText` | `耗时 {s}s` | 校验通过画面的耗时 |
+| `doneText` | `已完成` | 点选校验通过后的按钮文案 |
 | `failTitle` | `验证未通过，请重试` | 校验未通过时替换副标题 |
 | `failBanner` | `正在重新生成验证码…` | 校验未通过时图片上的提示条 |
 | `trackSuccess` | `验证已通过` | 校验通过时轨道内的文案 |
 | `trackFail` | `验证未通过，请重新拖动` | 校验未通过时轨道内的文案 |
-| `poweredBy` | `二维拖拽轨迹与运动特征分析` | 滑动区域底部的安全提示，设为空字符串可隐藏 |
-| `slideNote` | `多维速度曲线与轨迹时序分析` | 滑块拼图底部的安全提示，设为空字符串可隐藏 |
-| `rotateNote` | `拖动速度与微抖动行为分析` | 旋转底部的安全提示，设为空字符串可隐藏 |
+| `poweredBy` | `二维拖拽轨迹与运动特征分析` | 滑动区域底部的安全提示 |
+| `slideNote` | `多维速度曲线与轨迹时序分析` | 滑块拼图底部的安全提示 |
+| `rotateNote` | `拖动速度与微抖动行为分析` | 旋转底部的安全提示 |
 | `refreshLabel` | `刷新` | 刷新按钮的无障碍标签 |
 | `closeLabel` | `关闭` | 关闭按钮的无障碍标签 |
 
@@ -438,7 +399,7 @@ function App() {
 
 | 属性 | 类型 | 说明 |
 |------|------|------|
-| `verify` | `(options?: CaptchaVerifyOptions) => Promise<any>` | 按次触发验证，并允许覆盖 `type / api / locale / theme / config` |
+| `verify` | `(options?: CaptchaVerifyOptions) => Promise<any>` | 按次触发验证，可覆盖 `type / api / locale / theme / config` |
 | `holder` | `ReactNode` | 必须渲染在当前 React 树中的承载节点 |
 
 ---
@@ -449,14 +410,14 @@ function App() {
 |---|---|---|
 | 随机 key | 验证码 key 为 128 位加密随机数，与答案无关，无法离线反推 | — |
 | 客户端绑定 | 出题时记录客户端指纹（IP + UA 哈希），提交客户端不一致时题目直接作废 | `CAPTCHA_BIND_CLIENT` |
-| 时间窗口 | 出题到提交间隔低于阈值判定为自动化提交，计入一次失败 | `CAPTCHA_MIN_SOLVE_TIME` |
-| 工作量证明 PoW | 每道题下发 nonce 与难度位数，SDK 在后台用 SHA-256 碰撞；真人无感，批量脚本成本线性上升。难度随客户端风险等级提升 | `CAPTCHA_POW_*` |
-| 难度分级 | 1-5 级，映射到字符数量、干扰强度、拼图尺寸、旋转区间以及校验容差；连续失败或高风险分会自动升级 | `CAPTCHA_DEFAULT_DIFFICULTY` |
-| 服务端选题 | `type=auto` 时由服务端按风险等级决定题型，客户端无法固定选择最易自动化的题型 | — |
-| 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100；达到升级阈值提升后续难度，达到拦截阈值拒绝本次校验（同样消耗一次尝试机会，响应与答案错误一致） | `RISK_*` |
-| Redis 限流 | 基于有序集合的滑动窗口，多实例共享；Redis 不可用时自动回退进程内限流 | `RATE_LIMIT_BACKEND` |
-| 可信代理 | 仅 `REMOTE_IP_HEADERS` 列出的代理头（默认 `X-Forwarded-For` / `X-Real-IP`）会被读取，且只在直连来源命中 `TRUSTED_PROXIES` 时才被采信 | `TRUSTED_PROXIES` `REMOTE_IP_HEADERS` |
-| 请求体上限 | 全局上限之外，校验提交接口单独限制请求体大小，chunked 传输同样生效；遥测列表的单项长度也有上限 | `MAX_REQUEST_SIZE` `VERIFY_MAX_BODY_SIZE` |
+| 时间窗口 | 出题到提交间隔低于阈值视为自动化提交，计一次失败 | `CAPTCHA_MIN_SOLVE_TIME` |
+| 工作量证明 PoW | 每道题下发 nonce 与难度位数，SDK 在后台用 SHA-256 碰撞；真人无感，批量脚本成本线性上升，难度随风险等级提升 | `CAPTCHA_POW_*` |
+| 难度分级 | 1-5 级，决定字符数量、干扰强度、拼图尺寸、旋转区间与校验容差；连续失败或高风险分自动升级 | `CAPTCHA_DEFAULT_DIFFICULTY` |
+| 服务端选题 | `type=auto` 时由服务端按风险等级定题型，客户端无法固定选最易自动化的题型 | — |
+| 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100：达到升级阈值提升后续难度，达到拦截阈值拒绝本次校验（响应与答案错误一致） | `RISK_*` |
+| Redis 限流 | 基于有序集合的滑动窗口，多实例共享；Redis 不可用时回退进程内限流 | `RATE_LIMIT_BACKEND` |
+| 可信代理 | 只读取 `REMOTE_IP_HEADERS` 列出的代理头，且仅在直连来源命中 `TRUSTED_PROXIES` 时采信 | `TRUSTED_PROXIES` `REMOTE_IP_HEADERS` |
+| 请求体上限 | 校验提交接口在全局上限之外单独限制请求体（chunked 同样生效），遥测列表单项长度也有上限 | `MAX_REQUEST_SIZE` `VERIFY_MAX_BODY_SIZE` |
 
 **采集级别与隐私**
 
@@ -464,112 +425,55 @@ function App() {
 - `telemetry='basic'`：轨迹 + 基础环境信号（UA、语言、屏幕、时区、触控能力）
 - `telemetry='off'`：不采集，仅计算 PoW
 
-采集内容不含任何可直接识别个人的信息；服务端只保存客户端哈希与评分，不落原始 IP / UA。建议在隐私政策中声明验证码会采集交互行为用于人机判别。`RISK_MODE=log` 可先只记录分数不拦截，观察误报率后再切换为 `enforce`。
+采集内容不含可直接识别个人的信息，服务端只保存客户端哈希与评分，不落原始 IP / UA；建议在隐私政策中声明验证码会采集交互行为用于人机判别。上线初期可用 `RISK_MODE=log` 只记分不拦截，确认误报率后再切到 `enforce`。
 
 ## 二次验证（S2S）
 
-用户在前端完成验证后，`onSuccess` 回调返回的 `data` 中包含 `second_key`。业务前端应将此 key 随表单提交到**业务后端**，由业务后端发起服务端到服务端（S2S）的二次校验。
-
-业务后端凭**应用密钥**鉴权：在 [管理后台](#管理后台背景图--接入应用) 的「接入应用」里为每个业务后端单独创建一个应用，得到形如 `sk_` 开头的密钥。
-一个业务后端一把密钥，泄露时只需重置或停用对应的应用，日志里也能看到每次查询来自哪个应用。
+前端 `onSuccess` 拿到的 `data.second_key` 随表单提交到**业务后端**，由业务后端凭**应用密钥**向验证码服务查询：
 
 ```bash
-# 业务后端调用验证码后端，验证 second_key 是否有效
-curl -X GET \
-  https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
+curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
   -H "Authorization: Bearer sk_xxxxxxxxxxxxxxxx"
 ```
 
-**校验通过**（HTTP 200）：
+| 情况 | HTTP | 响应体 |
+|---|---|---|
+| 校验通过 | 200 | `{"valid": true}` |
+| `second_key` 无效、已过期或已查询过（只能查一次） | 200 | `{"code": 1004, "error": "验证码已失效"}` |
+| 应用密钥缺失、无效或应用已停用 | 401 | `{"code": 3001, "error": "应用密钥缺失或无效"}` |
 
-```json
-{
-  "valid": true
-}
-```
+只有拿到 `"valid": true` 才放行，其余一律按校验失败处理。
 
-**second_key 无效、已过期或已被消费**（HTTP 200，`second_key` 只能查询一次）：
-
-```json
-{
-  "code": 1004,
-  "error": "验证码已失效"
-}
-```
-
-**应用密钥缺失、无效或应用已停用**（HTTP 401）：
-
-```json
-{
-  "code": 3001,
-  "error": "应用密钥缺失或无效"
-}
-```
-
-业务后端应只在拿到 `"valid": true` 时放行，其余情况一律按校验失败处理。
-
-> **安全提醒**：应用密钥仅在业务后端使用，**绝不能**暴露到前端代码中。服务端只保存密钥的哈希，明文只在创建或重置时显示一次。
-
-若后端修改了 `API_PREFIX`，SDK 与业务后端的 S2S 请求也需使用相同前缀：
-
-```tsx
-<CaptchaProvider
-  api={{
-    basePath: 'https://captcha.yourdomain.com',
-    prefix: '/captcha/api',
-  }}
->
-  <App />
-</CaptchaProvider>
-```
+- 应用密钥在 [管理后台](#管理后台) 的「接入应用」里按业务后端分别创建（`sk_` 开头），泄露时只需重置或停用对应应用，日志里也能看出每次查询来自哪个应用。
+- 密钥只能放在业务后端，**绝不能**进入前端代码；服务端只存哈希，明文只在创建或重置时显示一次。
+- 修改过 `API_PREFIX` 时，S2S 地址和 SDK 的 `api.prefix` 都要换成同一前缀。
 
 ---
 
-## 管理后台（背景图 + 接入应用）
+## 管理后台
 
-后端内置的管理后台随服务常驻开启，用于在线管理背景图素材，以及为各业务后端签发 S2S 应用密钥，不影响任何验证码接口。
-管理界面内嵌在服务里，访问 **`http://<服务地址>/console/`** 即可（路径由 `CONSOLE_PATH` 决定），与 API 同源，不需要配置跨域。
-登录页用本项目的行为验证码保护，登录后可管理背景图、接入应用与管理员密码。
+管理后台内嵌在服务里、常驻开启，访问 **`http://<服务地址>/console/`**（路径由 `CONSOLE_PATH` 决定），与 API 同源，无需配置跨域。登录受行为验证码保护，登录后可管理背景图、接入应用与管理员密码，不影响任何验证码接口。
 
-- 页面是 `sdk/playground/console` 的构建产物，编译时通过 `//go:embed` 打进二进制（见 `backend/console`），镜像构建会自动生成；只含控制台，不含接入文档。
-- 服务返回页面时会把 `API_PREFIX` 写进 `index.html`，`API_PREFIX` 改了不需要重新构建前端；`CONSOLE_PATH` 可以挂到任意不与 API、监控路由重叠的路径，方便只转发子路径的反向代理。
-- 页面带严格的 CSP（只允许同源脚本，禁止被嵌入 iframe）和 `noindex`；哈希命名的静态资源长期缓存，`index.html` 每次回源校验。
+页面由 `sdk/playground/console` 构建、经 `//go:embed` 打进二进制，镜像构建时自动生成；`API_PREFIX` 在返回页面时注入，修改后无需重新构建前端。页面带严格的 CSP（只允许同源脚本、禁止被 iframe 嵌入）与 `noindex`。
 
 ### 管理员密码
 
-管理员密码不走配置，开发与生产环境一致：
+- **首次启动**随机生成 20 位密码，明文只在服务日志打印一次（容器部署用 `docker compose logs captcha | grep -A6 管理后台初始密码` 取出）。
+- **首次登录必须改密**，改密前管理接口只开放会话查询、注销与改密。新密码 10 个字符以上、不超过 72 字节。
+- 改密或重置后，所有已登录会话立即失效，发起改密的页面自动换用新会话。
+- 遗失密码时重新生成（下次登录同样要求改密），运行中的服务无需重启：
 
-1. **首次启动**时服务随机生成一个 20 位密码，bcrypt 哈希写入数据目录（`ADMIN_DATA_DIR`，默认 `./data`），明文只在服务控制台打印**这一次**：
-
-   ```
-   ====================================================================
-     管理后台初始密码（只显示这一次，请立即妥善保存）
-
-         用户名: admin
-         密  码: <随机密码>
-
-     首次登录后必须修改密码；遗失可执行 ./simple-captcha reset-admin-password
-   ====================================================================
-   ```
-
-   容器部署时用 `docker compose logs <服务名> | grep -A6 管理后台初始密码` 取出。
-2. **首次登录后必须改密**。初始密码会留在 `docker logs` 和日志采集系统里，改密之前管理接口只开放会话查询、注销与改密；改密后日志中的那串即失效。
-3. **改密或重置后，所有已登录的会话立即失效**，发起改密的页面自动换用新签发的会话。新密码至少 10 个字符、不超过 72 字节。
-4. **遗失密码**时重新生成（同样要求下次登录后修改），运行中的服务无需重启即生效：
-
-   ```bash
-   cd backend && ./run-dev.sh reset-admin-password                     # 本地
-   docker compose exec backend ./simple-captcha reset-admin-password   # 容器内
-   ```
+  ```bash
+  cd backend && ./run-dev.sh reset-admin-password                    # 本地
+  docker compose exec captcha ./simple-captcha reset-admin-password  # 容器
+  ```
 
 用户名由 `ADMIN_USERNAME` 决定，默认 `admin`。
 
-**数据目录必须持久化**：管理员凭据（`admin.json`）与接入应用（`apps.json`）都保存在 `ADMIN_DATA_DIR`，只含哈希，文件权限 0600。
-`docker-compose.yml` 把它挂载为具名卷 `captcha-data`；删除该卷（例如 `docker compose down -v`）会重新生成管理员密码，并使全部应用密钥失效。
+### 数据目录
 
-素材目录由 `CAPTCHA_IMAGE_PATH` 决定（默认 `./images`）。上传与删除直接作用于该目录，
-因此容器部署时该目录必须**可写**：`docker-compose.yml` 默认以读写方式挂载 `./backend/images`，
-容器以 uid 1001 运行，宿主机目录需对其可写（例如 `chown -R 1001:1001 backend/images`）。
+- **`ADMIN_DATA_DIR`**（默认 `./data`）保存管理员凭据 `admin.json` 与接入应用 `apps.json`，只含哈希、权限 0600，**必须持久化**：删掉对应的卷（例如 `docker compose down -v`）会重新生成管理员密码，并使全部应用密钥失效。
+- **`CAPTCHA_IMAGE_PATH`**（默认 `./images`）是背景图目录，上传与删除直接写入，必须可写。容器以 uid 1001 运行，改为绑定宿主机目录时需 `chown -R 1001:1001 <目录>`。
 
 ### 登录流程
 
@@ -588,8 +492,7 @@ curl -X GET \
  │  ◄── { token, mustChangePassword: false }  （新会话）
 ```
 
-每一次登录尝试都必须重新完成一次行为验证，密码暴力猜解的成本因此与过验证码的成本绑定。
-登录与改密接口同时受 `CAPTCHA_IP_RATE_LIMIT` 限流保护。会话令牌有效期由 `ADMIN_SESSION_TTL` 控制，注销即失效。
+每次登录都必须重新过一次行为验证，暴力猜密码的成本因此与过验证码绑定；登录与改密接口另受 `CAPTCHA_IP_RATE_LIMIT` 限流。会话有效期由 `ADMIN_SESSION_TTL` 控制，注销即失效。
 
 ### 接入应用
 
@@ -597,92 +500,79 @@ curl -X GET \
 
 | 操作 | 说明 |
 |------|------|
-| 新建 | 填写名称（1-40 个字符，不区分大小写去重），返回 `sk_` 开头的密钥，**明文只显示这一次** |
-| 列表 | 返回应用 ID、名称、密钥前缀（仅用于辨认）、启用状态、最近使用时间、密钥更新时间，不返回密钥本身 |
-| 停用 / 启用 | 停用后该密钥立即无法通过鉴权，重新启用后恢复 |
-| 重置密钥 | 生成新密钥并立即作废旧密钥；需要平滑切换时，可先为该业务后端新建一个应用，切换完成后再删除旧应用 |
+| 新建 | 名称 1-40 个字符（不区分大小写去重），返回 `sk_` 开头的密钥，**明文只显示这一次** |
+| 列表 | 应用 ID、名称、密钥前缀（仅供辨认）、启用状态、最近使用时间、密钥更新时间，不含密钥本身 |
+| 停用 / 启用 | 停用后密钥立即无法通过鉴权，启用后恢复 |
+| 重置密钥 | 生成新密钥并立即作废旧密钥；要平滑切换，可先新建一个应用，切换完成再删除旧应用 |
 | 删除 | 密钥立即失效 |
 
-- 服务端只保存密钥的 SHA-256 哈希，鉴权时做常量时间比较；最多 100 个应用。
-- **一个应用都没有时，S2S 状态查询一律返回 401**，不存在“未配置则放行”。
-- 每次 S2S 查询都会记录应用 ID（服务日志）与最近使用时间（Redis，只用于展示）。
+服务端只保存密钥的 SHA-256 哈希并做常量时间比较，最多 100 个应用。**一个应用都没有时 S2S 查询一律返回 401**，不存在“未配置则放行”。每次查询都会记录应用 ID（服务日志）与最近使用时间（Redis，仅供展示）。
 
-> **从旧版本升级**：`API_KEY`、`ADMIN_ENABLED`、`ADMIN_PASSWORD`、`ADMIN_PASSWORD_HASH` 已移除，留在 `.env` 里也不再生效。
-> 升级后先取出初始密码登录，为每个业务后端创建应用并替换密钥；在此之前 S2S 查询会返回 401。
+> **从旧版本升级**：`API_KEY`、`ADMIN_ENABLED`、`ADMIN_PASSWORD`、`ADMIN_PASSWORD_HASH` 已移除，留在 `.env` 里也不再生效。升级后先取出初始密码登录，为每个业务后端创建应用并替换密钥，在此之前 S2S 查询返回 401。
 
 ### 背景图管理
 
 | 操作 | 说明 |
 |------|------|
-| 列表 | 返回文件名、像素尺寸、体积、格式、修改时间，以及当前的上传约束 |
-| 上传 | `multipart/form-data`，字段名 `file`。服务端按真实内容识别格式（仅 JPEG / PNG），校验最小尺寸、像素总数与体积，文件名由服务端重新生成 |
+| 列表 | 文件名、像素尺寸、体积、格式、修改时间，以及当前的上传约束 |
+| 上传 | `multipart/form-data`，字段名 `file`。按真实内容识别格式（仅 JPEG / PNG），校验最小尺寸、像素总数与体积，文件名由服务端重新生成 |
 | 删除 | 拒绝删除最后一张，保证始终有素材可出题 |
 | 预览 | 返回原文件，需携带会话令牌 |
 
-上传或删除成功后，后端会**热重载**素材并丢弃已缓存的生成器实例，所有题型下一次出题即使用新素材，无需重启服务。
+上传或删除后素材**热重载**，下一次出题即生效，无需重启。
 
-**素材规格**：点选、滑块拼图、空间拼图统一使用 300×200（3:2）的画布，旋转题从同一批素材裁出正方形、显示为 128px 的圆。服务端最低按 2 倍出图（600×400），3 倍屏出 900×600；1x 屏拿到 2x 图后由浏览器缩小显示，文字与拼图边缘更锐利。
-
-素材加载时整张等比缩放，保留完整构图；每个出图尺寸按 110% / 125% 两个放大档各派生一份，出题时随机挑一份并随机取景。生成后再对主图（以及拼图块、旋转内圆）做轻微的随机颜色扰动和细噪点，肉眼几乎看不出，但同一张素材每次出题的像素都不同，拿干净原图也无法逐像素相减找出缺口。
+**素材规格**：点选与两种拼图使用 300×200（3:2）画布，旋转题从同一批素材裁出正方形、显示为 128px 的圆；服务端最低按 2 倍出图（600×400），3 倍屏出 900×600。每张素材按 110% / 125% 两档放大并随机取景，出图后再叠加轻微的颜色扰动与噪点，同一张素材每次出题的像素都不同，拿原图逐像素相减也找不出缺口。
 
 | 项目 | 要求 |
 |---|---|
 | 比例 | 3:2 横图（其他比例也能用，但会多裁掉一部分画面） |
 | 尺寸 | 建议 1800 × 1200；下限 900 × 600（上传时校验，保证 3 倍出图不靠放大） |
 | 格式 | JPG（sRGB，质量 ≥ 85）或 PNG |
-| 数量 | 至少 50 张，100 张以上更好：缩放、取景与扰动只能抬高比对成本，素材越多越难被建库比对 |
+| 数量 | 至少 50 张，100 张以上更好；素材越多越难被建库比对 |
 
-内容上：
-- 画面处处要有细节和中等明暗，避免大片纯色天空或纯白、纯黑区域，否则缺口一眼可见，点选文字也会看不清。
-- 画面要有明确的“上下方向”（地平线、建筑、站立的人），旋转题依赖它；俯拍和抽象纹理不适合。
-- 不要带文字、Logo、水印，避免可识别的人脸。
-- 整套素材风格统一（全部摄影或全部插画）。
+内容要求：
 
-每张素材在内存中约占 12 MB（工作副本加各出图尺寸、各放大档的缓存），100 张约 1.2 GB；放大档位在 `backend/services/backgrounds.go` 的 `backgroundZoomPercents`，档位越多越难比对，内存也成倍增加。
+- 画面处处有细节和中等明暗，避免大片纯色、纯白或纯黑区域，否则缺口一眼可见、点选文字也看不清。
+- 有明确的“上下方向”（地平线、建筑、站立的人），旋转题依赖它；俯拍和抽象纹理不适合。
+- 不带文字、Logo、水印，避免可识别的人脸；整套素材风格统一（全部摄影或全部插画）。
 
-> 当前实现把素材保存在本地磁盘，适用于单实例部署。多副本部署需挂载共享卷，否则各实例素材不一致。
+每张素材常驻内存约 12 MB（含各出图尺寸、各放大档的缓存），100 张约 1.2 GB。放大档位见 `backend/services/backgrounds.go` 的 `backgroundZoomPercents`，档位越多越难比对，内存占用也越大。
+
+> 素材保存在本地磁盘，适用于单实例部署；多副本部署需挂载共享卷，否则各实例素材不一致。
 
 ---
 
 ## 环境变量参考
 
-开发默认值见 [`backend/.env.development`](backend/.env.development)，生产模板见 [`backend/.env.example`](backend/.env.example)；
-`run-dev.sh` 与 `docker-compose.yml` 都从这些文件读取配置，不需要在命令行逐个导出。
+开发默认值见 [`backend/.env.development`](backend/.env.development)，生产模板见 [`backend/.env.example`](backend/.env.example)。应用密钥与管理员密码不走环境变量，见 [管理后台](#管理后台)。
 
-### 必填
-
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `REDIS_HOST` | Redis 主机地址 | `redis.example.com` |
-
-S2S 鉴权密钥与管理员密码都不走环境变量，见 [管理后台](#管理后台背景图--接入应用)。
-
-### 可选
+### 基础
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `PORT` | 服务监听端口 | `3321` |
-| `API_PREFIX` | 验证码 API 路径前缀；配置 `/` 表示根路径 | `/api/v1` |
+| `REDIS_HOST` | Redis 主机地址（**必填**） | — |
 | `REDIS_PORT` | Redis 端口 | `6379` |
 | `REDIS_PASSWORD` | Redis 密码 | 空 |
 | `REDIS_DB` | Redis 数据库编号 | `0` |
 | `REDIS_POOL_SIZE` | Redis 连接池大小 | `10` |
+| `PORT` | 服务监听端口 | `3321` |
+| `API_PREFIX` | 验证码 API 路径前缀；配置 `/` 表示根路径 | `/api/v1` |
 | `CAPTCHA_EXPIRE_TIME` | 验证码过期时间 | `5m` |
 | `CAPTCHA_MAX_ATTEMPTS` | 最大验证尝试次数 | `5` |
 | `CAPTCHA_IP_RATE_LIMIT` | 单 IP 频率限制 | `30` |
 | `ENABLE_RATE_LIMIT` | 是否启用频率限制 | `true` |
 | `RATE_LIMIT_REQUESTS` | 全局频率限制 | `100` |
 | `CORS_ENABLED` | 是否启用跨域响应 | `true` |
-| `CORS_ALLOW_ORIGINS` | 允许的来源，多个值用逗号分隔 | `*` |
-| `CORS_ALLOW_METHODS` | 允许的方法，多个值用逗号分隔 | `GET,POST,PUT,DELETE,OPTIONS` |
-| `CORS_ALLOW_HEADERS` | 允许的请求头，多个值用逗号分隔 | `Content-Type,...` |
-| `CORS_EXPOSE_HEADERS` | 向浏览器暴露的响应头，多个值用逗号分隔 | 空 |
+| `CORS_ALLOW_ORIGINS` | 允许的来源，逗号分隔 | `*` |
+| `CORS_ALLOW_METHODS` | 允许的方法，逗号分隔 | `GET,POST,PUT,DELETE,OPTIONS` |
+| `CORS_ALLOW_HEADERS` | 允许的请求头，逗号分隔 | `Content-Type,...` |
+| `CORS_EXPOSE_HEADERS` | 向浏览器暴露的响应头，逗号分隔 | 空 |
 | `CORS_ALLOW_CREDENTIALS` | 是否允许 Cookie 等跨域凭证 | `false` |
 | `CORS_MAX_AGE` | 浏览器缓存预检结果的时长 | `24h` |
 | `ENABLE_METRICS` | 是否启用监控指标 | `true` |
 | `GIN_MODE` | Gin 运行模式 | `release` |
 
-> 生产环境建议将 `CORS_ALLOW_ORIGINS` 配置为明确的 HTTPS 来源。启用 `CORS_ALLOW_CREDENTIALS` 时，中间件会返回具体来源而不是 `*`。
+> 生产环境建议把 `CORS_ALLOW_ORIGINS` 配成明确的 HTTPS 来源。启用 `CORS_ALLOW_CREDENTIALS` 时，中间件返回具体来源而不是 `*`。
 
 ### 安全与风控
 
@@ -704,8 +594,8 @@ S2S 鉴权密钥与管理员密码都不走环境变量，见 [管理后台](#�
 | `RISK_STATE_TTL` | 客户端风控状态保留时长 | `30m` |
 | `RISK_TELEMETRY_LOG_SIZE` | Redis 中保留的最近遥测记录条数（`captcha:telemetry` 列表），0 表示不保存 | `1000` |
 | `RATE_LIMIT_BACKEND` | `redis` 滑动窗口（多实例共享）或 `memory` | `redis` |
-| `TRUSTED_PROXIES` | 可信代理网段，只有来自这些来源的代理头才会被采信；生产环境建议收窄为实际的代理地址 | 私有网段 |
-| `REMOTE_IP_HEADERS` | 解析客户端 IP 时按顺序读取的代理头，逗号分隔。部署在 Cloudflare / Akamai 之后再追加 `CF-Connecting-IP` / `True-Client-IP` | `X-Forwarded-For,X-Real-IP` |
+| `TRUSTED_PROXIES` | 可信代理网段，只有来自这些来源的代理头才会被采信；生产环境建议收窄为实际代理地址 | 私有网段 |
+| `REMOTE_IP_HEADERS` | 解析客户端 IP 时按顺序读取的代理头，逗号分隔；部署在 Cloudflare / Akamai 之后追加 `CF-Connecting-IP` / `True-Client-IP` | `X-Forwarded-For,X-Real-IP` |
 | `MAX_REQUEST_SIZE` | 全局请求体上限（字节） | `33554432` |
 | `VERIFY_MAX_BODY_SIZE` | 校验提交接口（`/attempts`）的请求体上限（字节），超出返回 HTTP 413 | `262144` |
 
@@ -715,7 +605,7 @@ S2S 鉴权密钥与管理员密码都不走环境变量，见 [管理后台](#�
 |------|------|--------|
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
 | `ADMIN_DATA_DIR` | 管理员凭据与接入应用的保存目录，必须持久化 | `./data` |
-| `CONSOLE_PATH` | 内嵌管理后台页面的挂载路径；不能是根路径，也不能与 API、健康检查等路由重叠 | `/console` |
+| `CONSOLE_PATH` | 内嵌管理后台的挂载路径；不能是根路径，也不能与 API、健康检查等路由重叠 | `/console` |
 | `ADMIN_SESSION_TTL` | 登录会话有效期 | `2h` |
 | `ADMIN_MAX_UPLOAD_SIZE` | 单张背景图上传体积上限（字节），不能超过 `MAX_REQUEST_SIZE` | `5242880` |
 | `ADMIN_MAX_IMAGE_PIXELS` | 单张背景图像素总数上限，防止解压炸弹 | `24000000` |
@@ -731,7 +621,7 @@ simple-captcha/
 ├── backend/              # Go 后端服务
 │   ├── controllers/      # 路由控制层
 │   ├── services/         # 业务逻辑层
-│   ├── middleware/        # 中间件（CORS、鉴权、限流等）
+│   ├── middleware/       # 中间件（CORS、鉴权、限流等）
 │   ├── config/           # 环境变量配置
 │   ├── images/           # 验证码素材图片（管理后台直接读写此目录）
 │   ├── data/             # 管理员凭据与接入应用（首次启动生成，不入库）
@@ -742,8 +632,7 @@ simple-captcha/
 │   │   ├── Captcha.tsx   # 核心组件
 │   │   ├── _internal/    # 内部渲染引擎（点选、滑块、旋转）
 │   │   └── hooks/        # 公共 Hooks
-│   ├── playground/       # 演示站：接入文档 + 控制台（直接引用 src，热更新）
-│   │   └── console/      # 管理后台独立入口，构建后内嵌进 Go 服务
+│   ├── playground/       # Vite 演示站（直接引用 src，热更新）；console/ 为内嵌进 Go 服务的管理后台入口
 │   └── package.json
 ├── docker-compose.yml    # 本地开发编排
 └── .github/workflows/    # CI/CD 自动发布
@@ -753,16 +642,12 @@ simple-captcha/
 
 ```bash
 cd backend
-./run-dev.sh               # 等价于 make dev
-# 验证：curl http://localhost:3321/health
+./run-dev.sh               # 等价于 make dev；验证：curl http://localhost:3321/health
 ```
 
-脚本按优先级加载三层配置：命令行变量（如 `PORT=4000 ./run-dev.sh`）> `.env`（个人覆盖，不入库）> `.env.development`（仓库默认：本机 Redis、本地放开跨域等）。
-
-首次启动会在终端打印管理员初始密码（用户名 `admin`），凭据保存在 `backend/data/`，之后重启不再生成；忘了就执行 `./run-dev.sh reset-admin-password`。
-
-`go run` 编译时内嵌的是 `backend/console/dist` 里现有的产物：没有构建过时，`http://localhost:3321/console/` 只显示构建提示。
-需要在本地验证内嵌效果时先执行 `make console`（即 `cd sdk && pnpm build:console`）再重启后端；日常改界面直接用下面的演示站，保存即热更新。
+- 配置按优先级加载：命令行变量（如 `PORT=4000 ./run-dev.sh`）> `.env`（个人覆盖，不入库）> `.env.development`（仓库默认）。
+- 首次启动在终端打印管理员初始密码，凭据保存在 `backend/data/`；遗失执行 `./run-dev.sh reset-admin-password`。
+- `/console/` 内嵌的是 `backend/console/dist` 里现有的产物，没构建过时只显示构建提示；需要时先 `make console`（即 `cd sdk && pnpm build:console`）再重启后端。
 
 用 compose 跑生产形态：
 
@@ -772,23 +657,7 @@ docker compose up -d
 docker compose logs backend | grep -A6 管理后台初始密码
 ```
 
-### 启动前端演示站
-
-演示站包含两个页面：「接入文档」渲染本 README 的接入章节并提供五种题型的在线体验；「控制台」是用行为验证码保护的登录页，登录后可管理背景图、接入应用与管理员密码。
-
-```bash
-# 后端（位于 backend/）
-./run-dev.sh
-
-# 前端（位于 sdk/）
-pnpm install
-pnpm start
-# 控制台 http://localhost:8000 ，用户名 admin，初始密码见后端终端输出（首次登录后需修改）
-# 接入文档 http://localhost:8000/#/docs
-# 管理后台独立入口 http://localhost:8000/console/（与内嵌进服务的页面同一份代码）
-```
-
-演示站默认请求 `http://127.0.0.1:3321`，如需指向其他地址，复制 `sdk/playground/.env.example` 为 `.env` 并修改 `VITE_API_BASE`。
+SDK 的开发、构建与测试命令见 [`sdk/README.md`](sdk/README.md#本地开发)。
 
 ---
 

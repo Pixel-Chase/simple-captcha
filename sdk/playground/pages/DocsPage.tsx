@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DEMO_ID, DOC_ANCHOR_IDS, DOC_GROUPS, README_URL, docsHash } from '../docs/content';
-import { LiveDemo } from '../docs/LiveDemo';
+import { DOC_ANCHOR_IDS, DOC_GROUPS, README_URL, docsHash } from '../docs/content';
 
 interface DocsPageProps {
   /** hash 路由 #/docs/<anchor> 中的锚点，为空时停留在当前位置 */
@@ -92,7 +91,6 @@ export function DocsPage({ anchor }: DocsPageProps) {
   return (
     <div className="docs">
       <aside className="docs__nav" aria-label="文档目录">
-        {navLink(DEMO_ID, '在线体验')}
         {DOC_GROUPS.map((group) => (
           <div key={group.title} className="docs__group">
             <div className="docs__group-title">{group.title}</div>
@@ -125,8 +123,6 @@ export function DocsPage({ anchor }: DocsPageProps) {
             ，与 GitHub 上完全一致；修订文档请直接改 README。
           </p>
         </header>
-
-        <LiveDemo />
 
         {ALL_SECTIONS.map((section) => (
           <article

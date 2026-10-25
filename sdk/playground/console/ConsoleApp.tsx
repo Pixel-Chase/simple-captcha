@@ -19,7 +19,7 @@ export function ConsoleApp() {
       api={{ basePath: API_BASE, prefix: API_PREFIX }}
       locale={{ buttonText: '点击完成验证', userCancel: '你已取消本次验证' }}
     >
-      <div className="app">
+      <div className={auth.status === 'anonymous' ? 'app app--home' : 'app'}>
         <header className="topbar">
           <div className="topbar__brand">
             <span className="topbar__logo" aria-hidden="true" />

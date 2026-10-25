@@ -30,6 +30,9 @@ export default function App() {
   const route = parseRoute(useLocationHash());
   const { auth, handleSession, handleLogout, handleSessionExpired } = useConsoleAuth();
 
+  // 未登录的控制台首页是暗色展台，顶栏与页脚随之切换
+  const home = route.name === 'console' && auth.status === 'anonymous';
+
   const tabClass = (name: Route['name']) =>
     route.name === name ? 'topbar__tab topbar__tab--active' : 'topbar__tab';
 
@@ -38,7 +41,7 @@ export default function App() {
       api={{ basePath: API_BASE, prefix: API_PREFIX }}
       locale={{ buttonText: '点击完成验证', userCancel: '你已取消本次验证' }}
     >
-      <div className="app">
+      <div className={home ? 'app app--home' : 'app'}>
         <header className="topbar">
           <div className="topbar__brand">
             <span className="topbar__logo" aria-hidden="true" />

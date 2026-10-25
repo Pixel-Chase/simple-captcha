@@ -41,7 +41,6 @@ sdk/node_modules
 sdk/dist
 sdk/playground-dist
 .playwright-mcp
-sdk/stitch
 
 # 管理后台数据（管理员凭据、接入应用）
 backend/data/
