@@ -106,7 +106,7 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
     >
       <CardHeader
         icon="move"
-        title={localConfig.title || locale.regionTitle}
+        title={locale.regionTitle}
         subtitle={locale.regionSubtitle}
         tag={locale.regionTag}
         tagTone="success"
@@ -186,7 +186,7 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
           {locale.regionReset}
         </button>
       </div>
-      <SecureNote>{locale.poweredBy}</SecureNote>
+      <SecureNote>{locale.regionNote}</SecureNote>
     </div>
   );
 });

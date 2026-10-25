@@ -6,9 +6,6 @@ export interface ClickConfig {
   verticalPadding?: number;
   horizontalPadding?: number;
   showTheme?: boolean;
-  title?: string;
-  buttonText?: string;
-  iconSize?: number;
   dotSize?: number;
 }
 
@@ -20,7 +17,6 @@ export const defaultClickConfig = (): ClickConfig => ({
   verticalPadding: 20,
   horizontalPadding: 20,
   showTheme: true,
-  iconSize: 22,
   dotSize: 28,
 });
 

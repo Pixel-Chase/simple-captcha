@@ -237,20 +237,20 @@ pnpm add @aetherlib/g-captcha   # 或 npm install / yarn add
 
 ### 使用
 
-`CaptchaProvider` 提供全局的 `api / locale / theme / zIndex`，`Captcha` 渲染单个实例，`useCaptcha()` 按次触发验证并返回需要渲染的 `holder`：
+`CaptchaProvider` 提供全局的 `api / locale / theme / zIndex / telemetry`，`Captcha` 渲染单个实例，`useCaptcha()` 按次触发验证并返回需要渲染的 `holder`：
 
 ```tsx
 import { useRef } from 'react';
-import { Captcha, CaptchaProvider, useCaptcha } from '@aetherlib/g-captcha';
+import { Captcha, CaptchaError, CaptchaProvider, useCaptcha } from '@aetherlib/g-captcha';
+import type { CaptchaRef } from '@aetherlib/g-captcha';
 
 function App() {
-  const ref = useRef();
+  const ref = useRef<CaptchaRef>(null);
   const { verify, holder } = useCaptcha();
 
   return (
     <CaptchaProvider
       api={{ basePath: 'https://captcha.yourdomain.com' }}
-      locale={{ buttonText: '点击验证' }}
       theme={{ primaryColor: '#111827', borderRadius: 12 }}
     >
       {holder}
@@ -258,13 +258,11 @@ function App() {
       <Captcha
         type="auto"
         ref={ref}
-        onSuccess={(data) => {
-          console.log('验证成功', data);
-          submitForm(data.second_key);
-        }}
-        onFail={(msg) => console.log('验证失败', msg)}
+        onSuccess={(data) => submitForm(data.second_key)}
+        onFail={(error) => console.log('验证失败', error.code, error.message)}
+        onCancel={() => console.log('用户关闭了弹窗')}
       >
-        <button onClick={() => ref.current?.verify()}>
+        <button onClick={() => ref.current?.open()}>
           组件模式
         </button>
       </Captcha>
@@ -273,9 +271,10 @@ function App() {
         onClick={async () => {
           try {
             const data = await verify({ type: 'auto' });
-            console.log('验证成功', data);
+            submitForm(data.second_key);
           } catch (e) {
-            console.log('验证失败或取消', e);
+            if (e instanceof CaptchaError && e.code === 'CANCELLED') return;
+            console.log('验证失败', e);
           }
         }}
       >
@@ -300,20 +299,28 @@ function App() {
 | `zIndex` | `number` | `9999` | 弹窗层级 |
 | `telemetry` | `'off' \| 'basic' \| 'full'` | `'full'` | 行为/环境采集级别，见[安全机制](#安全机制) |
 
+`<Captcha>` 和 `useCaptcha()` 不单独接收这些配置，统一从最近的 `CaptchaProvider` 读取。某一块区域需要不同配置时，嵌套一层 `CaptchaProvider`，未指定的字段沿用外层：
+
+```tsx
+<CaptchaProvider api={{ basePath: 'https://captcha.yourdomain.com' }}>
+  <CaptchaProvider theme={{ primaryColor: '#059669' }}>
+    <PaymentForm />
+  </CaptchaProvider>
+</CaptchaProvider>
+```
+
 ### `<Captcha>` Props
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `type` | `CaptchaType` | `'auto'` | 验证码类型，`auto` 由服务端按风险等级选择题型（需要后端 ≥ 1.3） |
-| `telemetry` | `TelemetryLevel` | — | 当前实例的采集级别覆盖 |
-| `onSuccess` | `(data) => void` | — | 验证成功回调，`data` 包含 `second_key` |
-| `onFail` | `(msg) => void` | — | 验证失败回调 |
-| `onCancel` | `() => void` | — | 用户取消回调 |
-| `api` | `ApiConfig` | — | 当前实例的接口配置覆盖 |
-| `locale` | `LocaleTexts` | — | 当前实例的文案覆盖 |
-| `theme` | `ThemeTokens` | — | 当前实例的主题覆盖 |
-| `config` | `CaptchaConfig` | — | 当前实例的验证码配置 |
-| `ref` | `Ref` | — | 通过 `ref.current.verify()` 触发验证 |
+| `maxAttempts` | `number` | `5` | 连续答错的次数上限，达到后关闭弹窗并以 `MAX_ATTEMPTS` 触发 `onFail` |
+| `width` | `number` | `300` | 题图渲染宽度（CSS 像素），高度按 3:2 推算 |
+| `onSuccess` | `(data: CaptchaVerifySuccessData) => void` | — | 验证成功回调，`data.second_key` 用于[二次验证](#二次验证s2s) |
+| `onFail` | `(error: CaptchaError) => void` | — | 题目加载失败或答错次数用完时触发，见[错误处理](#错误处理) |
+| `onCancel` | `() => void` | — | 用户关闭弹窗时触发，此时不会再触发 `onFail` |
+| `children` | `ReactNode` | — | 原样渲染，通常放触发按钮 |
+| `ref` | `Ref<CaptchaRef>` | — | `ref.current.open()` 打开弹窗并加载题目；结果只经由上面三个回调通知 |
 
 ### `LocaleTexts` 文案配置
 
@@ -322,24 +329,20 @@ function App() {
 ```tsx
 <CaptchaProvider
   locale={{
-    userCancel: 'User Cancelled',
-    loading: 'Loading...',
     clickTitle: 'Please click in order',
     slideTitle: 'Drag the slider to complete',
     confirmButton: 'Confirm',
-    buttonText: 'Click to verify',
+    successText: 'Verified',
   }}
 >
   <App />
 </CaptchaProvider>
 ```
 
-`{n}`、`{p}`、`{s}` 为运行时替换的占位符；`*Tag`、`poweredBy`、`slideNote`、`rotateNote` 设为空字符串即隐藏。
+`{n}`、`{p}`、`{s}` 为运行时替换的占位符；`*Tag`、`regionNote`、`slideNote`、`rotateNote` 设为空字符串即隐藏。
 
 | Key | 默认值 | 说明 |
 |-----|--------|------|
-| `userCancel` | `用户取消` | 用户取消时的提示 |
-| `loading` | `加载中...` | 加载状态 |
 | `clickTitle` | `安全点选验证` | 点选标题 |
 | `slideTitle` | `拼图验证` | 滑块拼图标题 |
 | `regionTitle` | `空间拼图` | 滑动区域标题 |
@@ -353,7 +356,6 @@ function App() {
 | `regionTag` | `免滑条` | 滑动区域标题右侧的小标签 |
 | `rotateTag` | `角度矫正` | 旋转标题右侧的小标签 |
 | `confirmButton` | `确认点选` | 点选确认按钮 |
-| `buttonText` | `点击按键进行验证` | 触发验证按钮的默认文案 |
 | `clickHint` | `请依序点击：` | 点选提示条 |
 | `clickMeta` | `已依序选择 {n} 处` | 点选计数，`{n}` 为已点击数量 |
 | `clickClear` | `重选` | 点选清除按钮 |
@@ -373,7 +375,7 @@ function App() {
 | `failBanner` | `正在重新生成验证码…` | 校验未通过时图片上的提示条 |
 | `trackSuccess` | `验证已通过` | 校验通过时轨道内的文案 |
 | `trackFail` | `验证未通过，请重新拖动` | 校验未通过时轨道内的文案 |
-| `poweredBy` | `二维拖拽轨迹与运动特征分析` | 滑动区域底部的安全提示 |
+| `regionNote` | `二维拖拽轨迹与运动特征分析` | 滑动区域底部的安全提示 |
 | `slideNote` | `多维速度曲线与轨迹时序分析` | 滑块拼图底部的安全提示 |
 | `rotateNote` | `拖动速度与微抖动行为分析` | 旋转底部的安全提示 |
 | `refreshLabel` | `刷新` | 刷新按钮的无障碍标签 |
@@ -399,8 +401,21 @@ function App() {
 
 | 属性 | 类型 | 说明 |
 |------|------|------|
-| `verify` | `(options?: CaptchaVerifyOptions) => Promise<any>` | 按次触发验证，可覆盖 `type / api / locale / theme / config` |
+| `verify` | `(options?: CaptchaVerifyOptions) => Promise<CaptchaVerifySuccessData>` | 按次触发验证，`options` 与 `<Captcha>` Props 相同（不含 `children`）；成功时 resolve，取消或失败时以 `CaptchaError` reject |
 | `holder` | `ReactNode` | 必须渲染在当前 React 树中的承载节点 |
+
+### 错误处理
+
+验证没有成功时，SDK 统一给出 `CaptchaError`（继承自 `Error`），按 `code` 区分原因，不需要比对文案：
+
+| `code` | 触发场景 | 通知方式 |
+|------|------|------|
+| `CANCELLED` | 用户关闭弹窗 | 组件模式只触发 `onCancel`；Hook 模式同时以此 reject |
+| `LOAD_FAILED` | 题目获取失败：网络异常、限流或服务端拒绝 | `onFail`，Hook 模式同时 reject |
+| `MAX_ATTEMPTS` | 连续答错达到 `maxAttempts`，弹窗已关闭 | `onFail`，Hook 模式同时 reject |
+| `ABORTED` | 上一次 `verify()` 被新的调用替换，或组件已卸载 | 仅 Hook 模式 reject |
+
+`error.message` 是可直接展示的中文说明；`LOAD_FAILED` 与 `MAX_ATTEMPTS` 还带有 `error.response`，即服务端返回的 `{ code, error }`。
 
 ---
 

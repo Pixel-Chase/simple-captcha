@@ -1,4 +1,5 @@
-import type { ReactNode, CSSProperties } from 'react';
+import type { ReactNode } from 'react';
+import type { CaptchaError } from './CaptchaError';
 
 export type CaptchaType =
   | 'auto'
@@ -20,12 +21,9 @@ export type ResolvedCaptchaType = Exclude<CaptchaType, 'auto'>;
 export type TelemetryLevel = 'off' | 'basic' | 'full';
 
 export interface LocaleTexts {
-  userCancel?: string;
-  loading?: string;
   clickTitle?: string;
   slideTitle?: string;
   confirmButton?: string;
-  buttonText?: string;
   /** 滑动区域 / 旋转题型的标题（点选沿用 clickTitle，滑块拼图沿用 slideTitle） */
   regionTitle?: string;
   rotateTitle?: string;
@@ -64,8 +62,8 @@ export interface LocaleTexts {
   failBanner?: string;
   trackSuccess?: string;
   trackFail?: string;
-  /** 卡片底部的安全提示（poweredBy 用于滑动区域），设为空字符串可隐藏 */
-  poweredBy?: string;
+  /** 卡片底部的安全提示，设为空字符串可隐藏 */
+  regionNote?: string;
   slideNote?: string;
   rotateNote?: string;
   refreshLabel?: string;
@@ -178,55 +176,24 @@ export interface CaptchaStateData {
   valid: boolean;
 }
 
-export interface CaptchaConfig {
-  width?: number;
-  height?: number;
-  /** 旋转验证码内圆区域尺寸 */
-  size?: number;
-  thumbWidth?: number;
-  thumbHeight?: number;
-  verticalPadding?: number;
-  horizontalPadding?: number;
-  showTheme?: boolean;
-  title?: string;
-  iconSize?: number;
-  scope?: boolean;
-  buttonText?: string;
-  dotSize?: number;
-}
-
-export interface CaptchaGlobalConfig {
-  locale?: LocaleTexts;
-  theme?: ThemeTokens;
-  api?: ApiConfig;
-  zIndex?: number;
-  telemetry?: TelemetryLevel;
-}
-
-export interface CaptchaInstanceOptions {
+export interface CaptchaProps {
+  /** 题型，auto 由服务端按风险等级选择 */
   type?: CaptchaType;
-  config?: CaptchaConfig;
-  className?: string;
-  style?: CSSProperties;
-  locale?: LocaleTexts;
-  theme?: ThemeTokens;
-  api?: ApiConfig;
-  telemetry?: TelemetryLevel;
+  /** 连续答错多少次后关闭弹窗，并以 MAX_ATTEMPTS 触发 onFail */
+  maxAttempts?: number;
+  /** 题图渲染宽度（CSS 像素），高度按 3:2 推算 */
+  width?: number;
+  onSuccess?: (data: CaptchaVerifySuccessData) => void;
+  /** 题目加载失败或答错次数用完时触发；用户关闭弹窗只触发 onCancel */
+  onFail?: (error: CaptchaError) => void;
+  onCancel?: () => void;
+  children?: ReactNode;
 }
 
-export interface CaptchaVerifyOptions extends CaptchaInstanceOptions {
-  onCancel?: () => void;
-  onFail?: (error: CaptchaErrorResponse | string) => void;
-  onSuccess?: (data: CaptchaVerifySuccessData) => void;
-  maxRetryCount?: number;
-}
+/** useCaptcha().verify 的单次参数 */
+export type CaptchaVerifyOptions = Omit<CaptchaProps, 'children'>;
 
 export interface CaptchaRef {
-  verify: () => Promise<void>;
-}
-
-export interface CaptchaProps extends CaptchaVerifyOptions {
-  children?: ReactNode;
-  /** 弹窗彻底关闭后触发（含校验结果画面的展示时间），useCaptcha 据此延后卸载 */
-  onClosed?: () => void;
+  /** 打开弹窗并加载题目，加载结束后 resolve；结果只经由 onSuccess / onFail / onCancel 通知 */
+  open: () => Promise<void>;
 }

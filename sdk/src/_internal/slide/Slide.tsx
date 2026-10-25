@@ -109,7 +109,7 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
     >
       <CardHeader
         icon="puzzle"
-        title={localConfig.title || locale.slideTitle}
+        title={locale.slideTitle}
         subtitle={locale.slideSubtitle}
         tag={locale.slideTag}
         status={status}

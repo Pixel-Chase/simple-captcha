@@ -35,14 +35,6 @@ export function isCaptchaErrorResponse(value: unknown): value is CaptchaErrorRes
   );
 }
 
-export function getCaptchaErrorMessage(error: CaptchaErrorResponse | string): string {
-  if (typeof error === 'string') {
-    return error;
-  }
-
-  return error.error;
-}
-
 /** 取整并裁剪到 1-3 的设备像素比，服务端据此选择出图倍率 */
 export function getDevicePixelRatio(): number {
   if (typeof window === 'undefined') {

@@ -1,0 +1,14 @@
+{
+  "assets": 60,
+  "generated": {
+    "click-dark": 60,
+    "click-light": 60,
+    "click-shape": 60,
+    "region": 60,
+    "rotate": 60,
+    "slide": 60
+  },
+  "scale": 3,
+  "variantsPerSize": 120,
+  "zoomPercent": 125
+}

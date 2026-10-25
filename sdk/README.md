@@ -13,19 +13,18 @@ import { useRef } from 'react';
 import { Captcha, CaptchaProvider, useCaptcha } from '@aetherlib/g-captcha';
 
 export default () => {
-  const ref = useRef();
+  const ref = useRef(null);
   const { verify, holder } = useCaptcha();
 
   return (
     <CaptchaProvider
       api={{ basePath: 'http://127.0.0.1:3321' }}
-      locale={{ buttonText: '点击验证' }}
       theme={{ primaryColor: '#111827', borderRadius: 12 }}
     >
       {holder}
 
       <Captcha ref={ref} type="auto" onSuccess={(data) => console.log(data)}>
-        <button onClick={() => ref.current?.verify()}>组件模式</button>
+        <button onClick={() => ref.current?.open()}>组件模式</button>
       </Captcha>
 
       <button
@@ -51,6 +50,8 @@ export default () => {
 | zIndex | 弹层层级 | `number` | `9999` |
 | telemetry | 行为/环境采集级别：`off` 不采集，`basic` 轨迹 + 基础环境，`full` 额外采集 WebGL 渲染器与指纹哈希 | `TelemetryLevel` | `full` |
 
+`Captcha` 与 `useCaptcha()` 统一从最近的 `CaptchaProvider` 读取以上配置；局部需要不同配置时嵌套一层 `CaptchaProvider`，未指定的字段沿用外层。
+
 `ApiConfig` 支持以下配置：
 
 | 属性 | 说明 | 类型 | 默认值 |
@@ -70,18 +71,15 @@ SDK 会自动完成以下工作，无需业务侧干预：
 
 | 属性 | 说明 | 类型 | 默认值 |
 |---|---|---|---|
-| onFail | 校验失败回调 | `(msg: string) => void` | - |
-| onSuccess | 校验成功回调 | `(data: any) => void` | - |
-| onCancel | 用户主动关闭回调 | `() => void` | - |
-| maxRetryCount | 单次验证最多允许的校验失败次数，达到后才触发 `onFail` | `number` | `5` |
 | type | 验证码类型，支持 `auto`、`click-text`、`click-shape`、`slide-text`、`slide-region`、`rotate`；`auto` 由服务端按客户端风险等级选择题型 | `CaptchaType` | `auto` |
-| telemetry | 当前实例的采集级别覆盖 | `TelemetryLevel` | - |
-| api | 当前实例的接口配置覆盖 | `ApiConfig` | - |
-| locale | 当前实例的文案覆盖 | `LocaleTexts` | - |
-| theme | 当前实例的主题覆盖 | `ThemeTokens` | - |
-| config | 当前实例的验证码配置 | `CaptchaConfig` | - |
-| className | 容器类名 | `string` | - |
-| style | 容器样式 | `CSSProperties` | - |
+| maxAttempts | 连续答错的次数上限，达到后关闭弹窗并以 `MAX_ATTEMPTS` 触发 `onFail` | `number` | `5` |
+| width | 题图渲染宽度（CSS 像素），高度按 3:2 推算 | `number` | `300` |
+| onSuccess | 校验成功回调，`data.second_key` 用于二次验证 | `(data: CaptchaVerifySuccessData) => void` | - |
+| onFail | 题目加载失败（`LOAD_FAILED`）或答错次数用完（`MAX_ATTEMPTS`）时触发 | `(error: CaptchaError) => void` | - |
+| onCancel | 用户关闭弹窗时触发，此时不会再触发 `onFail` | `() => void` | - |
+| children | 原样渲染，通常放触发按钮 | `ReactNode` | - |
+
+通过 `ref.current.open()` 打开弹窗并加载题目，结果只经由上面三个回调通知。
 
 ## useCaptcha
 
@@ -89,11 +87,11 @@ SDK 会自动完成以下工作，无需业务侧干预：
 
 | 字段 | 说明 | 类型 |
 |---|---|---|
-| verify | 按次触发验证码，可覆盖当前调用的 `type/config/api/locale/theme` 与回调 | `(options?: CaptchaVerifyOptions) => Promise<any>` |
+| verify | 按次触发验证码，`options` 与 `Captcha` 属性相同（不含 `children`）；成功时 resolve，取消或失败时以 `CaptchaError` reject | `(options?: CaptchaVerifyOptions) => Promise<CaptchaVerifySuccessData>` |
 | holder | 必须渲染在当前 React 树中的承载节点 | `ReactNode` |
 
 ```jsx
-import { CaptchaProvider, useCaptcha } from '@aetherlib/g-captcha';
+import { CaptchaError, CaptchaProvider, useCaptcha } from '@aetherlib/g-captcha';
 
 export default () => {
   const { verify, holder } = useCaptcha();
@@ -103,13 +101,13 @@ export default () => {
       {holder}
       <button
         onClick={async () => {
-          const data = await verify({
-            type: 'auto',
-            maxRetryCount: 5,
-            locale: { userCancel: 'Canceled by user' },
-            theme: { primaryColor: '#111827' },
-          });
-          console.log(data);
+          try {
+            const data = await verify({ type: 'auto', maxAttempts: 3 });
+            console.log(data.second_key);
+          } catch (e) {
+            if (e instanceof CaptchaError && e.code === 'CANCELLED') return;
+            console.log(e.code, e.message);
+          }
         }}
       >
         verify
@@ -119,22 +117,18 @@ export default () => {
 };
 ```
 
-## CaptchaConfig
+## CaptchaError
 
-| 属性 | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| width | 宽度 | `number` | - |
-| height | 高度 | `number` | - |
-| thumbWidth | 缩略图宽度 | `number` | - |
-| thumbHeight | 缩略图高度 | `number` | - |
-| verticalPadding | 垂直方向内边距 | `number` | - |
-| horizontalPadding | 水平方向内边距 | `number` | - |
-| showTheme | 是否显示主题外框 | `boolean` | - |
-| title | 标题 | `string` | - |
-| iconSize | 图标大小 | `number` | - |
-| scope | 滑动和旋转生效范围 | `number` | - |
-| buttonText | 按钮文字 | `string` | - |
-| dotSize | 点选模式区域大小 | `number` | - |
+验证没有成功时统一给出 `CaptchaError`（继承自 `Error`），按 `code` 区分原因：
+
+| code | 触发场景 | 通知方式 |
+|---|---|---|
+| `CANCELLED` | 用户关闭弹窗 | 组件模式只触发 `onCancel`；Hook 模式同时以此 reject |
+| `LOAD_FAILED` | 题目获取失败：网络异常、限流或服务端拒绝 | `onFail`，Hook 模式同时 reject |
+| `MAX_ATTEMPTS` | 连续答错达到 `maxAttempts`，弹窗已关闭 | `onFail`，Hook 模式同时 reject |
+| `ABORTED` | 上一次 `verify()` 被新的调用替换，或组件已卸载 | 仅 Hook 模式 reject |
+
+`error.message` 是可直接展示的中文说明；`LOAD_FAILED` 与 `MAX_ATTEMPTS` 还带有 `error.response`，即服务端返回的 `{ code, error }`。
 
 ## LocaleTexts
 
@@ -153,7 +147,6 @@ export default () => {
 | regionTag | 滑动区域标题右侧的小标签，默认 `免滑条` |
 | rotateTag | 旋转标题右侧的小标签，默认 `角度矫正` |
 | confirmButton | 点选确认按钮，默认 `确认点选` |
-| buttonText | 触发验证按钮默认文案，默认 `点击按键进行验证` |
 | clickHint | 点选提示条文案，默认 `请依序点击：` |
 | clickMeta | 点选计数，`{n}` 为已点击数量，默认 `已依序选择 {n} 处` |
 | clickClear | 点选清除按钮，默认 `重选` |
@@ -173,13 +166,11 @@ export default () => {
 | failBanner | 校验未通过时图片上的提示条，默认 `正在重新生成验证码…` |
 | trackSuccess | 校验通过时轨道内的文案，默认 `验证已通过` |
 | trackFail | 校验未通过时轨道内的文案，默认 `验证未通过，请重新拖动` |
-| poweredBy | 滑动区域底部的安全提示，设为空字符串可隐藏，默认 `二维拖拽轨迹与运动特征分析` |
+| regionNote | 滑动区域底部的安全提示，设为空字符串可隐藏，默认 `二维拖拽轨迹与运动特征分析` |
 | slideNote | 滑块拼图底部的安全提示，设为空字符串可隐藏，默认 `多维速度曲线与轨迹时序分析` |
 | rotateNote | 旋转底部的安全提示，设为空字符串可隐藏，默认 `拖动速度与微抖动行为分析` |
 | refreshLabel | 刷新按钮的无障碍标签，默认 `刷新` |
 | closeLabel | 关闭按钮的无障碍标签，默认 `关闭` |
-| userCancel | 用户取消提示，默认 `用户取消` |
-| loading | 加载中文案，默认 `加载中...` |
 
 ## ThemeTokens
 

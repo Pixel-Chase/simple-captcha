@@ -81,7 +81,7 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
     >
       <CardHeader
         icon="fingerprint"
-        title={localConfig.title || locale.clickTitle}
+        title={locale.clickTitle}
         subtitle={locale.clickSubtitle}
         tag={locale.clickTag}
         status={status}
@@ -165,7 +165,7 @@ const Click = forwardRef<ClickRef, ClickProps>((props, ref) => {
           </>
         ) : (
           <>
-            <span>{localConfig.buttonText || locale.confirmButton}</span>
+            <span>{locale.confirmButton}</span>
             <UiArrowIcon width={13} height={13} />
           </>
         )}

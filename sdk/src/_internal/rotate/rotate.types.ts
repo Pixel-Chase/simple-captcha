@@ -5,8 +5,6 @@ export interface RotateConfig {
   verticalPadding?: number;
   horizontalPadding?: number;
   showTheme?: boolean;
-  title?: string;
-  iconSize?: number;
   scope?: boolean;
 }
 
@@ -17,7 +15,6 @@ export const defaultRotateConfig = (): RotateConfig => ({
   verticalPadding: 20,
   horizontalPadding: 20,
   showTheme: true,
-  iconSize: 22,
   scope: true,
 });
 

@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { ForwardRefExoticComponent, RefAttributes } from 'react';
 import type {
   CaptchaEnv,
   CaptchaErrorResponse,
@@ -15,18 +16,19 @@ import { CaptchaStyle } from './CaptchaStyle';
 import { Click, Slide, SlideRegion, Rotate } from './_internal';
 import type { ClickDot, SlideRegionPoint, SlidePoint } from './_internal';
 import { collectEnv, solvePow, useBehaviorTrace } from './_internal/telemetry';
-import { getCaptchaErrorMessage, useCaptchaRequest } from './hooks';
-import { CaptchaProvider, useCaptchaConfig } from './CaptchaProvider';
+import { useCaptchaRequest } from './hooks';
+import { useCaptchaConfig } from './CaptchaProvider';
+import { CaptchaError } from './CaptchaError';
 import type { CaptchaStatus } from './_internal/shared/status.types';
 import type { ClickData } from './_internal/click/click.types';
 import type { RotateData } from './_internal/rotate/rotate.types';
 import type { SlideData } from './_internal/slide/slide.types';
 import type { SlideRegionData } from './_internal/slide-region/slide-region.types';
 
-const DEFAULT_MAX_RETRY_COUNT = 5;
-/** 与各验证模式默认配置一致的渲染尺寸（CSS 像素） */
+const DEFAULT_MAX_ATTEMPTS = 5;
+/** 与各验证模式默认配置一致的渲染宽度（CSS 像素），题图统一 3:2 */
 const DEFAULT_RENDER_WIDTH = 300;
-const DEFAULT_RENDER_HEIGHT = 200;
+const RENDER_ASPECT = 3 / 2;
 const DEFAULT_ROTATE_SIZE = 128;
 /** 校验结果画面的停留时长（毫秒） */
 const SUCCESS_HOLD_MS = 900;
@@ -37,39 +39,47 @@ interface Ratio {
   y: number;
 }
 
-const normalizeMaxRetryCount = (value?: number) => {
+const normalizeMaxAttempts = (value?: number) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return DEFAULT_MAX_RETRY_COUNT;
+    return DEFAULT_MAX_ATTEMPTS;
   }
 
-  return Math.max(0, Math.floor(value));
+  return Math.max(1, Math.floor(value));
 };
+
+const normalizeWidth = (value?: number) =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : DEFAULT_RENDER_WIDTH;
 
 /** 图像像素 → CSS 像素 */
 const toCss = (value: number, ratio: number) => Math.round(value / ratio);
 /** CSS 像素 → 图像像素 */
 const toImage = (value: number, ratio: number) => Math.round(value * ratio);
 
-const CaptchaInternal = forwardRef<
-  CaptchaRef,
-  Omit<CaptchaProps, 'locale' | 'theme' | 'api' | 'telemetry'>
->((props, ref) => {
+export interface CaptchaInternalProps extends CaptchaProps {
+  /** 弹窗彻底关闭后触发（含校验结果画面的展示时间），useCaptcha 据此延后卸载 holder */
+  onClosed?: () => void;
+}
+
+export const CaptchaInternal = forwardRef<CaptchaRef, CaptchaInternalProps>((props, ref) => {
   const {
     onCancel = noop,
     onSuccess = noop as (data: CaptchaVerifySuccessData) => void,
-    onFail = noop as (error: CaptchaErrorResponse | string) => void,
+    onFail = noop as (error: CaptchaError) => void,
     onClosed = noop,
-    className,
-    style,
-    config,
     type: typeProp = 'auto',
-    maxRetryCount: maxRetryCountProp,
+    maxAttempts: maxAttemptsProp,
+    width: widthProp,
     children,
   } = props;
   const [visible, setVisible] = useState<boolean>(false);
-  const { locale, telemetry } = useCaptchaConfig();
+  const { telemetry } = useCaptchaConfig();
 
-  const maxRetryCount = normalizeMaxRetryCount(maxRetryCountProp);
+  const maxAttempts = normalizeMaxAttempts(maxAttemptsProp);
+  const width = normalizeWidth(widthProp);
+  const height = Math.round(width / RENDER_ASPECT);
+  const config = useMemo(() => ({ width, height }), [width, height]);
 
   // auto 由服务端按风险等级解析为具体题型，响应中的 type 即实际题型
   const { get, check, data } = useCaptchaRequest({ type: typeProp, mode: 'dark' });
@@ -147,13 +157,10 @@ const CaptchaInternal = forwardRef<
       return { x: 1, y: 1 };
     }
     if (resolvedType === 'rotate') {
-      const size = config?.size || DEFAULT_ROTATE_SIZE;
-      return { x: data.imageWidth / size, y: data.imageWidth / size };
+      return { x: data.imageWidth / DEFAULT_ROTATE_SIZE, y: data.imageWidth / DEFAULT_ROTATE_SIZE };
     }
-    const width = config?.width || DEFAULT_RENDER_WIDTH;
-    const height = config?.height || DEFAULT_RENDER_HEIGHT;
     return { x: data.imageWidth / width, y: data.imageHeight / height };
-  }, [data, resolvedType, config?.width, config?.height, config?.size]);
+  }, [data, resolvedType, width, height]);
 
   const clickData = useMemo<ClickData | null>(() => {
     if (!data?.image || !data.thumb) {
@@ -216,15 +223,20 @@ const CaptchaInternal = forwardRef<
 
     clearHoldTimer();
     sessionRef.current += 1;
+    const session = sessionRef.current;
     setStatus('idle');
     setVisible(true);
     try {
       await get();
     } catch (error) {
+      // 加载期间用户已关闭弹窗，取消已经通知过，不再补报失败
+      if (session !== sessionRef.current) {
+        return;
+      }
+      const response = error as CaptchaErrorResponse;
       setVisible(false);
-      onFail(error as CaptchaErrorResponse | string);
+      onFail(new CaptchaError('LOAD_FAILED', response.error, response));
       onClosed();
-      throw error;
     }
   };
 
@@ -242,7 +254,6 @@ const CaptchaInternal = forwardRef<
     clearHoldTimer();
     sessionRef.current += 1;
     setVisible(false);
-    onFail(locale.userCancel!);
     onCancel();
     onClosed();
   };
@@ -266,19 +277,14 @@ const CaptchaInternal = forwardRef<
       hideAfter(SUCCESS_HOLD_MS);
       onSuccess(result);
     } catch (error) {
-      const normalizedError = error as CaptchaErrorResponse | string;
-      const errorMessage = getCaptchaErrorMessage(normalizedError);
-      if (errorMessage === locale.userCancel) {
-        onFail(normalizedError);
-        return;
-      }
-
       failCountRef.current += 1;
       setStatus('fail');
-      if (failCountRef.current >= maxRetryCount) {
+      if (failCountRef.current >= maxAttempts) {
         failCountRef.current = 0;
         hideAfter(FAIL_HOLD_MS);
-        onFail(normalizedError);
+        onFail(
+          new CaptchaError('MAX_ATTEMPTS', '验证未通过次数已达上限', error as CaptchaErrorResponse),
+        );
         return;
       }
 
@@ -287,7 +293,7 @@ const CaptchaInternal = forwardRef<
       if (session !== sessionRef.current) {
         return;
       }
-      await refresh().catch(noop);
+      await refresh();
     }
   };
 
@@ -306,7 +312,7 @@ const CaptchaInternal = forwardRef<
     await confirm({ angle: `${angle}` });
   };
 
-  useImperativeHandle(ref, () => ({ verify: start }), [start]);
+  useImperativeHandle(ref, () => ({ open: start }), [start]);
 
   const events = {
     close,
@@ -314,7 +320,8 @@ const CaptchaInternal = forwardRef<
   };
 
   return (
-    <div className={className} style={{ position: 'relative', display: 'inline-block', ...style }}>
+    <>
+      <CaptchaStyle />
       <Popup visible={visible}>
         <div ref={attach}>
           {clickData && ['click-text', 'click-shape'].includes(resolvedType) && (
@@ -360,19 +367,12 @@ const CaptchaInternal = forwardRef<
         </div>
       </Popup>
       {children}
-    </div>
+    </>
   );
 });
 
-const Captcha = forwardRef<CaptchaRef, CaptchaProps>((props, ref) => {
-  const { locale, theme, api, telemetry, ...restProps } = props;
-
-  return (
-    <CaptchaProvider locale={locale} theme={theme} api={api} telemetry={telemetry}>
-      <CaptchaStyle />
-      <CaptchaInternal {...restProps} ref={ref} />
-    </CaptchaProvider>
-  );
-});
+/** 对外类型不含 onClosed，它只供 useCaptcha 使用 */
+const Captcha: ForwardRefExoticComponent<CaptchaProps & RefAttributes<CaptchaRef>> =
+  CaptchaInternal;
 
 export default Captcha;

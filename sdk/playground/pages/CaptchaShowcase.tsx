@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { useCaptcha } from '@aetherlib/g-captcha';
+import { CaptchaError, useCaptcha } from '@aetherlib/g-captcha';
 import type { CaptchaType } from '@aetherlib/g-captcha';
 import { getErrorMessage } from '../api';
 
@@ -29,19 +29,15 @@ export function CaptchaShowcase() {
       return;
     }
     setPending(type);
-    // 关闭弹窗时 SDK 先以 userCancel 文案 reject，再同步调用 onCancel，catch 执行时标记已经就位
-    let cancelled = false;
     let result: TryResult;
     try {
-      await verify({
-        type,
-        onCancel: () => {
-          cancelled = true;
-        },
-      });
+      await verify({ type });
       result = { tone: 'ok', text: '验证通过' };
     } catch (err) {
-      result = { tone: cancelled ? 'cancel' : 'fail', text: getErrorMessage(err, '验证未完成') };
+      result =
+        err instanceof CaptchaError && err.code === 'CANCELLED'
+          ? { tone: 'cancel', text: '你已取消本次验证' }
+          : { tone: 'fail', text: getErrorMessage(err, '验证未完成') };
     }
     setResults((prev) => ({ ...prev, [tileId]: result }));
     setPending(null);

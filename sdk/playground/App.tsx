@@ -37,10 +37,7 @@ export default function App() {
     route.name === name ? 'topbar__tab topbar__tab--active' : 'topbar__tab';
 
   return (
-    <CaptchaProvider
-      api={{ basePath: API_BASE, prefix: API_PREFIX }}
-      locale={{ buttonText: '点击完成验证', userCancel: '你已取消本次验证' }}
-    >
+    <CaptchaProvider api={{ basePath: API_BASE, prefix: API_PREFIX }}>
       <div className={home ? 'app app--home' : 'app'}>
         <header className="topbar">
           <div className="topbar__brand">

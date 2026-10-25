@@ -1,12 +1,6 @@
 import { createContext, useContext, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type {
-  CaptchaGlobalConfig,
-  LocaleTexts,
-  ThemeTokens,
-  ApiConfig,
-  TelemetryLevel,
-} from './Captcha.types';
+import type { LocaleTexts, ThemeTokens, ApiConfig, TelemetryLevel } from './Captcha.types';
 
 export interface InternalConfig {
   locale: LocaleTexts;
@@ -17,8 +11,6 @@ export interface InternalConfig {
 }
 
 const defaultLocale: LocaleTexts = {
-  userCancel: '用户取消',
-  loading: '加载中...',
   clickTitle: '安全点选验证',
   slideTitle: '拼图验证',
   regionTitle: '空间拼图',
@@ -32,7 +24,6 @@ const defaultLocale: LocaleTexts = {
   regionTag: '免滑条',
   rotateTag: '角度矫正',
   confirmButton: '确认点选',
-  buttonText: '点击按键进行验证',
   clickHint: '请依序点击：',
   clickMeta: '已依序选择 {n} 处',
   clickClear: '重选',
@@ -52,7 +43,7 @@ const defaultLocale: LocaleTexts = {
   failBanner: '正在重新生成验证码…',
   trackSuccess: '验证已通过',
   trackFail: '验证未通过，请重新拖动',
-  poweredBy: '二维拖拽轨迹与运动特征分析',
+  regionNote: '二维拖拽轨迹与运动特征分析',
   slideNote: '多维速度曲线与轨迹时序分析',
   rotateNote: '拖动速度与微抖动行为分析',
   refreshLabel: '刷新',
@@ -77,7 +68,12 @@ const defaultConfig: InternalConfig = {
 
 const CaptchaConfigContext = createContext<InternalConfig>(defaultConfig);
 
-export interface CaptchaProviderProps extends CaptchaGlobalConfig {
+export interface CaptchaProviderProps {
+  locale?: LocaleTexts;
+  theme?: ThemeTokens;
+  api?: ApiConfig;
+  zIndex?: number;
+  telemetry?: TelemetryLevel;
   children: ReactNode;
 }
 

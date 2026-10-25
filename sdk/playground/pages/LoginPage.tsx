@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useCaptcha } from '@aetherlib/g-captcha';
+import { CaptchaError, useCaptcha } from '@aetherlib/g-captcha';
 import { adminApi, getErrorMessage } from '../api';
 import type { LoginResponse } from '../api';
 import { CaptchaShowcase } from './CaptchaShowcase';
@@ -81,7 +81,8 @@ function LoginForm({ onLogin }: LoginPageProps) {
       const result = await verify({ type: 'auto' });
       secondKey = result.second_key;
     } catch (err) {
-      setError(getErrorMessage(err, '验证未完成'));
+      const cancelled = err instanceof CaptchaError && err.code === 'CANCELLED';
+      setError(cancelled ? '你已取消本次验证' : getErrorMessage(err, '验证未完成'));
       setStage('idle');
       return;
     }

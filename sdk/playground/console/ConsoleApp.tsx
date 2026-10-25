@@ -15,10 +15,7 @@ export function ConsoleApp() {
   const { auth, handleSession, handleLogout, handleSessionExpired } = useConsoleAuth();
 
   return (
-    <CaptchaProvider
-      api={{ basePath: API_BASE, prefix: API_PREFIX }}
-      locale={{ buttonText: '点击完成验证', userCancel: '你已取消本次验证' }}
-    >
+    <CaptchaProvider api={{ basePath: API_BASE, prefix: API_PREFIX }}>
       <div className={auth.status === 'anonymous' ? 'app app--home' : 'app'}>
         <header className="topbar">
           <div className="topbar__brand">

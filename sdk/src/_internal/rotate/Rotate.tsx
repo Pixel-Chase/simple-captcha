@@ -115,7 +115,7 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
     >
       <CardHeader
         icon="rotate"
-        title={localConfig.title || locale.rotateTitle}
+        title={locale.rotateTitle}
         subtitle={locale.rotateSubtitle}
         tag={locale.rotateTag}
         status={status}
