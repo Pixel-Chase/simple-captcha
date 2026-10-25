@@ -2,11 +2,12 @@ package services
 
 import (
 	"log"
+	"simple-captcha/assets/fonts"
 	"simple-captcha/helper"
 
 	"github.com/golang/freetype/truetype"
 	"github.com/wenlng/go-captcha-assets/bindata/chars"
-	"github.com/wenlng/go-captcha-assets/resources/fonts/fzshengsksjw"
+	"golang.org/x/image/font"
 	"simple-captcha/internal/gocaptcha/base/imagedata"
 	"simple-captcha/internal/gocaptcha/base/option"
 	"simple-captcha/internal/gocaptcha/click"
@@ -30,14 +31,14 @@ type ClickTextCaptchaService struct {
 
 // NewClickTextCaptchaService 创建点击文字验证码服务
 func NewClickTextCaptchaService(backgrounds *BackgroundStore) *ClickTextCaptchaService {
-	fonts, err := fzshengsksjw.GetFont()
+	textFont, err := fonts.ClickTextFont()
 	if err != nil {
 		log.Fatalln("加载字体失败:", err)
 	}
 
 	service := &ClickTextCaptchaService{
 		BaseService: NewBaseService(),
-		fonts:       []*truetype.Font{fonts},
+		fonts:       []*truetype.Font{textFont},
 		backgrounds: backgrounds,
 		chars:       chars.GetChineseChars(),
 	}
@@ -69,6 +70,9 @@ func (s *ClickTextCaptchaService) build(key instanceKey) click.Captcha {
 		click.WithRangeThumbBgCirclesNum(profile.ThumbCircles),
 		click.WithRangeThumbBgSlimLineNum(profile.ThumbSlimLines),
 		click.WithRangeThumbColors(thumbColors),
+		// 站酷快乐体的 hinting 指令会让 golang/freetype 的解释器栈溢出，出图直接失败；
+		// 字号在几十像素且开启抗锯齿，关闭 hinting 对观感几乎没有影响
+		click.WithFontHinting(font.HintingNone),
 	}
 	if key.mode != "light" {
 		opts = append(opts, click.WithRangeColors(darkTextColors))

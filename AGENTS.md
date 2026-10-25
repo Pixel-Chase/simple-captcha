@@ -18,6 +18,7 @@ simple-captcha/
 │   ├── cache/                   # 缓存配置 (Redis)
 │   ├── config/                  # 应用配置项
 │   ├── helper/                  # 全局工具函数
+│   ├── assets/fonts/            # 内置字体（go:embed），点选题使用站酷快乐体（OFL 1.1，授权见 OFL.txt）
 │   ├── internal/gocaptcha/      # 验证码图形引擎（fork 自 go-captcha v2.0.5，自行维护，与上游的差异记在 NOTICE.md）
 │   ├── console/                 # 内嵌的管理后台页面（//go:embed dist，dist 由 sdk 的 pnpm build:console 生成，不入库）
 │   └── main.go                  # 后端服务入口
@@ -38,7 +39,7 @@ simple-captcha/
 
 ### 3.1 技术栈
 *   **Web 框架**: Gin (`github.com/gin-gonic/gin`)
-*   **核心图形引擎**: 内置的 `internal/gocaptcha`（fork 自 go-captcha v2.0.5，上游已停更，由本项目自行维护）；字体、图形等素材仍引用 `github.com/wenlng/go-captcha-assets`
+*   **核心图形引擎**: 内置的 `internal/gocaptcha`（fork 自 go-captcha v2.0.5，上游已停更，由本项目自行维护）；点选字体内置于 `assets/fonts`，字符集、图形与拼图块素材仍引用 `github.com/wenlng/go-captcha-assets`。新增或更换素材只用授权明确可商用的开源资源，授权文件随素材一同入库
 *   **缓存与持久化**: Redis (`github.com/go-redis/redis/v8`)
 *   **开发语言**: Go 1.23+
 
