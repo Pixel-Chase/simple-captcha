@@ -67,7 +67,7 @@ function hookVisibility() {
 }
 
 /** 检测自动化框架留下的全局痕迹，返回命中的标记名称 */
-export function detectAutomation(): string[] {
+function detectAutomation(): string[] {
   const found: string[] = [];
   if (typeof window === 'undefined') {
     return found;

@@ -7,7 +7,6 @@ import (
 
 // 定义错误码常量
 const (
-	ErrCodeSuccess         = 0
 	ErrCodeInvalidParam    = 400
 	ErrCodeTooManyRequests = 429
 	ErrCodeInternalError   = 500
@@ -22,13 +21,20 @@ const (
 	ErrCodePowInvalid      = 1009 // 工作量证明缺失或无效
 
 	// 管理后台错误码（2xxx）
-	ErrCodeUnauthorized       = 2001 // 未登录或会话已过期
-	ErrCodeLoginFailed        = 2002 // 用户名或密码错误
-	ErrCodeCaptchaRequired    = 2003 // 登录前置行为验证缺失或已失效
-	ErrCodeInvalidImage       = 2004 // 上传文件不是受支持的图片或不满足尺寸要求
-	ErrCodeImageTooLarge      = 2005 // 上传体积超限
-	ErrCodeLastBackground     = 2006 // 至少需要保留一张背景图
-	ErrCodeBackgroundNotFound = 2007 // 背景图不存在
+	ErrCodeUnauthorized           = 2001 // 未登录或会话已过期
+	ErrCodeLoginFailed            = 2002 // 用户名或密码错误
+	ErrCodeCaptchaRequired        = 2003 // 登录前置行为验证缺失或已失效
+	ErrCodeInvalidImage           = 2004 // 上传文件不是受支持的图片或不满足尺寸要求
+	ErrCodeImageTooLarge          = 2005 // 上传体积超限
+	ErrCodeLastBackground         = 2006 // 至少需要保留一张背景图
+	ErrCodeBackgroundNotFound     = 2007 // 背景图不存在
+	ErrCodePasswordChangeRequired = 2008 // 尚未修改初始密码，只开放会话查询、注销与改密
+	ErrCodeWrongPassword          = 2009 // 修改密码时当前密码错误
+	ErrCodeAppNotFound            = 2010 // 接入应用不存在
+	ErrCodeAppNameConflict        = 2011 // 接入应用名称重复
+
+	// S2S 接口错误码（3xxx）
+	ErrCodeAppUnauthorized = 3001 // 应用密钥缺失、无效或应用已停用
 )
 
 // CaptchaError 自定义错误类型
@@ -59,24 +65,22 @@ func NewCaptchaError(code int, message string, detail ...string) *CaptchaError {
 
 // 预定义的错误
 var (
-	ErrInvalidParam    = NewCaptchaError(ErrCodeInvalidParam, "参数错误")
-	ErrTooManyRequests = NewCaptchaError(ErrCodeTooManyRequests, "请求过于频繁，请稍后再试")
-	ErrInternalError   = NewCaptchaError(ErrCodeInternalError, "内部服务器错误")
-	ErrCacheError      = NewCaptchaError(ErrCodeCacheError, "缓存操作失败")
-	ErrCaptchaGenError = NewCaptchaError(ErrCodeCaptchaGenError, "验证码生成失败")
-	ErrVerifyFailed    = NewCaptchaError(ErrCodeVerifyFailed, "验证失败")
-	ErrExpired         = NewCaptchaError(ErrCodeExpired, "验证码已过期")
-	ErrTooManyAttempts = NewCaptchaError(ErrCodeTooManyAttempts, "验证尝试次数过多")
-	ErrTooFast         = NewCaptchaError(ErrCodeTooFast, "操作过快，请重试")
-	ErrClientMismatch  = NewCaptchaError(ErrCodeClientMismatch, "验证码已失效，请重新获取")
-	ErrRiskBlocked     = NewCaptchaError(ErrCodeRiskBlocked, "验证失败")
-	ErrPowInvalid      = NewCaptchaError(ErrCodePowInvalid, "验证失败，请刷新后重试")
+	ErrVerifyFailed   = NewCaptchaError(ErrCodeVerifyFailed, "验证失败")
+	ErrTooFast        = NewCaptchaError(ErrCodeTooFast, "操作过快，请重试")
+	ErrClientMismatch = NewCaptchaError(ErrCodeClientMismatch, "验证码已失效，请重新获取")
+	ErrPowInvalid     = NewCaptchaError(ErrCodePowInvalid, "验证失败，请刷新后重试")
 
-	ErrUnauthorized       = NewCaptchaError(ErrCodeUnauthorized, "未登录或会话已过期")
-	ErrLoginFailed        = NewCaptchaError(ErrCodeLoginFailed, "用户名或密码错误")
-	ErrCaptchaRequired    = NewCaptchaError(ErrCodeCaptchaRequired, "请先完成行为验证")
-	ErrLastBackground     = NewCaptchaError(ErrCodeLastBackground, "至少需要保留一张背景图")
-	ErrBackgroundNotFound = NewCaptchaError(ErrCodeBackgroundNotFound, "背景图不存在")
+	ErrUnauthorized           = NewCaptchaError(ErrCodeUnauthorized, "未登录或会话已过期")
+	ErrLoginFailed            = NewCaptchaError(ErrCodeLoginFailed, "用户名或密码错误")
+	ErrCaptchaRequired        = NewCaptchaError(ErrCodeCaptchaRequired, "请先完成行为验证")
+	ErrLastBackground         = NewCaptchaError(ErrCodeLastBackground, "至少需要保留一张背景图")
+	ErrBackgroundNotFound     = NewCaptchaError(ErrCodeBackgroundNotFound, "背景图不存在")
+	ErrPasswordChangeRequired = NewCaptchaError(ErrCodePasswordChangeRequired, "请先修改初始密码")
+	ErrWrongPassword          = NewCaptchaError(ErrCodeWrongPassword, "当前密码错误")
+	ErrAppNotFound            = NewCaptchaError(ErrCodeAppNotFound, "应用不存在")
+	ErrAppNameConflict        = NewCaptchaError(ErrCodeAppNameConflict, "已存在同名应用")
+
+	ErrAppUnauthorized = NewCaptchaError(ErrCodeAppUnauthorized, "应用密钥缺失或无效")
 )
 
 // HTTPStatusFromError 根据错误码返回HTTP状态码
@@ -90,14 +94,18 @@ func HTTPStatusFromError(err *CaptchaError) int {
 		return http.StatusInternalServerError
 	case ErrCodeUnauthorized, ErrCodeLoginFailed:
 		return http.StatusUnauthorized
-	case ErrCodeCaptchaRequired, ErrCodeInvalidImage:
+	case ErrCodeCaptchaRequired, ErrCodeInvalidImage, ErrCodeWrongPassword:
 		return http.StatusBadRequest
+	case ErrCodePasswordChangeRequired:
+		return http.StatusForbidden
 	case ErrCodeImageTooLarge:
 		return http.StatusRequestEntityTooLarge
-	case ErrCodeLastBackground:
+	case ErrCodeLastBackground, ErrCodeAppNameConflict:
 		return http.StatusConflict
-	case ErrCodeBackgroundNotFound:
+	case ErrCodeBackgroundNotFound, ErrCodeAppNotFound:
 		return http.StatusNotFound
+	case ErrCodeAppUnauthorized:
+		return http.StatusUnauthorized
 	default:
 		return http.StatusOK
 	}

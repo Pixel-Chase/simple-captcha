@@ -11,18 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ValidateInterface 验证接口
-type ValidateInterface interface {
-	Validate() *helper.CaptchaError
-}
-
-// ValidationMiddleware 通用验证中间件
-func ValidationMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-	}
-}
-
 // ValidateCaptchaRequest 验证验证码请求中间件
 func ValidateCaptchaRequest() gin.HandlerFunc {
 	return func(c *gin.Context) {

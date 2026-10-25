@@ -1,12 +1,21 @@
 package tests
 
-import "golang.org/x/crypto/bcrypt"
+import (
+	"os"
+	"testing"
+)
 
-// bcryptHash 生成测试用的密码哈希
-func bcryptHash(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+// TestMain 把全局服务管理器使用的控制台数据目录指向临时目录，
+// 避免测试在仓库里生成 data/admin.json 并打印初始密码
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "simple-captcha-data-*")
 	if err != nil {
-		return "", err
+		panic(err)
 	}
-	return string(hash), nil
+	if os.Getenv("ADMIN_DATA_DIR") == "" {
+		_ = os.Setenv("ADMIN_DATA_DIR", dir)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
 }

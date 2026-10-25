@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -214,40 +213,6 @@ func NoCacheMiddleware() gin.HandlerFunc {
 	}
 }
 
-// CacheMiddleware 缓存中间件
-func CacheMiddleware(duration time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 只对GET请求启用缓存
-		if c.Request.Method != "GET" {
-			c.Next()
-			return
-		}
-
-		// 设置缓存头
-		c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(duration.Seconds())))
-		c.Header("Expires", time.Now().Add(duration).Format(http.TimeFormat))
-
-		c.Next()
-	}
-}
-
-// TimeoutMiddleware 超时中间件
-func TimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 创建带超时的上下文
-		ctx := c.Request.Context()
-		cancel := func() {}
-
-		if timeout > 0 {
-			ctx, cancel = context.WithTimeout(c.Request.Context(), timeout)
-		}
-		defer cancel()
-
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	}
-}
-
 // RequestBodyLoggerMiddleware 请求体日志中间件（仅开发环境）
 func RequestBodyLoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -277,19 +242,6 @@ func RequestBodyLoggerMiddleware() gin.HandlerFunc {
 	}
 }
 
-// HealthCheckMiddleware 健康检查中间件
-func HealthCheckMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 为健康检查路径跳过其他中间件
-		if c.Request.URL.Path == "/health" || c.Request.URL.Path == "/metrics" {
-			c.Next()
-			return
-		}
-
-		c.Next()
-	}
-}
-
 // GetMetrics 获取指标数据
 func GetMetrics() map[string]interface{} {
 	globalMetrics.mu.RLock()
@@ -308,17 +260,6 @@ func GetMetrics() map[string]interface{} {
 		"total_latency":   globalMetrics.TotalLatency.String(),
 		"error_rate":      float64(globalMetrics.ErrorCount) / float64(globalMetrics.RequestCount),
 	}
-}
-
-// ResetMetrics 重置指标
-func ResetMetrics() {
-	globalMetrics.mu.Lock()
-	defer globalMetrics.mu.Unlock()
-
-	globalMetrics.RequestCount = 0
-	globalMetrics.ErrorCount = 0
-	globalMetrics.TotalLatency = 0
-	globalMetrics.ActiveRequests = 0
 }
 
 // 辅助函数

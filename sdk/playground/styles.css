@@ -917,6 +917,252 @@ p {
   }
 }
 
+/* ---------- 控制台分区导航 ---------- */
+
+.subnav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.subnav__tab {
+  padding: 8px 4px;
+  margin-right: 20px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.subnav__tab:hover {
+  color: var(--text);
+}
+
+.subnav__tab--active {
+  color: var(--primary-strong);
+  border-bottom-color: var(--primary);
+}
+
+.field__hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.alert--success {
+  background: var(--good-soft);
+  color: var(--good);
+  border: 1px solid #bfe5cd;
+}
+
+/* ---------- 修改密码 ---------- */
+
+.password {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 420px);
+  gap: 48px;
+  align-items: start;
+}
+
+.password__lead {
+  color: #3d475f;
+  max-width: 56ch;
+}
+
+.password__note {
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 56ch;
+}
+
+.password__form {
+  padding: 28px;
+}
+
+.password__form h2 {
+  margin-bottom: 20px;
+}
+
+/* ---------- 接入应用 ---------- */
+
+.apps__refresh {
+  flex: none;
+}
+
+.apps__create {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+}
+
+.apps__create-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.apps__empty {
+  margin-top: 24px;
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.apps__empty-text {
+  margin: 8px auto 0;
+  max-width: 48ch;
+}
+
+.secret {
+  margin-top: 16px;
+  padding: 20px;
+  border-color: #f1d9a8;
+  background: #fffcf4;
+}
+
+.secret__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.secret__note {
+  font-size: 13px;
+}
+
+.secret__value {
+  display: block;
+  padding: 10px 12px;
+  font-size: 14px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.secret__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.secret__done {
+  margin-left: auto;
+}
+
+.app-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+  display: grid;
+  gap: 12px;
+}
+
+.app-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 20px;
+}
+
+.app-card__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.app-card__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-card__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-card__rename {
+  display: flex;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.app-card__rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+}
+
+.app-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.app-card__meta-item {
+  display: flex;
+  gap: 6px;
+}
+
+.app-card__meta-label {
+  color: var(--muted);
+}
+
+.app-card__meta-value {
+  margin: 0;
+  color: #3d475f;
+}
+
+.app-card--disabled .app-card__name,
+.app-card--disabled .app-card__meta {
+  opacity: 0.6;
+}
+
+.app-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+}
+
+.app-card__delete {
+  color: var(--danger);
+}
+
+@media (max-width: 860px) {
+  .password {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .app-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .app-card__actions {
+    justify-content: flex-start;
+  }
+
+  .apps__create {
+    flex-direction: column;
+  }
+
+  .secret__done {
+    margin-left: 0;
+  }
+}
+
 /* useCaptcha().holder 的容器：弹窗本身是 fixed 定位，容器脱离文档流即可，避免在 grid 布局里占一格 */
 .captcha-holder {
   position: absolute;

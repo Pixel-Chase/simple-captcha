@@ -649,8 +649,23 @@ export const CaptchaStyle = () => {
       align-items: center;
       justify-content: center;
       border-radius: 50%;
-      border: 1px dashed color-mix(in srgb, var(--gc-primary-light) 40%, transparent);
     }
+    .gc-dial-track {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .gc-dial-track circle { fill: none; }
+    .gc-dial-track-dash {
+      stroke: color-mix(in srgb, var(--gc-primary-light) 40%, transparent);
+      stroke-width: 1;
+      stroke-dasharray: 3 3;
+    }
+    .gc-dial-track-done { stroke: var(--gc-primary); stroke-width: 2; }
+    .gc-dial-pointer { position: absolute; inset: 0; pointer-events: none; }
     .gc-dial-ring {
       position: absolute;
       left: 50%;
@@ -677,6 +692,7 @@ export const CaptchaStyle = () => {
     .gc-dial-dot-bottom { bottom: -4px; left: 50%; margin-left: -4px; }
     .gc-dial-dot-left { left: -4px; top: 50%; margin-top: -4px; }
     .gc-dial-dot-right { right: -4px; top: 50%; margin-top: -4px; }
+    .gc-dial-dot-passed { background: var(--gc-primary); }
     .gc-body-inner { position: relative; background: #fff; }
     .gc-body-inner-rotate {
       border-radius: 100%;
@@ -741,60 +757,6 @@ export const CaptchaStyle = () => {
     .gc-angle-badge strong { font-weight: 700; color: #f43f5e; }
     .gc-type-rotate .gc-result-banner { width: 76%; margin-bottom: 18%; border-radius: 999px; }
 
-    /* ---------- 触发按钮 ---------- */
-    .gc-btn {
-      position: relative;
-      box-sizing: border-box;
-      font-size: 14px;
-      border-radius: 12px;
-      letter-spacing: .5px;
-      line-height: 1;
-      white-space: nowrap;
-      -webkit-appearance: none;
-      outline: none;
-      margin: 0;
-      transition: background-color .15s, box-shadow .15s;
-      font-weight: 500;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: ${FONT_STACK};
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-    }
-    .gc-btn span { padding-left: 8px; }
-    .gc-btn-disabled { pointer-events: none; }
-    .gc-btn-default {
-      --gc-primary: ${primary};
-      color: var(--gc-primary);
-      border: 1px solid color-mix(in srgb, var(--gc-primary) 40%, #fff);
-      background-color: color-mix(in srgb, var(--gc-primary) 7%, #fff);
-      cursor: pointer;
-    }
-    .gc-btn-default:hover {
-      background-color: color-mix(in srgb, var(--gc-primary) 14%, #fff);
-      box-shadow: 0 4px 14px color-mix(in srgb, var(--gc-primary) 22%, transparent);
-    }
-    .gc-btn-error { cursor: pointer; color: #b91c1c; background-color: #fef2f2; border: 1px solid #fecaca; }
-    .gc-btn-warn { cursor: pointer; color: #b45309; background-color: #fffbeb; border: 1px solid #fde68a; }
-    .gc-btn-success { color: #047857; background-color: #ecfdf5; border: 1px solid #a7f3d0; pointer-events: none; }
-    .gc-btn-ripple { position: relative; display: flex; align-items: center; justify-content: center; }
-    .gc-btn-ripple svg, .gc-btn-ripple > * { position: relative; z-index: 2; }
-    .gc-btn-ripple::after {
-      background-color: var(--gc-primary);
-      border-radius: 50px;
-      content: '';
-      display: block;
-      width: 21px; height: 21px;
-      opacity: 0;
-      position: absolute;
-      top: 50%; left: 50%;
-      margin-top: -11px; margin-left: -11px;
-      z-index: 1;
-      animation: gc-ripple 1.3s infinite;
-      animation-delay: 2s;
-    }
-
     /* ---------- 动效 ---------- */
     @keyframes gc-card-in {
       0% { opacity: 0; transform: translateY(22px) scale(.98); }
@@ -827,13 +789,6 @@ export const CaptchaStyle = () => {
     }
     @keyframes gc-float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(3px, -5px); } }
     @keyframes gc-pulse { 50% { opacity: .5; } }
-    @keyframes gc-ripple {
-      0% { opacity: 0; }
-      5% { opacity: 0.05; }
-      20% { opacity: 0.35; }
-      65% { opacity: 0.01; }
-      100% { transform: scaleX(2) scaleY(2); opacity: 0; }
-    }
 
     /* ---------- 窄屏：保持弹窗形态，仅放大触控区域 ---------- */
     @media (max-width: 480px) {
@@ -843,7 +798,7 @@ export const CaptchaStyle = () => {
     }
     @media (prefers-reduced-motion: reduce) {
       .gc-wrapper-theme, .gc-dot, .gc-confirm, .gc-drag-idle, .gc-tile-nudge, .gc-tile-region,
-      .gc-region-tip em, .gc-btn-ripple::after, .gc-result, .gc-result-badge { animation: none !important; }
+      .gc-region-tip em, .gc-result, .gc-result-badge { animation: none !important; }
       .gc-wrapper-theme, .gc-icon-block button { transition: none !important; }
       .gc-wrapper-theme:hover { transform: none !important; }
     }

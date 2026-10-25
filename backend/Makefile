@@ -45,13 +45,17 @@ run:
 	$(GOBUILD) -o $(BINARY_NAME) -v ./...
 	./$(BINARY_NAME)
 
+# 构建管理后台前端并输出到 console/dist，之后编译的二进制会内嵌它（开发调试直接用 sdk 的 pnpm start 即可）
+console:
+	cd ../sdk && pnpm build:console
+
 # 本地开发：加载 .env.development 与 .env 后 go run（见 run-dev.sh）
 dev:
 	./run-dev.sh
 
-# 生成管理员密码的 bcrypt 哈希（交互式输入，不进 shell 历史）
-hash-password:
-	$(GOCMD) run . hash-password
+# 重置管理员密码：重新随机生成并打印，下次登录后必须修改（读取与 dev 相同的 env 文件）
+reset-admin-password:
+	./run-dev.sh reset-admin-password
 
 # Format code
 fmt:
@@ -69,9 +73,9 @@ security:
 docs:
 	godoc -http=:6060
 
-# Docker build
+# Docker build（上下文为仓库根目录，镜像内会构建管理后台前端）
 docker-build:
-	docker build -t $(BINARY_NAME) .
+	docker build -f Dockerfile -t $(BINARY_NAME) ..
 
 # Docker run
 docker-run:
@@ -88,8 +92,9 @@ help:
 	@echo "  build-linux   - Cross compile for Linux"
 	@echo "  deps          - Install dependencies"
 	@echo "  run           - Build and run the application"
+	@echo "  console       - Build the admin console frontend into console/dist (embedded on next build)"
 	@echo "  dev           - Run locally with .env.development + .env (run-dev.sh)"
-	@echo "  hash-password - Generate bcrypt hash for ADMIN_PASSWORD_HASH"
+	@echo "  reset-admin-password - Regenerate the admin password (must be changed on next login)"
 	@echo "  fmt           - Format code"
 	@echo "  lint          - Lint code"
 	@echo "  security      - Run security checks"
@@ -98,4 +103,4 @@ help:
 	@echo "  docker-run    - Run Docker container"
 	@echo "  help          - Show this help"
 
-.PHONY: build clean test test-coverage benchmark build-linux deps run dev hash-password fmt lint security docs docker-build docker-run help
+.PHONY: build clean test test-coverage benchmark build-linux deps run console dev reset-admin-password fmt lint security docs docker-build docker-run help

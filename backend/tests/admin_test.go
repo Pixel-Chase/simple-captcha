@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	adminTestUser     = "admin"
-	adminTestPassword = "s3cret-demo"
+	adminTestUser = "admin"
+	// adminTestPassword 首次登录强制改密后使用的密码；初始密码由服务随机生成，见 adminHarness.password
+	adminTestPassword = "s3cret-demo-pass"
 )
 
 var (
@@ -40,15 +41,19 @@ var (
 	savedNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*\.(jpg|png)$`)
 )
 
-// adminHarness 用临时素材目录与独立的 AdminService 搭建管理路由，
+// adminHarness 用临时素材目录、临时数据目录与独立的服务实例搭建管理路由，
 // 每个实例使用不同的来源 IP，避免登录接口的 IP 限流在用例之间串扰
 type adminHarness struct {
 	router     *gin.Engine
 	store      *services.BackgroundStore
 	admin      *services.AdminService
+	apps       *services.AppService
 	risk       *services.RiskControlServiceImpl
 	dir        string
+	dataDir    string
 	remoteAddr string
+	// password 当前有效的管理员密码：起初是随机初始密码，login 完成强制改密后变为 adminTestPassword
+	password string
 }
 
 func newAdminHarness(t *testing.T, imageCount int, mutate ...func(*config.AdminConfig)) *adminHarness {
@@ -61,9 +66,8 @@ func newAdminHarness(t *testing.T, imageCount int, mutate ...func(*config.AdminC
 	require.NoError(t, err)
 
 	cfg := config.AdminConfig{
-		Enabled:        true,
 		Username:       adminTestUser,
-		Password:       adminTestPassword,
+		DataDir:        t.TempDir(),
 		SessionTTL:     time.Hour,
 		MaxUploadSize:  2 << 20,
 		MaxImagePixels: 24_000_000,
@@ -72,23 +76,40 @@ func newAdminHarness(t *testing.T, imageCount int, mutate ...func(*config.AdminC
 		fn(&cfg)
 	}
 
+	// 先行生成凭据以拿到初始密码；NewAdminService 发现凭据已存在便不会重新生成
+	initialPassword, err := services.EnsureAdminCredential(cfg.DataDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, initialPassword)
+
 	risk, ok := services.GetServiceManager().GetRiskControlService().(*services.RiskControlServiceImpl)
 	require.True(t, ok)
 
-	admin := services.NewAdminService(cfg, store, risk)
+	admin, err := services.NewAdminService(cfg, store, risk)
+	require.NoError(t, err)
+	apps, err := services.NewAppService(cfg.DataDir)
+	require.NoError(t, err)
+	// 删除应用会顺带清掉 Redis 里不过期的最近使用时间，避免每次跑测试都残留键
+	t.Cleanup(func() {
+		for _, app := range apps.List() {
+			_ = apps.Delete(app.ID)
+		}
+	})
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	routes.RegisterAdminRoutes(r.Group("/api/v1/admin"), admin, risk)
+	routes.RegisterAdminRoutes(r.Group("/api/v1/admin"), admin, apps, risk)
 
 	seq := adminHarnessSeq.Add(1)
 	return &adminHarness{
 		router:     r,
 		store:      store,
 		admin:      admin,
+		apps:       apps,
 		risk:       risk,
 		dir:        dir,
+		dataDir:    cfg.DataDir,
 		remoteAddr: fmt.Sprintf("198.51.100.%d:4000", seq),
+		password:   initialPassword,
 	}
 }
 
@@ -144,17 +165,33 @@ func (h *adminHarness) freshCaptchaKey(t *testing.T) string {
 	return token
 }
 
+// login 以当前密码登录；仍处于初始密码状态时顺带完成强制改密，返回可访问全部管理接口的会话令牌
 func (h *adminHarness) login(t *testing.T) string {
 	t.Helper()
 	w := h.doJSON(http.MethodPost, "/login", map[string]string{
 		"username":   adminTestUser,
-		"password":   adminTestPassword,
+		"password":   h.password,
 		"captchaKey": h.freshCaptchaKey(t),
 	}, "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	body := decodeBody(t, w)
 	token, _ := body["token"].(string)
+	require.Len(t, token, 64)
+	if body["mustChangePassword"] != true {
+		return token
+	}
+
+	w = h.doJSON(http.MethodPut, "/password", map[string]string{
+		"currentPassword": h.password,
+		"newPassword":     adminTestPassword,
+	}, token)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	h.password = adminTestPassword
+
+	body = decodeBody(t, w)
+	require.Equal(t, false, body["mustChangePassword"])
+	token, _ = body["token"].(string)
 	require.Len(t, token, 64)
 	return token
 }
@@ -228,7 +265,7 @@ func TestAdmin_LoginFlow(t *testing.T) {
 
 	captchaKey := h.freshCaptchaKey(t)
 	w := h.doJSON(http.MethodPost, "/login", map[string]string{
-		"username": adminTestUser, "password": adminTestPassword, "captchaKey": captchaKey,
+		"username": adminTestUser, "password": h.password, "captchaKey": captchaKey,
 	}, "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	body := decodeBody(t, w)
@@ -236,6 +273,7 @@ func TestAdmin_LoginFlow(t *testing.T) {
 	assert.Len(t, token, 64)
 	assert.Equal(t, adminTestUser, body["username"])
 	assert.Greater(t, body["expiresAt"].(float64), float64(time.Now().Unix()))
+	assert.Equal(t, true, body["mustChangePassword"], "随机初始密码登录后必须改密")
 
 	// 会话可用
 	w = h.do(http.MethodGet, "/session", nil, token, "")
@@ -244,7 +282,7 @@ func TestAdmin_LoginFlow(t *testing.T) {
 
 	// 同一个验证码 key 已被消费，不能再次用于登录
 	w = h.doJSON(http.MethodPost, "/login", map[string]string{
-		"username": adminTestUser, "password": adminTestPassword, "captchaKey": captchaKey,
+		"username": adminTestUser, "password": h.password, "captchaKey": captchaKey,
 	}, "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Equal(t, helper.ErrCodeCaptchaRequired, errorCode(t, w))
@@ -266,7 +304,7 @@ func TestAdmin_LoginRejectsBadCredentials(t *testing.T) {
 		password string
 	}{
 		{"密码错误", adminTestUser, "wrong-password"},
-		{"用户名错误", "root", adminTestPassword},
+		{"用户名错误", "root", h.password},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -286,36 +324,23 @@ func TestAdmin_LoginRejectsBadCredentials(t *testing.T) {
 	}, "")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	w = h.doJSON(http.MethodPost, "/login", map[string]string{
-		"username": adminTestUser, "password": adminTestPassword, "captchaKey": captchaKey,
+		"username": adminTestUser, "password": h.password, "captchaKey": captchaKey,
 	}, "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Equal(t, helper.ErrCodeCaptchaRequired, errorCode(t, w))
 
 	// 缺少验证码或验证码无效
 	w = h.doJSON(http.MethodPost, "/login", map[string]string{
-		"username": adminTestUser, "password": adminTestPassword,
+		"username": adminTestUser, "password": h.password,
 	}, "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Equal(t, helper.ErrCodeInvalidParam, errorCode(t, w))
 
 	w = h.doJSON(http.MethodPost, "/login", map[string]string{
-		"username": adminTestUser, "password": adminTestPassword, "captchaKey": "not-a-real-key",
+		"username": adminTestUser, "password": h.password, "captchaKey": "not-a-real-key",
 	}, "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Equal(t, helper.ErrCodeCaptchaRequired, errorCode(t, w))
-}
-
-func TestAdmin_LoginWithPasswordHash(t *testing.T) {
-	// 生产形态：只配置 bcrypt 哈希，不配置明文密码
-	hash, err := bcryptHash(adminTestPassword)
-	require.NoError(t, err)
-	h := newAdminHarness(t, 1, func(cfg *config.AdminConfig) {
-		cfg.Password = ""
-		cfg.PasswordHash = hash
-	})
-	token := h.login(t)
-	w := h.do(http.MethodGet, "/session", nil, token, "")
-	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestAdmin_RequiresBearerToken(t *testing.T) {

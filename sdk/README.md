@@ -198,10 +198,11 @@ export default () => {
 ```bash
 curl -X GET \
   https://您的验证码域名/api/v1/captchas/states/{second_key} \
-  -H "Authorization: Bearer <API_KEY>"
+  -H "Authorization: Bearer <应用密钥>"
 ```
 
-如果返回 `{"valid": true}` 则代表验证通过，可以放行业务逻辑。
+应用密钥在验证码服务的管理后台「接入应用」中创建，每个业务后端一把，只在业务后端使用。
+只有返回 `{"valid": true}` 才代表验证通过，可以放行业务逻辑。
 
 若后端配置了自定义 `API_PREFIX`，此 S2S 地址中的 `/api/v1` 也需替换为相同前缀。
 

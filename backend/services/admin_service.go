@@ -45,10 +45,14 @@ var (
 	allowedUploadFormats = []string{"jpeg", "png"}
 )
 
-// AdminSession 管理员登录会话
+// AdminSession 管理员登录会话，序列化后存入 Redis
 type AdminSession struct {
 	Username  string    `json:"username"`
 	ExpiresAt time.Time `json:"expiresAt"`
+	// Generation 签发时的凭据代次，改密或重置密码后不再匹配，旧会话随之失效
+	Generation string `json:"generation"`
+	// MustChangePassword 由当前凭据实时推导，不落 Redis
+	MustChangePassword bool `json:"-"`
 }
 
 // BackgroundInfo 背景图元信息
@@ -75,39 +79,36 @@ type UploadConstraints struct {
 
 // AdminService 管理后台业务：管理员登录会话 + 背景图增删查
 type AdminService struct {
-	cfg          config.AdminConfig
-	passwordHash []byte
-	backgrounds  *BackgroundStore
-	riskControl  RiskControlService
+	cfg         config.AdminConfig
+	credentials *credentialStore
+	backgrounds *BackgroundStore
+	riskControl RiskControlService
 
-	fsMu sync.Mutex // 串行化写盘与重载，保证"至少保留一张"的判断原子
+	credMu sync.Mutex // 串行化改密，避免并发请求交错写入凭据
+	fsMu   sync.Mutex // 串行化写盘与重载，保证"至少保留一张"的判断原子
 }
 
-// NewAdminService 创建管理服务。优先使用 bcrypt 哈希；仅配置明文密码时在启动阶段即时哈希
-func NewAdminService(cfg config.AdminConfig, backgrounds *BackgroundStore, riskControl RiskControlService) *AdminService {
-	hash := []byte(cfg.PasswordHash)
-	if len(hash) > 0 {
-		if _, err := bcrypt.Cost(hash); err != nil {
-			log.Fatalln("ADMIN_PASSWORD_HASH 不是合法的 bcrypt 哈希:", err)
-		}
-	} else {
-		if cfg.Password == "" {
-			log.Fatalln("管理后台已开启但未配置 ADMIN_PASSWORD_HASH 或 ADMIN_PASSWORD")
-		}
-		generated, err := bcrypt.GenerateFromPassword([]byte(cfg.Password), bcrypt.DefaultCost)
-		if err != nil {
-			log.Fatalln("管理员密码哈希失败:", err)
-		}
-		hash = generated
-		log.Println("管理后台使用明文 ADMIN_PASSWORD 启动，生产环境建议改用 ADMIN_PASSWORD_HASH")
+// NewAdminService 创建管理服务。数据目录中还没有管理员凭据时随机生成初始密码，
+// 明文只在这一次打印到控制台，首次登录后必须修改
+func NewAdminService(cfg config.AdminConfig, backgrounds *BackgroundStore, riskControl RiskControlService) (*AdminService, error) {
+	password, err := EnsureAdminCredential(cfg.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("初始化管理员凭据失败: %w", err)
 	}
 
-	return &AdminService{
-		cfg:          cfg,
-		passwordHash: hash,
-		backgrounds:  backgrounds,
-		riskControl:  riskControl,
+	s := &AdminService{
+		cfg:         cfg,
+		credentials: newCredentialStore(cfg.DataDir),
+		backgrounds: backgrounds,
+		riskControl: riskControl,
 	}
+
+	if password != "" {
+		log.Print(AdminPasswordNotice(cfg.Username, password))
+	} else if cred, err := s.credentials.load(); err == nil && cred.MustChangePassword {
+		log.Println("管理员尚未修改初始密码；初始密码只在生成时打印过一次，遗失可执行 ./simple-captcha reset-admin-password")
+	}
+	return s, nil
 }
 
 // Login 校验登录前置验证码与账号密码，成功后签发不透明会话令牌。
@@ -119,13 +120,55 @@ func (s *AdminService) Login(username, password, captchaKey string) (string, *Ad
 		return "", nil, helper.ErrCaptchaRequired
 	}
 
+	cred, err := s.credentials.load()
+	if err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取管理员凭据失败", err.Error())
+	}
+
 	// 用户名与密码都做常量时间比较，并且无论用户名是否匹配都执行 bcrypt，避免时序侧信道
 	userOK := subtle.ConstantTimeCompare([]byte(username), []byte(s.cfg.Username)) == 1
-	passOK := bcrypt.CompareHashAndPassword(s.passwordHash, []byte(password)) == nil
+	passOK := bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(password)) == nil
 	if !userOK || !passOK {
 		return "", nil, helper.ErrLoginFailed
 	}
+	return s.issueSession(cred)
+}
 
+// ChangePassword 校验当前密码后更换密码。凭据代次随之更换，包括当前会话在内的全部旧会话立即失效，
+// 调用方拿到新签发的会话继续操作
+func (s *AdminService) ChangePassword(token, currentPassword, newPassword string) (string, *AdminSession, *helper.CaptchaError) {
+	if msg := validateNewPassword(newPassword); msg != "" {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInvalidParam, msg)
+	}
+
+	s.credMu.Lock()
+	defer s.credMu.Unlock()
+
+	cred, err := s.credentials.load()
+	if err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取管理员凭据失败", err.Error())
+	}
+	if bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(currentPassword)) != nil {
+		return "", nil, helper.ErrWrongPassword
+	}
+	if newPassword == currentPassword {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInvalidParam, "新密码不能与当前密码相同")
+	}
+
+	next, err := newCredential(newPassword, false)
+	if err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "生成密码哈希失败", err.Error())
+	}
+	if err := s.credentials.save(next); err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "保存管理员凭据失败", err.Error())
+	}
+
+	s.Logout(token)
+	return s.issueSession(next)
+}
+
+// issueSession 签发随机会话令牌，Redis 中只保存令牌哈希
+func (s *AdminService) issueSession(cred *adminCredential) (string, *AdminSession, *helper.CaptchaError) {
 	raw := make([]byte, adminTokenBytes)
 	if _, err := rand.Read(raw); err != nil {
 		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "生成会话令牌失败", err.Error())
@@ -133,8 +176,9 @@ func (s *AdminService) Login(username, password, captchaKey string) (string, *Ad
 	token := hex.EncodeToString(raw)
 
 	session := &AdminSession{
-		Username:  s.cfg.Username,
-		ExpiresAt: time.Now().Add(s.cfg.SessionTTL),
+		Username:   s.cfg.Username,
+		ExpiresAt:  time.Now().Add(s.cfg.SessionTTL),
+		Generation: cred.Generation,
 	}
 	payload, err := json.Marshal(session)
 	if err != nil {
@@ -143,10 +187,11 @@ func (s *AdminService) Login(username, password, captchaKey string) (string, *Ad
 	if err := cache.Set(sessionKey(token), string(payload), s.cfg.SessionTTL); err != nil {
 		return "", nil, helper.NewCaptchaError(helper.ErrCodeCacheError, "保存会话失败", err.Error())
 	}
+	session.MustChangePassword = cred.MustChangePassword
 	return token, session, nil
 }
 
-// Authenticate 校验 Bearer 令牌，返回对应会话
+// Authenticate 校验 Bearer 令牌，返回对应会话；凭据代次不一致（已改密或重置）的会话视为失效
 func (s *AdminService) Authenticate(token string) (*AdminSession, bool) {
 	if len(token) != adminTokenBytes*2 {
 		return nil, false
@@ -167,6 +212,16 @@ func (s *AdminService) Authenticate(token string) (*AdminSession, bool) {
 	if time.Now().After(session.ExpiresAt) {
 		return nil, false
 	}
+
+	cred, err := s.credentials.load()
+	if err != nil {
+		log.Printf("读取管理员凭据失败: error=%v", err)
+		return nil, false
+	}
+	if session.Generation != cred.Generation {
+		return nil, false
+	}
+	session.MustChangePassword = cred.MustChangePassword
 	return &session, true
 }
 

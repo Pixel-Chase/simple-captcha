@@ -95,6 +95,8 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
 
   const angle = handler.getState().thumbAngle;
   const ringSize = (size || 0) + RING_GAP;
+  const ringRadius = ringSize / 2;
+  const ringLength = 2 * Math.PI * ringRadius;
   const outerRingSize = (size || 0) + OUTER_RING_GAP;
   const angleText = `${Math.round(angle)}`;
 
@@ -125,14 +127,40 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
         style={{ width: localConfig.width + 'px', height: ringSize + ROTATE_PAD + 'px' }}
       >
         <div className="gc-dial" style={{ width: ringSize + 'px', height: ringSize + 'px' }}>
+          {/* 虚线环随角度整体转动（起点即当前角度），已转过的 0°→angle 段用实线弧覆盖 */}
+          <svg className="gc-dial-track" viewBox={`0 0 ${ringSize} ${ringSize}`} aria-hidden="true">
+            <circle
+              className="gc-dial-track-dash"
+              cx={ringRadius}
+              cy={ringRadius}
+              r={ringRadius}
+              transform={`rotate(${angle - 90} ${ringRadius} ${ringRadius})`}
+            />
+            <circle
+              className="gc-dial-track-done"
+              cx={ringRadius}
+              cy={ringRadius}
+              r={ringRadius}
+              strokeDasharray={`${(ringLength * angle) / 360} ${ringLength}`}
+              transform={`rotate(-90 ${ringRadius} ${ringRadius})`}
+            />
+          </svg>
           <i
             className="gc-dial-ring"
             style={{ width: outerRingSize + 'px', height: outerRingSize + 'px' }}
           />
-          <i className="gc-dial-dot gc-dial-dot-top" />
-          <i className="gc-dial-dot gc-dial-dot-right" />
-          <i className="gc-dial-dot gc-dial-dot-bottom" />
-          <i className="gc-dial-dot gc-dial-dot-left" />
+          <i
+            className={`gc-dial-dot gc-dial-dot-right ${angle >= 90 ? 'gc-dial-dot-passed' : ''}`}
+          />
+          <i
+            className={`gc-dial-dot gc-dial-dot-bottom ${angle >= 180 ? 'gc-dial-dot-passed' : ''}`}
+          />
+          <i
+            className={`gc-dial-dot gc-dial-dot-left ${angle >= 270 ? 'gc-dial-dot-passed' : ''}`}
+          />
+          <i className="gc-dial-pointer" style={{ transform: `rotate(${angle}deg)` }}>
+            <i className="gc-dial-dot gc-dial-dot-top" />
+          </i>
           <div
             className="gc-body-inner gc-body-inner-rotate"
             style={{ width: size + 'px', height: size + 'px' }}

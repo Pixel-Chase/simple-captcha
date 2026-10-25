@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"runtime"
 	"simple-captcha/config"
+	"simple-captcha/console"
 	"simple-captcha/controllers"
 	"simple-captcha/middleware"
 	"simple-captcha/services"
@@ -64,37 +65,55 @@ func SetupRouter() *gin.Engine {
 	api.Use(middleware.NoCacheMiddleware()) // 验证码接口（含错误响应）一律禁止缓存
 
 	// 注册验证码相关路由
-	registerCaptchaRoutes(api)
+	registerCaptchaRoutes(api, serviceManager.GetAppService())
 
-	// 管理后台路由（默认关闭）：管理员登录 + 背景图管理
-	if cfg.Admin.Enabled {
-		RegisterAdminRoutes(r.Group(cfg.Server.APIPrefix+"/admin"), serviceManager.GetAdminService(), riskControl)
-		log.Printf("管理后台已开启: prefix=%s/admin", cfg.Server.APIPrefix)
+	// 管理后台路由：管理员登录 + 背景图与接入应用管理
+	RegisterAdminRoutes(r.Group(cfg.Server.APIPrefix+"/admin"),
+		serviceManager.GetAdminService(), serviceManager.GetAppService(), riskControl)
+
+	// 管理后台页面：内嵌的前端构建产物，与 API 同源，无需跨域配置
+	consoleHandler := console.NewHandler(console.Assets(), cfg.Server.APIPrefix)
+	console.Register(r, cfg.Admin.ConsolePath, consoleHandler)
+	if consoleHandler.Built() {
+		log.Printf("管理后台页面: %s/", cfg.Admin.ConsolePath)
+	} else {
+		log.Printf("管理后台前端未内嵌（未执行 pnpm build:console），%s/ 只显示构建提示", cfg.Admin.ConsolePath)
 	}
 
 	return r
 }
 
 // RegisterAdminRoutes 注册管理后台路由。
-// 登录接口叠加 IP 限流并以行为验证作为前置；其余接口要求 Bearer 会话令牌。
-// 单独导出以便测试用自定义的 AdminService（如临时素材目录）构建路由。
-func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, riskControl services.RiskControlService) {
-	ctrl := controllers.NewAdminController(admin)
+// 登录接口叠加 IP 限流并以行为验证作为前置；其余接口要求 Bearer 会话令牌，
+// 且在修改初始密码之前只开放会话查询、注销与改密。
+// 单独导出以便测试用自定义的服务实例（如临时素材与数据目录）构建路由。
+func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps *services.AppService, riskControl services.RiskControlService) {
+	adminCtrl := controllers.NewAdminController(admin)
+	appCtrl := controllers.NewAppController(apps)
 	rg.Use(middleware.NoCacheMiddleware())
 
-	rg.POST("/login", middleware.RateLimitMiddleware(riskControl), ctrl.LoginHandler)
+	rg.POST("/login", middleware.RateLimitMiddleware(riskControl), adminCtrl.LoginHandler)
 
 	authed := rg.Group("", middleware.AdminAuthMiddleware(admin))
-	authed.GET("/session", ctrl.SessionHandler)
-	authed.DELETE("/session", ctrl.LogoutHandler)
-	authed.GET("/backgrounds", ctrl.ListBackgroundsHandler)
-	authed.POST("/backgrounds", ctrl.UploadBackgroundHandler)
-	authed.GET("/backgrounds/:name", ctrl.PreviewBackgroundHandler)
-	authed.DELETE("/backgrounds/:name", ctrl.DeleteBackgroundHandler)
+	authed.GET("/session", adminCtrl.SessionHandler)
+	authed.DELETE("/session", adminCtrl.LogoutHandler)
+	authed.PUT("/password", middleware.RateLimitMiddleware(riskControl), adminCtrl.ChangePasswordHandler)
+
+	ready := authed.Group("", middleware.RequirePasswordChanged())
+	ready.GET("/backgrounds", adminCtrl.ListBackgroundsHandler)
+	ready.POST("/backgrounds", adminCtrl.UploadBackgroundHandler)
+	ready.GET("/backgrounds/:name", adminCtrl.PreviewBackgroundHandler)
+	ready.DELETE("/backgrounds/:name", adminCtrl.DeleteBackgroundHandler)
+
+	ready.GET("/apps", appCtrl.ListHandler)
+	ready.POST("/apps", appCtrl.CreateHandler)
+	ready.PUT("/apps/:id", appCtrl.UpdateHandler)
+	ready.POST("/apps/:id/secret", appCtrl.RotateSecretHandler)
+	ready.DELETE("/apps/:id", appCtrl.DeleteHandler)
 }
 
 // registerCaptchaRoutes 注册验证码相关路由
-func registerCaptchaRoutes(rg *gin.RouterGroup) {
+func registerCaptchaRoutes(rg *gin.RouterGroup, apps *services.AppService) {
 	// 获取验证码资源
 	rg.GET("/:type",
 		middleware.ValidateCaptchaRequest(),
@@ -105,9 +124,9 @@ func registerCaptchaRoutes(rg *gin.RouterGroup) {
 		middleware.ValidateVerifyRequest(),
 		controllers.VerifyCaptchaHandler)
 
-	// 查询验证会话状态（S2S，需携带 Bearer Token）
+	// 查询验证会话状态（S2S，需携带 Bearer <应用密钥>）
 	rg.GET("/states/:key",
-		middleware.APIKeyMiddleware(),
+		middleware.AppAuthMiddleware(apps),
 		middleware.ValidateStateRequest(),
 		controllers.ValidateCaptchaHandler)
 }

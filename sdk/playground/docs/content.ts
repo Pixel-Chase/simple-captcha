@@ -37,7 +37,16 @@ export interface DocGroup {
 const CURATED_GROUPS: ReadonlyArray<{ title: string; headings: string[] }> = [
   { title: '概览', headings: ['架构概览', '验证流程'] },
   { title: '前端接入', headings: ['前端接入', 'API 参考'] },
-  { title: '后端接入', headings: ['后端部署', '二次验证（S2S）', '环境变量参考', '安全机制'] },
+  {
+    title: '后端接入',
+    headings: [
+      '后端部署',
+      '二次验证（S2S）',
+      '管理后台（背景图 + 接入应用）',
+      '环境变量参考',
+      '安全机制',
+    ],
+  },
 ];
 
 /** 分词阶段给标题 token 挂上 id，渲染阶段直接读取 */

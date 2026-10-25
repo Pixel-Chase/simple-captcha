@@ -13,7 +13,7 @@
 - [API 参考](#api-参考)
 - [安全机制](#安全机制)
 - [二次验证（S2S）](#二次验证s2s)
-- [管理后台（登录 + 背景图管理）](#管理后台登录--背景图管理)
+- [管理后台（背景图 + 接入应用）](#管理后台背景图--接入应用)
 - [环境变量参考](#环境变量参考)
 - [本地开发](#本地开发)
 
@@ -26,7 +26,7 @@
 │  g-captcha       │         │  :3321           │         │           │
 └──────────────────┘         └──────────────────┘         └───────────┘
                                       ▲
-                                      │ Authorization: Bearer <API_KEY>
+                                      │ Authorization: Bearer <应用密钥>
                               ┌───────┴────────┐
                               │  业务后端 (S2S)  │
                               │  二次验证查询     │
@@ -80,7 +80,8 @@ docker pull ghcr.io/pixel-chase/simple-captcha:latest
 
 **2. 准备配置文件 `.env`**
 
-完整模板见仓库中的 [`backend/.env.example`](backend/.env.example)，最少需要填写 Redis 与 `API_KEY`：
+完整模板见仓库中的 [`backend/.env.example`](backend/.env.example)，最少只需要填写 Redis。
+S2S 鉴权密钥与管理员密码都不走配置：前者在管理后台按应用创建，后者在首次启动时随机生成。
 
 ```dotenv
 # Redis 连接（必填，连接到你的业务 Redis）
@@ -88,9 +89,6 @@ REDIS_HOST=your-redis-host
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 REDIS_DB=2
-
-# S2S 二次验证鉴权密钥（必填）
-API_KEY=your_secure_api_key_here
 
 # 允许的前端来源，多个用逗号分隔
 CORS_ALLOW_ORIGINS=https://example.com,https://admin.example.com
@@ -100,7 +98,7 @@ API_PREFIX=/api/v1
 CAPTCHA_EXPIRE_TIME=5m
 ```
 
-> 含 `$` 的值（如 bcrypt 哈希）必须用单引号包裹，否则会被当作变量展开。
+> 含 `$` 的值必须用单引号包裹，否则会被当作变量展开。
 
 **3. 创建 `docker-compose.yml`**
 
@@ -113,12 +111,21 @@ services:
       - "3321:3321"
     env_file:
       - .env
+    volumes:
+      # 管理员凭据与接入应用（只存哈希）。务必持久化：丢失后会重新生成管理员密码，全部应用密钥失效
+      - captcha-data:/app/data
+      # 背景图素材：管理后台上传 / 删除直接写入，新卷首次挂载时自动带上镜像内置的素材
+      - captcha-images:/app/images
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3321/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+volumes:
+  captcha-data:
+  captcha-images:
 ```
 
 **4. 启动服务**
@@ -134,6 +141,17 @@ curl http://localhost:3321/health
 # 返回: {"status":"ok","redis":{"status":"ok"}, ...}
 ```
 
+**6. 取出管理员初始密码，创建接入应用**
+
+首次启动时服务会随机生成管理员密码，并在日志里打印**一次**：
+
+```bash
+docker compose logs captcha | grep -A6 管理后台初始密码
+```
+
+打开 `http://<服务地址>:3321/console/` 用它登录管理后台，按提示改成自己的密码，再在「接入应用」里为每个业务后端创建一个应用，把生成的应用密钥配置到对应的业务后端。
+详见 [管理后台](#管理后台背景图--接入应用)。在创建第一个应用之前，S2S 状态查询会一律返回 401。
+
 ### 镜像发布
 
 后端镜像由 GitHub Actions 直接构建并发布到 GitHub Container Registry：
@@ -142,6 +160,7 @@ curl http://localhost:3321/health
 - 推送到默认分支时生成 `latest`、分支名和 `sha-*` 标签
 - 推送 `v*` 版本标签时生成语义化版本标签，并同步更新 `latest`
 - 支持 `linux/amd64` 和 `linux/arm64` 两种架构
+- 构建上下文是仓库根目录：镜像内先构建 `sdk/playground/console` 的管理后台前端，再内嵌进 Go 二进制。本地手动构建用 `docker build -f backend/Dockerfile .`
 
 私有仓库或私有 Package 拉取前需要登录 GHCR：
 
@@ -155,14 +174,18 @@ echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <GITHUB_USERNAME> --password-std
 |------|------|------|------|
 | `GET` | `/api/v1/captchas/:type` | 获取验证码 | 无 |
 | `POST` | `/api/v1/captchas/:type/:key/attempts` | 提交验证答案 | 无 |
-| `GET` | `/api/v1/captchas/states/:key` | 查询验证状态 (S2S) | `Authorization: Bearer <API_KEY>` |
+| `GET` | `/api/v1/captchas/states/:key` | 查询验证状态 (S2S) | `Authorization: Bearer <应用密钥>` |
 | `GET` | `/health` | 健康检查 | 无 |
 | `POST` | `/api/v1/admin/login` | 管理员登录（需携带行为验证 `second_key`） | 无，叠加 IP 限流 |
 | `GET` / `DELETE` | `/api/v1/admin/session` | 查询 / 注销当前管理会话 | `Authorization: Bearer <会话令牌>` |
+| `PUT` | `/api/v1/admin/password` | 修改管理员密码（成功后旧会话全部失效，返回新会话） | `Authorization: Bearer <会话令牌>` |
 | `GET` / `POST` | `/api/v1/admin/backgrounds` | 列出 / 上传背景图 | `Authorization: Bearer <会话令牌>` |
 | `GET` / `DELETE` | `/api/v1/admin/backgrounds/:name` | 预览 / 删除单张背景图 | `Authorization: Bearer <会话令牌>` |
+| `GET` / `POST` | `/api/v1/admin/apps` | 列出 / 新建接入应用（新建时返回一次性明文密钥） | `Authorization: Bearer <会话令牌>` |
+| `PUT` / `DELETE` | `/api/v1/admin/apps/:id` | 修改名称与启用状态 / 删除应用 | `Authorization: Bearer <会话令牌>` |
+| `POST` | `/api/v1/admin/apps/:id/secret` | 重置应用密钥（旧密钥立即失效） | `Authorization: Bearer <会话令牌>` |
 
-`/admin/*` 路由仅在 `ADMIN_ENABLED=true` 时注册，详见 [管理后台](#管理后台登录--背景图管理)。
+管理后台随服务常驻开启。仍在使用随机初始密码时，`/admin/*` 只开放会话查询、注销与改密，其余接口返回 HTTP 403（`code: 2008`），详见 [管理后台](#管理后台背景图--接入应用)。
 
 以上验证码接口使用默认的 `API_PREFIX=/api/v1`。例如配置 `API_PREFIX=/captcha/api` 后，获取验证码接口将变为 `/captcha/api/captchas/:type`；配置 `/` 则直接挂载到 `/captchas`。
 
@@ -445,16 +468,19 @@ function App() {
 
 ## 二次验证（S2S）
 
-用户在前端完成验证后，`onSuccess` 回调返回的 `data` 中包含 `second_key`。业务前端应将此 key 随表单提交到**业务后端**，由业务后端发起服务端到服务端（S2S）的二次校验：
+用户在前端完成验证后，`onSuccess` 回调返回的 `data` 中包含 `second_key`。业务前端应将此 key 随表单提交到**业务后端**，由业务后端发起服务端到服务端（S2S）的二次校验。
+
+业务后端凭**应用密钥**鉴权：在 [管理后台](#管理后台背景图--接入应用) 的「接入应用」里为每个业务后端单独创建一个应用，得到形如 `sk_` 开头的密钥。
+一个业务后端一把密钥，泄露时只需重置或停用对应的应用，日志里也能看到每次查询来自哪个应用。
 
 ```bash
 # 业务后端调用验证码后端，验证 second_key 是否有效
 curl -X GET \
   https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
-  -H "Authorization: Bearer your_secure_api_key_here"
+  -H "Authorization: Bearer sk_xxxxxxxxxxxxxxxx"
 ```
 
-**成功响应**（HTTP 200）：
+**校验通过**（HTTP 200）：
 
 ```json
 {
@@ -462,16 +488,27 @@ curl -X GET \
 }
 ```
 
-**失败响应**（HTTP 400/401/403）：
+**second_key 无效、已过期或已被消费**（HTTP 200，`second_key` 只能查询一次）：
 
 ```json
 {
-  "code": 1003,
-  "message": "验证码已失效"
+  "code": 1004,
+  "error": "验证码已失效"
 }
 ```
 
-> **安全提醒**：`API_KEY` 仅在业务后端使用，**绝不能**暴露到前端代码中。
+**应用密钥缺失、无效或应用已停用**（HTTP 401）：
+
+```json
+{
+  "code": 3001,
+  "error": "应用密钥缺失或无效"
+}
+```
+
+业务后端应只在拿到 `"valid": true` 时放行，其余情况一律按校验失败处理。
+
+> **安全提醒**：应用密钥仅在业务后端使用，**绝不能**暴露到前端代码中。服务端只保存密钥的哈希，明文只在创建或重置时显示一次。
 
 若后端修改了 `API_PREFIX`，SDK 与业务后端的 S2S 请求也需使用相同前缀：
 
@@ -488,31 +525,47 @@ curl -X GET \
 
 ---
 
-## 管理后台（登录 + 背景图管理）
+## 管理后台（背景图 + 接入应用）
 
-后端内置一个可选的管理后台，用于在线管理验证码的背景图素材。它默认关闭，开启后不影响任何验证码接口。
-`sdk/playground` 即是它的演示站：登录页用本项目的行为验证码保护，登录后进入背景图管理页；顶栏的「接入文档」页则渲染本 README 的接入章节并提供在线体验。
+后端内置的管理后台随服务常驻开启，用于在线管理背景图素材，以及为各业务后端签发 S2S 应用密钥，不影响任何验证码接口。
+管理界面内嵌在服务里，访问 **`http://<服务地址>/console/`** 即可（路径由 `CONSOLE_PATH` 决定），与 API 同源，不需要配置跨域。
+登录页用本项目的行为验证码保护，登录后可管理背景图、接入应用与管理员密码。
 
-### 开启
+- 页面是 `sdk/playground/console` 的构建产物，编译时通过 `//go:embed` 打进二进制（见 `backend/console`），镜像构建会自动生成；只含控制台，不含接入文档。
+- 服务返回页面时会把 `API_PREFIX` 写进 `index.html`，`API_PREFIX` 改了不需要重新构建前端；`CONSOLE_PATH` 可以挂到任意不与 API、监控路由重叠的路径，方便只转发子路径的反向代理。
+- 页面带严格的 CSP（只允许同源脚本，禁止被嵌入 iframe）和 `noindex`；哈希命名的静态资源长期缓存，`index.html` 每次回源校验。
 
-**开发环境**：`backend/.env.development` 已默认开启管理后台（账号 `admin` / `demo123`，明文密码启动时即时哈希），执行 `./run-dev.sh` 即可。
+### 管理员密码
 
-**生产环境**：在 `backend/.env` 中配置，密码只接受 bcrypt 哈希。先生成哈希：
+管理员密码不走配置，开发与生产环境一致：
 
-```bash
-cd backend && make hash-password          # 交互输入密码，输出哈希，不进 shell 历史
-# 没有 Go 环境时用镜像生成：
-docker run --rm -i ghcr.io/pixel-chase/simple-captcha ./simple-captcha hash-password
-```
+1. **首次启动**时服务随机生成一个 20 位密码，bcrypt 哈希写入数据目录（`ADMIN_DATA_DIR`，默认 `./data`），明文只在服务控制台打印**这一次**：
 
-再写入 `.env`（哈希含 `$`，必须单引号包裹）：
+   ```
+   ====================================================================
+     管理后台初始密码（只显示这一次，请立即妥善保存）
 
-```dotenv
-ADMIN_ENABLED=true
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD_HASH='$2a$10$...'
-ADMIN_SESSION_TTL=2h
-```
+         用户名: admin
+         密  码: <随机密码>
+
+     首次登录后必须修改密码；遗失可执行 ./simple-captcha reset-admin-password
+   ====================================================================
+   ```
+
+   容器部署时用 `docker compose logs <服务名> | grep -A6 管理后台初始密码` 取出。
+2. **首次登录后必须改密**。初始密码会留在 `docker logs` 和日志采集系统里，改密之前管理接口只开放会话查询、注销与改密；改密后日志中的那串即失效。
+3. **改密或重置后，所有已登录的会话立即失效**，发起改密的页面自动换用新签发的会话。新密码至少 10 个字符、不超过 72 字节。
+4. **遗失密码**时重新生成（同样要求下次登录后修改），运行中的服务无需重启即生效：
+
+   ```bash
+   cd backend && ./run-dev.sh reset-admin-password                     # 本地
+   docker compose exec backend ./simple-captcha reset-admin-password   # 容器内
+   ```
+
+用户名由 `ADMIN_USERNAME` 决定，默认 `admin`。
+
+**数据目录必须持久化**：管理员凭据（`admin.json`）与接入应用（`apps.json`）都保存在 `ADMIN_DATA_DIR`，只含哈希，文件权限 0600。
+`docker-compose.yml` 把它挂载为具名卷 `captcha-data`；删除该卷（例如 `docker compose down -v`）会重新生成管理员密码，并使全部应用密钥失效。
 
 素材目录由 `CAPTCHA_IMAGE_PATH` 决定（默认 `./images`）。上传与删除直接作用于该目录，
 因此容器部署时该目录必须**可写**：`docker-compose.yml` 默认以读写方式挂载 `./backend/images`，
@@ -526,12 +579,36 @@ ADMIN_SESSION_TTL=2h
  │  POST /admin/login { username, password, captchaKey: second_key }
  ├────────────────────────────────────────►│ 1. 一次性消费 second_key（无论密码对错）
  │                                         │ 2. 常量时间比对用户名 + bcrypt 校验密码
- │  ◄── { token, username, expiresAt }     │ 3. 签发随机会话令牌，仅在 Redis 保存其哈希
+ │  ◄── { token, mustChangePassword, … }   │ 3. 签发随机会话令牌，仅在 Redis 保存其哈希
  │  后续请求携带 Authorization: Bearer <token>
+ │
+ │  mustChangePassword 为 true 时：
+ │  PUT /admin/password { currentPassword, newPassword }
+ ├────────────────────────────────────────►│ 4. 校验当前密码 → 写入新哈希 → 旧会话全部失效
+ │  ◄── { token, mustChangePassword: false }  （新会话）
 ```
 
 每一次登录尝试都必须重新完成一次行为验证，密码暴力猜解的成本因此与过验证码的成本绑定。
-登录接口同时受 `CAPTCHA_IP_RATE_LIMIT` 限流保护。会话令牌有效期由 `ADMIN_SESSION_TTL` 控制，注销即失效。
+登录与改密接口同时受 `CAPTCHA_IP_RATE_LIMIT` 限流保护。会话令牌有效期由 `ADMIN_SESSION_TTL` 控制，注销即失效。
+
+### 接入应用
+
+每个调用 S2S 接口的业务后端对应一个应用、一把独立密钥。
+
+| 操作 | 说明 |
+|------|------|
+| 新建 | 填写名称（1-40 个字符，不区分大小写去重），返回 `sk_` 开头的密钥，**明文只显示这一次** |
+| 列表 | 返回应用 ID、名称、密钥前缀（仅用于辨认）、启用状态、最近使用时间、密钥更新时间，不返回密钥本身 |
+| 停用 / 启用 | 停用后该密钥立即无法通过鉴权，重新启用后恢复 |
+| 重置密钥 | 生成新密钥并立即作废旧密钥；需要平滑切换时，可先为该业务后端新建一个应用，切换完成后再删除旧应用 |
+| 删除 | 密钥立即失效 |
+
+- 服务端只保存密钥的 SHA-256 哈希，鉴权时做常量时间比较；最多 100 个应用。
+- **一个应用都没有时，S2S 状态查询一律返回 401**，不存在“未配置则放行”。
+- 每次 S2S 查询都会记录应用 ID（服务日志）与最近使用时间（Redis，只用于展示）。
+
+> **从旧版本升级**：`API_KEY`、`ADMIN_ENABLED`、`ADMIN_PASSWORD`、`ADMIN_PASSWORD_HASH` 已移除，留在 `.env` 里也不再生效。
+> 升级后先取出初始密码登录，为每个业务后端创建应用并替换密钥；在此之前 S2S 查询会返回 401。
 
 ### 背景图管理
 
@@ -577,7 +654,8 @@ ADMIN_SESSION_TTL=2h
 | 变量 | 说明 | 示例 |
 |------|------|------|
 | `REDIS_HOST` | Redis 主机地址 | `redis.example.com` |
-| `API_KEY` | S2S 二次验证鉴权密钥 | `sk-xxxxxxxxxxxx` |
+
+S2S 鉴权密钥与管理员密码都不走环境变量，见 [管理后台](#管理后台背景图--接入应用)。
 
 ### 可选
 
@@ -635,10 +713,9 @@ ADMIN_SESSION_TTL=2h
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `ADMIN_ENABLED` | 是否开放 `/admin/*` 管理接口 | `false` |
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
-| `ADMIN_PASSWORD_HASH` | 管理员密码的 bcrypt 哈希（推荐） | 空 |
-| `ADMIN_PASSWORD` | 管理员明文密码，仅供本地演示；与 `ADMIN_PASSWORD_HASH` 二选一 | 空 |
+| `ADMIN_DATA_DIR` | 管理员凭据与接入应用的保存目录，必须持久化 | `./data` |
+| `CONSOLE_PATH` | 内嵌管理后台页面的挂载路径；不能是根路径，也不能与 API、健康检查等路由重叠 | `/console` |
 | `ADMIN_SESSION_TTL` | 登录会话有效期 | `2h` |
 | `ADMIN_MAX_UPLOAD_SIZE` | 单张背景图上传体积上限（字节），不能超过 `MAX_REQUEST_SIZE` | `5242880` |
 | `ADMIN_MAX_IMAGE_PIXELS` | 单张背景图像素总数上限，防止解压炸弹 | `24000000` |
@@ -657,13 +734,16 @@ simple-captcha/
 │   ├── middleware/        # 中间件（CORS、鉴权、限流等）
 │   ├── config/           # 环境变量配置
 │   ├── images/           # 验证码素材图片（管理后台直接读写此目录）
+│   ├── data/             # 管理员凭据与接入应用（首次启动生成，不入库）
+│   ├── console/          # 内嵌的管理后台页面（dist/ 由 sdk 的 pnpm build:console 生成，不入库）
 │   └── Dockerfile
 ├── sdk/                  # React 前端 SDK
 │   ├── src/
 │   │   ├── Captcha.tsx   # 核心组件
 │   │   ├── _internal/    # 内部渲染引擎（点选、滑块、旋转）
 │   │   └── hooks/        # 公共 Hooks
-│   ├── playground/       # 演示站：接入文档 + 行为验证登录 + 背景图管理（直接引用 src，热更新）
+│   ├── playground/       # 演示站：接入文档 + 控制台（直接引用 src，热更新）
+│   │   └── console/      # 管理后台独立入口，构建后内嵌进 Go 服务
 │   └── package.json
 ├── docker-compose.yml    # 本地开发编排
 └── .github/workflows/    # CI/CD 自动发布
@@ -677,28 +757,35 @@ cd backend
 # 验证：curl http://localhost:3321/health
 ```
 
-脚本按优先级加载三层配置：命令行变量（如 `PORT=4000 ./run-dev.sh`）> `.env`（个人覆盖，不入库）> `.env.development`（仓库默认：本机 Redis、管理后台开启、账号 `admin` / `demo123`）。
+脚本按优先级加载三层配置：命令行变量（如 `PORT=4000 ./run-dev.sh`）> `.env`（个人覆盖，不入库）> `.env.development`（仓库默认：本机 Redis、本地放开跨域等）。
+
+首次启动会在终端打印管理员初始密码（用户名 `admin`），凭据保存在 `backend/data/`，之后重启不再生成；忘了就执行 `./run-dev.sh reset-admin-password`。
+
+`go run` 编译时内嵌的是 `backend/console/dist` 里现有的产物：没有构建过时，`http://localhost:3321/console/` 只显示构建提示。
+需要在本地验证内嵌效果时先执行 `make console`（即 `cd sdk && pnpm build:console`）再重启后端；日常改界面直接用下面的演示站，保存即热更新。
 
 用 compose 跑生产形态：
 
 ```bash
-cp backend/.env.example backend/.env       # 填写 Redis、API_KEY、管理员密码哈希
+cp backend/.env.example backend/.env       # 填写 Redis、CORS 等
 docker compose up -d
+docker compose logs backend | grep -A6 管理后台初始密码
 ```
 
 ### 启动前端演示站
 
-演示站包含两个页面：「接入文档」渲染本 README 的接入章节并提供五种题型的在线体验；「控制台」是用行为验证码保护的登录页，登录后进入背景图管理页。后端需以管理模式启动：
+演示站包含两个页面：「接入文档」渲染本 README 的接入章节并提供五种题型的在线体验；「控制台」是用行为验证码保护的登录页，登录后可管理背景图、接入应用与管理员密码。
 
 ```bash
-# 后端（位于 backend/，.env.development 已开启管理后台）
+# 后端（位于 backend/）
 ./run-dev.sh
 
 # 前端（位于 sdk/）
 pnpm install
 pnpm start
-# 控制台 http://localhost:8000 ，账号 admin / demo123
+# 控制台 http://localhost:8000 ，用户名 admin，初始密码见后端终端输出（首次登录后需修改）
 # 接入文档 http://localhost:8000/#/docs
+# 管理后台独立入口 http://localhost:8000/console/（与内嵌进服务的页面同一份代码）
 ```
 
 演示站默认请求 `http://127.0.0.1:3321`，如需指向其他地址，复制 `sdk/playground/.env.example` 为 `.env` 并修改 `VITE_API_BASE`。

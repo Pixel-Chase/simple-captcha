@@ -4,7 +4,8 @@
 # 变量优先级（高 → 低）：
 #   1. 命令行 / 当前 shell 已有的环境变量，例如 PORT=4000 ./run-dev.sh
 #   2. .env               个人或生产覆盖项，不入库
-#   3. .env.development   仓库内的开发默认值（Redis 本机、管理后台开启、admin / demo123）
+#   3. .env.development   仓库内的开发默认值（Redis 本机、本地放开跨域等）
+# 参数原样传给程序，例如 ./run-dev.sh reset-admin-password 重置管理员密码
 # 文件格式：每行 KEY=VALUE，# 开头为注释；含空格或 $ 的值请用单引号包裹。
 set -eu
 cd "$(dirname "$0")"
@@ -34,5 +35,7 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "启动后端: PORT=${PORT:-8080} GIN_MODE=${GIN_MODE:-release} REDIS=${REDIS_HOST:-localhost}:${REDIS_PORT:-6379} ADMIN_ENABLED=${ADMIN_ENABLED:-false}"
+if [ $# -eq 0 ]; then
+  echo "启动后端: PORT=${PORT:-8080} GIN_MODE=${GIN_MODE:-release} REDIS=${REDIS_HOST:-localhost}:${REDIS_PORT:-6379} ADMIN_DATA_DIR=${ADMIN_DATA_DIR:-./data}"
+fi
 exec go run . "$@"

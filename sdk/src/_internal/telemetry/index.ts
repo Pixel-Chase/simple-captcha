@@ -1,4 +1,3 @@
-export { solvePow, verifyPow } from './pow';
-export { collectEnv, detectAutomation } from './env';
+export { solvePow } from './pow';
+export { collectEnv } from './env';
 export { useBehaviorTrace } from './use-behavior-trace';
-export type { BehaviorTraceHandle } from './use-behavior-trace';

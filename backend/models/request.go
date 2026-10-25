@@ -95,13 +95,6 @@ type VerifyResponse struct {
 	SecondKey string `json:"second_key"`
 }
 
-// StateResponse 状态响应结构
-type StateResponse struct {
-	Verified   bool  `json:"verified"`
-	VerifyTime int64 `json:"verify_time"`
-	ExpireAt   int64 `json:"expire_at"`
-}
-
 var (
 	structValidator     *validator.Validate
 	structValidatorOnce sync.Once

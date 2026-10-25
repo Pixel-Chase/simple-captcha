@@ -70,12 +70,6 @@ type CacheService interface {
 
 // ServiceManager 服务管理器接口
 type ServiceManager interface {
-	// RegisterCaptchaService 注册验证码服务
-	RegisterCaptchaService(serviceType string, service CaptchaService)
-
-	// RegisterVerifyService 注册验证服务
-	RegisterVerifyService(serviceType string, service VerifyService)
-
 	// GetCaptchaService 获取验证码服务
 	GetCaptchaService(serviceType string) (CaptchaService, bool)
 
@@ -88,14 +82,8 @@ type ServiceManager interface {
 	// GetAllVerifyServices 获取所有验证服务
 	GetAllVerifyServices() map[string]VerifyService
 
-	// SetRiskControlService 设置风险控制服务
-	SetRiskControlService(service RiskControlService)
-
 	// GetRiskControlService 获取风险控制服务
 	GetRiskControlService() RiskControlService
-
-	// SetCacheService 设置缓存服务
-	SetCacheService(service CacheService)
 
 	// GetCacheService 获取缓存服务
 	GetCacheService() CacheService

@@ -15,7 +15,7 @@ import (
 // multipartOverhead 上传请求体在图片本体之外允许的额外体积（表单字段、分隔符等）
 const multipartOverhead = 1 << 20
 
-// AdminController 管理后台控制器：登录会话与背景图管理
+// AdminController 管理后台控制器：登录会话、管理员密码与背景图管理
 type AdminController struct {
 	admin *services.AdminService
 }
@@ -42,12 +42,29 @@ func (ctrl *AdminController) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("管理员登录成功: username=%s, ip=%s", session.Username, ip)
-	helper.SuccessResponse(c, models.AdminLoginResponse{
-		Token:     token,
-		Username:  session.Username,
-		ExpiresAt: session.ExpiresAt.Unix(),
-	})
+	log.Printf("管理员登录成功: username=%s, ip=%s, mustChangePassword=%t", session.Username, ip, session.MustChangePassword)
+	helper.SuccessResponse(c, loginResponse(token, session))
+}
+
+// ChangePasswordHandler 修改管理员密码：校验当前密码，成功后作废全部旧会话并返回新会话
+func (ctrl *AdminController) ChangePasswordHandler(c *gin.Context) {
+	var req models.AdminChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		helper.ErrorResponse(c, helper.NewCaptchaError(helper.ErrCodeInvalidParam, "参数格式错误", err.Error()))
+		return
+	}
+
+	ip := helper.GetRealClientIP(c)
+	session := middleware.GetAdminSession(c)
+	token, next, err := ctrl.admin.ChangePassword(middleware.BearerToken(c), req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		log.Printf("修改管理员密码失败: admin=%s, ip=%s, code=%d", sessionName(session), ip, err.Code)
+		helper.ErrorResponse(c, err)
+		return
+	}
+
+	log.Printf("修改管理员密码成功，旧会话已全部失效: admin=%s, ip=%s", next.Username, ip)
+	helper.SuccessResponse(c, loginResponse(token, next))
 }
 
 // SessionHandler 返回当前会话信息，供前端恢复登录态时校验令牌
@@ -58,8 +75,9 @@ func (ctrl *AdminController) SessionHandler(c *gin.Context) {
 		return
 	}
 	helper.SuccessResponse(c, models.AdminSessionResponse{
-		Username:  session.Username,
-		ExpiresAt: session.ExpiresAt.Unix(),
+		Username:           session.Username,
+		ExpiresAt:          session.ExpiresAt.Unix(),
+		MustChangePassword: session.MustChangePassword,
 	})
 }
 
@@ -163,6 +181,15 @@ func (ctrl *AdminController) DeleteBackgroundHandler(c *gin.Context) {
 
 	log.Printf("删除背景图成功: name=%s, admin=%s, ip=%s", req.Name, sessionName(session), helper.GetRealClientIP(c))
 	c.Status(http.StatusNoContent)
+}
+
+func loginResponse(token string, session *services.AdminSession) models.AdminLoginResponse {
+	return models.AdminLoginResponse{
+		Token:              token,
+		Username:           session.Username,
+		ExpiresAt:          session.ExpiresAt.Unix(),
+		MustChangePassword: session.MustChangePassword,
+	}
 }
 
 func sessionName(session *services.AdminSession) string {

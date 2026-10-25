@@ -58,9 +58,3 @@ export async function solvePow(
 
   return null;
 }
-
-/** 校验一个解答是否满足难度（供测试与调试使用） */
-export function verifyPow(challenge: CaptchaPowChallenge, key: string, solution: string): boolean {
-  const digest = sha256(encodeUtf8(`${challenge.nonce}:${key}:${solution}`));
-  return leadingZeroBits(digest) >= Math.max(0, challenge.difficulty || 0);
-}

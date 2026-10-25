@@ -42,3 +42,10 @@ sdk/dist
 sdk/playground-dist
 .playwright-mcp
 sdk/stitch
+
+# 管理后台数据（管理员凭据、接入应用）
+backend/data/
+
+# 管理后台前端构建产物（sdk 中 pnpm build:console 生成，镜像构建时重新生成）；.gitkeep 保证 go:embed 目录存在
+backend/console/dist/*
+!backend/console/dist/.gitkeep

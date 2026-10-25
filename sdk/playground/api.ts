@@ -1,11 +1,26 @@
 import type { CaptchaErrorResponse } from '@aetherlib/g-captcha';
 
-/** 验证码后端地址：演示页与 SDK 共用同一个服务，可用 VITE_API_BASE 覆盖（见 .env.example） */
-export const API_BASE = (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3321').replace(
-  /\/+$/,
-  '',
-);
-const API_PREFIX = '/api/v1';
+/** 与 backend/console 约定的占位符：服务端返回 index.html 时替换为实际的 API_PREFIX */
+const API_PREFIX_PLACEHOLDER = '__CAPTCHA_API_PREFIX__';
+
+/** 内嵌在 Go 服务中时由服务端写入的 API 前缀；本地演示站没有该 meta 或仍是占位符，返回 null */
+const embeddedApiPrefix = (() => {
+  const content = document.querySelector<HTMLMetaElement>(
+    'meta[name="captcha-api-prefix"]',
+  )?.content;
+  return content === undefined || content === API_PREFIX_PLACEHOLDER ? null : content;
+})();
+
+/**
+ * 验证码后端地址与 API 前缀，演示页与 SDK 共用同一个服务：
+ * - 内嵌在 Go 服务中（/console/）：与页面同源，前缀取服务端配置的 API_PREFIX
+ * - 本地演示站：VITE_API_BASE（见 .env.example），前缀固定 /api/v1
+ */
+export const API_BASE =
+  embeddedApiPrefix !== null
+    ? window.location.origin
+    : (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3321').replace(/\/+$/, '');
+export const API_PREFIX = embeddedApiPrefix ?? '/api/v1';
 const ADMIN_ENDPOINT = `${API_BASE}${API_PREFIX}/admin`;
 
 const TOKEN_STORAGE_KEY = 'g-captcha-admin-token';
@@ -15,11 +30,14 @@ export interface LoginResponse {
   username: string;
   /** Unix 秒 */
   expiresAt: number;
+  /** 仍在使用随机初始密码：改密之前只开放会话查询、注销与改密 */
+  mustChangePassword: boolean;
 }
 
 export interface SessionResponse {
   username: string;
   expiresAt: number;
+  mustChangePassword: boolean;
 }
 
 export interface BackgroundItem {
@@ -46,6 +64,30 @@ export interface BackgroundListResponse {
   items: BackgroundItem[];
   total: number;
   constraints: UploadConstraints;
+}
+
+/** 接入应用：业务后端凭应用密钥调用 S2S 接口，列表不含密钥本身 */
+export interface AppItem {
+  id: string;
+  name: string;
+  /** 密钥前若干位，仅用于辨认 */
+  secretHint: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  secretRotatedAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface AppListResponse {
+  items: AppItem[];
+  total: number;
+}
+
+/** 新建应用或重置密钥的响应：明文密钥只出现这一次 */
+export interface AppSecretResponse {
+  app: AppItem;
+  secret: string;
 }
 
 /** 管理接口错误：status 为 HTTP 状态码，code 为服务端业务错误码 */
@@ -94,7 +136,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   try {
     response = await fetch(`${ADMIN_ENDPOINT}${path}`, { ...init, headers });
   } catch {
-    throw new AdminApiError(0, 0, '无法连接验证码服务，请确认后端已启动并开启 ADMIN_ENABLED');
+    throw new AdminApiError(0, 0, '无法连接验证码服务，请确认后端已启动');
   }
 
   const text = await response.text();
@@ -134,6 +176,18 @@ export const adminApi = {
   logout(token: string) {
     return request<void>('/session', { method: 'DELETE' }, token);
   },
+  /** 改密成功后旧会话全部失效，响应里是新签发的会话 */
+  changePassword(token: string, body: { currentPassword: string; newPassword: string }) {
+    return request<LoginResponse>(
+      '/password',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      token,
+    );
+  },
   listBackgrounds(token: string) {
     return request<BackgroundListResponse>('/backgrounds', {}, token);
   },
@@ -144,6 +198,41 @@ export const adminApi = {
   },
   deleteBackground(token: string, name: string) {
     return request<void>(`/backgrounds/${encodeURIComponent(name)}`, { method: 'DELETE' }, token);
+  },
+  listApps(token: string) {
+    return request<AppListResponse>('/apps', {}, token);
+  },
+  createApp(token: string, name: string) {
+    return request<AppSecretResponse>(
+      '/apps',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      },
+      token,
+    );
+  },
+  updateApp(token: string, id: string, body: { name: string; enabled: boolean }) {
+    return request<AppItem>(
+      `/apps/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      token,
+    );
+  },
+  rotateAppSecret(token: string, id: string) {
+    return request<AppSecretResponse>(
+      `/apps/${encodeURIComponent(id)}/secret`,
+      { method: 'POST' },
+      token,
+    );
+  },
+  deleteApp(token: string, id: string) {
+    return request<void>(`/apps/${encodeURIComponent(id)}`, { method: 'DELETE' }, token);
   },
   /** 预览需要携带令牌，无法直接用 <img src>，这里取回 blob 生成对象 URL */
   async fetchPreview(token: string, name: string): Promise<string> {

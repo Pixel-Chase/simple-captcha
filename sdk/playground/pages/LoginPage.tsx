@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useCaptcha } from '@aetherlib/g-captcha';
 import type { CaptchaType } from '@aetherlib/g-captcha';
-import { adminApi, getErrorMessage } from '../api';
+import { API_PREFIX, adminApi, getErrorMessage } from '../api';
 import type { LoginResponse } from '../api';
 import { CAPTCHA_TYPE_OPTIONS } from '../captcha-options';
 
@@ -85,7 +85,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <li>
             <span className="steps__index">2</span>
             <span>
-              携 <code>second_key</code> 提交 <code>POST /api/v1/admin/login</code>
+              携 <code>second_key</code> 提交 <code>POST {API_PREFIX}/admin/login</code>
             </span>
           </li>
           <li>
@@ -148,7 +148,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </button>
 
         <p className="login__hint">
-          账号由后端环境变量 <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> 决定。
+          用户名默认 <code>admin</code>（<code>ADMIN_USERNAME</code>
+          ）。初始密码在后端首次启动时随机生成并打印在服务控制台，首次登录后需要修改；遗失可执行{' '}
+          <code>reset-admin-password</code>。
         </p>
       </form>
     </section>

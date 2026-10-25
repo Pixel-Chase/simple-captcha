@@ -1,0 +1,23 @@
+# 镜像构建上下文是仓库根目录（backend/Dockerfile 同时需要 backend 与 sdk）：
+# 默认全部排除，只放行构建所需的两个目录，再剔除其中的本地文件
+*
+!backend
+!sdk
+
+# backend：本地配置与数据不能打进镜像；测试不参与编译；控制台产物在镜像内重新构建
+backend/.env
+backend/.env.*
+backend/data
+backend/logs
+backend/tmp
+backend/simple-captcha
+backend/tests
+backend/**/*_test.go
+backend/console/dist
+
+# sdk：依赖与各类产物在镜像内重新安装 / 构建
+sdk/node_modules
+sdk/dist
+sdk/playground-dist
+sdk/stitch
+sdk/playground/.env

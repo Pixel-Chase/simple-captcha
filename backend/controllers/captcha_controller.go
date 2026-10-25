@@ -8,6 +8,7 @@ import (
 	"simple-captcha/middleware"
 	"simple-captcha/models"
 	"simple-captcha/services"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -164,12 +165,12 @@ func (ctrl *CaptchaController) ValidateCaptchaHandler(c *gin.Context) {
 	}
 
 	if !ctrl.riskControl.ValidateSecondVerifyToken(req.Key) {
-		log.Printf("二次验证令牌无效: key=%s, ip=%s", req.Key, helper.GetRealClientIP(c))
+		log.Printf("二次验证令牌无效: key=%s, app=%s, ip=%s", req.Key, middleware.GetAppID(c), helper.GetRealClientIP(c))
 		helper.SimpleErrorResponse(c, helper.ErrCodeExpired, "验证码已失效")
 		return
 	}
 
-	log.Printf("状态查询成功: key=%s, ip=%s", req.Key, helper.GetRealClientIP(c))
+	log.Printf("状态查询成功: key=%s, app=%s, ip=%s", req.Key, middleware.GetAppID(c), helper.GetRealClientIP(c))
 
 	c.JSON(http.StatusOK, gin.H{
 		"valid": true,
@@ -225,22 +226,32 @@ func (ctrl *CaptchaController) extractVerifyData(req *models.VerifyRequest) stri
 	}
 }
 
-// 为了保持向后兼容，保留原有的函数签名
+// 为了保持向后兼容，保留原有的函数签名。
+// 默认控制器在首个请求时才创建：包初始化阶段不触发服务管理器（加载素材、连接 Redis、生成管理员凭据），
+// reset-admin-password 等子命令与测试的 TestMain 才能在此之前完成各自的准备
 var (
-	captchaController = NewCaptchaController()
+	captchaControllerOnce sync.Once
+	captchaController     *CaptchaController
 )
+
+func defaultCaptchaController() *CaptchaController {
+	captchaControllerOnce.Do(func() {
+		captchaController = NewCaptchaController()
+	})
+	return captchaController
+}
 
 // GetCaptchaHandler 全局函数（向后兼容）
 func GetCaptchaHandler(c *gin.Context) {
-	captchaController.GetCaptchaHandler(c)
+	defaultCaptchaController().GetCaptchaHandler(c)
 }
 
 // VerifyCaptchaHandler 全局函数（向后兼容）
 func VerifyCaptchaHandler(c *gin.Context) {
-	captchaController.VerifyCaptchaHandler(c)
+	defaultCaptchaController().VerifyCaptchaHandler(c)
 }
 
 // ValidateCaptchaHandler 全局函数（向后兼容）
 func ValidateCaptchaHandler(c *gin.Context) {
-	captchaController.ValidateCaptchaHandler(c)
+	defaultCaptchaController().ValidateCaptchaHandler(c)
 }

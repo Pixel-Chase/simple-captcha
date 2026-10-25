@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-const defaultAPIPrefix = "/api/v1"
+const (
+	defaultAPIPrefix   = "/api/v1"
+	defaultConsolePath = "/console"
+)
 
 // Config 应用配置结构
 type Config struct {
@@ -19,7 +22,6 @@ type Config struct {
 	CORS       CORSConfig
 	Redis      RedisConfig
 	Captcha    CaptchaConfig
-	Logging    LoggingConfig
 	Monitoring MonitoringConfig
 	Security   SecurityConfig
 	Risk       RiskConfig
@@ -97,27 +99,15 @@ type RiskConfig struct {
 	TelemetryLogSize  int           // Redis 中保留的最近遥测记录条数，0 表示不落 Redis
 }
 
-// AdminConfig 管理后台配置（管理员登录 + 背景图管理），默认关闭。
-// 关闭时相关路由完全不注册，纯验证码部署不受任何影响。
+// AdminConfig 管理控制台配置（管理员登录、背景图与接入应用管理），随服务常驻开启。
+// 管理员密码不走配置：首次启动时随机生成并打印到控制台，凭据与接入应用持久化在 DataDir。
 type AdminConfig struct {
-	Enabled        bool          // 是否开放管理接口
 	Username       string        // 管理员用户名
-	Password       string        // 管理员明文密码：仅便于本地演示，启动时即时转为 bcrypt 哈希
-	PasswordHash   string        // 管理员密码的 bcrypt 哈希，生产环境应使用此项
+	DataDir        string        // 控制台数据目录：管理员凭据（admin.json）与接入应用（apps.json）
+	ConsolePath    string        // 内嵌管理后台页面的挂载路径，不能是根路径或与 API / 监控路由重叠
 	SessionTTL     time.Duration // 登录会话有效期
 	MaxUploadSize  int64         // 单张背景图上传体积上限（字节）
 	MaxImagePixels int           // 单张背景图像素总数上限，防止解压炸弹
-}
-
-// LoggingConfig 日志配置
-type LoggingConfig struct {
-	Level      string
-	Format     string
-	Output     string
-	MaxSize    int
-	MaxBackups int
-	MaxAge     int
-	Compress   bool
 }
 
 // MonitoringConfig 监控配置
@@ -146,7 +136,6 @@ type SecurityConfig struct {
 	GlobalRateLimit   int
 	IPWhitelist       []string
 	IPBlacklist       []string
-	APIKey            string
 	RateLimitBackend  string // redis：多实例共享的滑动窗口限流；memory：单实例内存限流
 }
 
@@ -255,15 +244,6 @@ func loadFromEnv() *Config {
 			StateTTL:          getDurationEnv("RISK_STATE_TTL", 30*time.Minute),
 			TelemetryLogSize:  getIntEnv("RISK_TELEMETRY_LOG_SIZE", 1000),
 		},
-		Logging: LoggingConfig{
-			Level:      getEnv("LOG_LEVEL", "info"),
-			Format:     getEnv("LOG_FORMAT", "json"),
-			Output:     getEnv("LOG_OUTPUT", "stdout"),
-			MaxSize:    getIntEnv("LOG_MAX_SIZE", 100),
-			MaxBackups: getIntEnv("LOG_MAX_BACKUPS", 3),
-			MaxAge:     getIntEnv("LOG_MAX_AGE", 28),
-			Compress:   getBoolEnv("LOG_COMPRESS", true),
-		},
 		Monitoring: MonitoringConfig{
 			Enabled:         getBoolEnv("ENABLE_METRICS", true),
 			MetricsPath:     getEnv("METRICS_PATH", "/metrics"),
@@ -289,14 +269,12 @@ func loadFromEnv() *Config {
 			GlobalRateLimit:   getIntEnv("RATE_LIMIT_REQUESTS", 100),
 			IPWhitelist:       getStringSliceEnv("IP_WHITELIST", []string{}),
 			IPBlacklist:       getStringSliceEnv("IP_BLACKLIST", []string{}),
-			APIKey:            getEnv("API_KEY", ""),
 			RateLimitBackend:  strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_BACKEND", "redis"))),
 		},
 		Admin: AdminConfig{
-			Enabled:        getBoolEnv("ADMIN_ENABLED", false),
 			Username:       getEnv("ADMIN_USERNAME", "admin"),
-			Password:       getEnv("ADMIN_PASSWORD", ""),
-			PasswordHash:   getEnv("ADMIN_PASSWORD_HASH", ""),
+			DataDir:        getEnv("ADMIN_DATA_DIR", "./data"),
+			ConsolePath:    normalizeConsolePath(getEnv("CONSOLE_PATH", defaultConsolePath)),
 			SessionTTL:     getDurationEnv("ADMIN_SESSION_TTL", 2*time.Hour),
 			MaxUploadSize:  getInt64Env("ADMIN_MAX_UPLOAD_SIZE", 5<<20), // 5MB
 			MaxImagePixels: getIntEnv("ADMIN_MAX_IMAGE_PIXELS", 24_000_000),
@@ -317,6 +295,37 @@ func normalizeAPIPrefix(value string) string {
 	}
 
 	return prefix
+}
+
+// normalizeConsolePath 统一管理后台挂载路径格式：以 / 开头、不带结尾的 /
+func normalizeConsolePath(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return defaultConsolePath
+	}
+	return path.Clean("/" + strings.TrimLeft(value, "/"))
+}
+
+// validateConsolePath 管理后台页面以通配路由挂载：挂在根路径，或与 API、监控路由互相嵌套，都会让路由注册冲突
+func validateConsolePath(config *Config) error {
+	consolePath := config.Admin.ConsolePath
+	if consolePath == "/" {
+		return fmt.Errorf("CONSOLE_PATH cannot be the root path")
+	}
+
+	reserved := []string{config.Monitoring.HealthPath, config.Monitoring.MetricsPath, config.Monitoring.StatsPath}
+	if config.Server.APIPrefix != "" {
+		reserved = append(reserved, config.Server.APIPrefix)
+	} else {
+		// API 挂在根路径时，验证码与管理接口分别占用 /captchas 与 /admin
+		reserved = append(reserved, "/captchas", "/admin")
+	}
+	for _, route := range reserved {
+		if route == consolePath || strings.HasPrefix(consolePath, route+"/") || strings.HasPrefix(route, consolePath+"/") {
+			return fmt.Errorf("CONSOLE_PATH %s overlaps with route %s", consolePath, route)
+		}
+	}
+	return nil
 }
 
 // validateConfig 验证配置
@@ -370,22 +379,23 @@ func validateConfig(config *Config) error {
 	if config.Security.RateLimitBackend != "redis" && config.Security.RateLimitBackend != "memory" {
 		return fmt.Errorf("RATE_LIMIT_BACKEND must be redis or memory")
 	}
-	if config.Admin.Enabled {
-		if strings.TrimSpace(config.Admin.Username) == "" {
-			return fmt.Errorf("ADMIN_USERNAME cannot be empty when ADMIN_ENABLED=true")
-		}
-		if config.Admin.Password == "" && config.Admin.PasswordHash == "" {
-			return fmt.Errorf("ADMIN_PASSWORD_HASH (or ADMIN_PASSWORD) must be set when ADMIN_ENABLED=true")
-		}
-		if config.Admin.SessionTTL <= 0 {
-			return fmt.Errorf("ADMIN_SESSION_TTL must be positive")
-		}
-		if config.Admin.MaxUploadSize <= 0 || config.Admin.MaxUploadSize > config.Security.MaxRequestSize {
-			return fmt.Errorf("ADMIN_MAX_UPLOAD_SIZE must be between 1 and MAX_REQUEST_SIZE (%d)", config.Security.MaxRequestSize)
-		}
-		if config.Admin.MaxImagePixels <= 0 {
-			return fmt.Errorf("ADMIN_MAX_IMAGE_PIXELS must be positive")
-		}
+	if strings.TrimSpace(config.Admin.Username) == "" {
+		return fmt.Errorf("ADMIN_USERNAME cannot be empty")
+	}
+	if strings.TrimSpace(config.Admin.DataDir) == "" {
+		return fmt.Errorf("ADMIN_DATA_DIR cannot be empty")
+	}
+	if err := validateConsolePath(config); err != nil {
+		return err
+	}
+	if config.Admin.SessionTTL <= 0 {
+		return fmt.Errorf("ADMIN_SESSION_TTL must be positive")
+	}
+	if config.Admin.MaxUploadSize <= 0 || config.Admin.MaxUploadSize > config.Security.MaxRequestSize {
+		return fmt.Errorf("ADMIN_MAX_UPLOAD_SIZE must be between 1 and MAX_REQUEST_SIZE (%d)", config.Security.MaxRequestSize)
+	}
+	if config.Admin.MaxImagePixels <= 0 {
+		return fmt.Errorf("ADMIN_MAX_IMAGE_PIXELS must be positive")
 	}
 	return nil
 }

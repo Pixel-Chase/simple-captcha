@@ -216,12 +216,6 @@ func TestBaseService_CaptchaDataOperations(t *testing.T) {
 	baseService.DeleteCaptchaData(testKey)
 }
 
-func TestClickTextService_ServiceType(t *testing.T) {
-	service := &services.ClickTextService{}
-	serviceType := service.GetServiceType()
-	assert.Equal(t, "click-text", serviceType)
-}
-
 // 基准测试
 func BenchmarkServiceManager_GetCaptchaService(b *testing.B) {
 	manager := services.NewServiceManager()

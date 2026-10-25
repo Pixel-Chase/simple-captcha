@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCaptcha } from '@aetherlib/g-captcha';
 import type { CaptchaType } from '@aetherlib/g-captcha';
-import { API_BASE, getErrorMessage } from '../api';
+import { API_BASE, API_PREFIX, getErrorMessage } from '../api';
 import { CAPTCHA_TYPE_OPTIONS, captchaTypeLabel } from '../captcha-options';
 import { DEMO_ID } from './content';
 
@@ -25,7 +25,7 @@ export function LiveDemo() {
   const [copied, setCopied] = useState(false);
 
   const curl = result
-    ? `curl -H "Authorization: Bearer <API_KEY>" \\\n  ${API_BASE}/api/v1/captchas/states/${result.secondKey}`
+    ? `curl -H "Authorization: Bearer <应用密钥>" \\\n  ${API_BASE}${API_PREFIX}/captchas/states/${result.secondKey}`
     : '';
 
   const run = async () => {
@@ -63,8 +63,8 @@ export function LiveDemo() {
         <h2>先完整走一遍流程</h2>
         <p>
           选择题型后点击按钮，SDK 会向 <code>{API_BASE}</code> 取题并弹出验证。通过后得到一次性的{' '}
-          <code>second_key</code>，业务后端再用它向验证码服务做二次确认，前端不需要也不应该持有{' '}
-          <code>API_KEY</code>。
+          <code>second_key</code>
+          ，业务后端再凭自己的应用密钥向验证码服务做二次确认，前端不需要也不应该持有应用密钥。
         </p>
         <pre className="demo__snippet">
           <code>{SNIPPET}</code>
@@ -120,7 +120,8 @@ export function LiveDemo() {
                 {copied ? '已复制' : '复制命令'}
               </button>
               <span className="muted">
-                second_key 只能消费一次；开发环境的 API_KEY 见 backend/.env.development
+                second_key 只能消费一次；应用密钥在 <a href="#/console/apps">控制台 → 接入应用</a>{' '}
+                创建
               </span>
             </div>
           </div>

@@ -9,8 +9,7 @@ import (
 
 const adminSessionContextKey = "admin_session"
 
-// AdminAuthMiddleware 管理接口鉴权：校验 Bearer 会话令牌。
-// 与 APIKeyMiddleware 不同，这里没有"未配置则放行"的分支，令牌缺失或无效一律 401
+// AdminAuthMiddleware 管理接口鉴权：校验 Bearer 会话令牌，令牌缺失或无效一律 401
 func AdminAuthMiddleware(admin *services.AdminService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		session, ok := admin.Authenticate(BearerToken(c))
@@ -22,6 +21,25 @@ func AdminAuthMiddleware(admin *services.AdminService) gin.HandlerFunc {
 		}
 
 		c.Set(adminSessionContextKey, session)
+		c.Next()
+	}
+}
+
+// RequirePasswordChanged 尚未修改初始密码的会话只能查询会话、注销与改密，其余管理接口一律 403。
+// 必须挂在 AdminAuthMiddleware 之后
+func RequirePasswordChanged() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		session := GetAdminSession(c)
+		if session == nil {
+			helper.ErrorResponse(c, helper.ErrUnauthorized)
+			c.Abort()
+			return
+		}
+		if session.MustChangePassword {
+			helper.ErrorResponse(c, helper.ErrPasswordChangeRequired)
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

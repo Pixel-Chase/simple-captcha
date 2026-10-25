@@ -44,6 +44,7 @@
     "start": "vite",
     "build": "tsdown",
     "playground:build": "vite build",
+    "build:console": "vite build --config vite.console.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
