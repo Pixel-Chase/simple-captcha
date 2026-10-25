@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"simple-captcha/config"
-	"strconv"
 	"sync"
 	"time"
 
@@ -40,22 +39,25 @@ func (e *CacheError) Error() string {
 func initClient() {
 	cfg := config.LoadConfig()
 
-	db, err := strconv.Atoi(strconv.Itoa(cfg.Redis.DB))
-	if err != nil {
-		log.Fatalf("无效的 REDIS_DB 值: %v", err)
+	// go-redis 把 MaxRetries=0 当作默认的 3 次、-1 才是不重试；对外统一用 0 表示不重试
+	commandRetries := cfg.Redis.MaxRetries
+	if commandRetries == 0 {
+		commandRetries = -1
 	}
 
 	client = redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%s", cfg.Redis.Host, cfg.Redis.Port),
 		Password:     cfg.Redis.Password,
-		DB:           db,
-		PoolSize:     10,              // 连接池大小
-		MinIdleConns: 5,               // 最小空闲连接数
-		MaxRetries:   3,               // 最大重试次数
-		DialTimeout:  5 * time.Second, // 连接超时
-		ReadTimeout:  3 * time.Second, // 读取超时
-		WriteTimeout: 3 * time.Second, // 写入超时
-		IdleTimeout:  5 * time.Minute, // 空闲连接超时
+		DB:           cfg.Redis.DB,
+		PoolSize:     cfg.Redis.PoolSize,
+		MinIdleConns: cfg.Redis.MinIdleConns,
+		MaxRetries:   commandRetries,
+		DialTimeout:  cfg.Redis.DialTimeout,
+		ReadTimeout:  cfg.Redis.ReadTimeout,
+		WriteTimeout: cfg.Redis.WriteTimeout,
+		PoolTimeout:  cfg.Redis.PoolTimeout,
+		IdleTimeout:  cfg.Redis.IdleTimeout,
+		MaxConnAge:   cfg.Redis.MaxConnAge,
 	})
 
 	// 测试连接是否成功，带重试机制

@@ -46,8 +46,9 @@ func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
 
 	clientHash := helper.ClientFingerprint(c)
 
-	// 难度由服务端根据该客户端的历史表现决定；auto 类型也在这里解析为具体题型
-	level := ctrl.policy.DifficultyFor(clientHash)
+	// 难度由服务端根据该客户端的历史表现与出口 IP 的请求量决定；auto 类型也在这里解析为具体题型
+	ipRequests := middleware.GetIPRequestCount(c)
+	level := ctrl.policy.DifficultyFor(clientHash, ipRequests)
 	captchaType := ctrl.policy.ResolveType(req.Type, level)
 
 	captchaService, exists := ctrl.serviceManager.GetCaptchaService(captchaType)
@@ -75,8 +76,8 @@ func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("生成验证码成功: type=%s, mode=%s, scale=%d, level=%d, key=%s, ip=%s",
-		captchaType, req.Mode, captData.Scale, captData.Difficulty, captData.Key, helper.GetRealClientIP(c))
+	log.Printf("生成验证码成功: type=%s, mode=%s, scale=%d, level=%d, key=%s, ip=%s, ipRequests=%d",
+		captchaType, req.Mode, captData.Scale, captData.Difficulty, captData.Key, helper.GetRealClientIP(c), ipRequests)
 
 	response := ctrl.buildCaptchaResponse(captchaType, captData)
 

@@ -43,7 +43,9 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.RequestIDMiddleware())
 	r.Use(middleware.LoggerMiddleware())
 	r.Use(middleware.ErrorHandlerMiddleware())
-	r.Use(middleware.MetricsMiddleware())
+	if cfg.Monitoring.Enabled {
+		r.Use(middleware.MetricsMiddleware())
+	}
 	r.Use(middleware.SecurityMiddleware())
 	r.Use(middleware.TrustedProxyMiddleware(r))
 	r.Use(middleware.CompressionMiddleware())
@@ -56,16 +58,17 @@ func SetupRouter() *gin.Engine {
 
 	// 健康检查和监控路由（不需要限流）
 	r.GET(cfg.Monitoring.HealthPath, healthCheckHandler)
-	r.GET(cfg.Monitoring.MetricsPath, metricsHandler)
+	if cfg.Monitoring.Enabled {
+		r.GET(cfg.Monitoring.MetricsPath, metricsHandler)
+	}
 	r.GET(cfg.Monitoring.StatsPath, statsHandler)
 
-	// 验证码API路由组（需要限流保护）
+	// 验证码API路由组
 	api := r.Group(cfg.Server.APIPrefix + "/captchas")
-	api.Use(middleware.RateLimitMiddleware(riskControl))
 	api.Use(middleware.NoCacheMiddleware()) // 验证码接口（含错误响应）一律禁止缓存
 
 	// 注册验证码相关路由
-	registerCaptchaRoutes(api, serviceManager.GetAppService())
+	registerCaptchaRoutes(api, serviceManager.GetAppService(), middleware.CaptchaIPPressureMiddleware(riskControl))
 
 	// 管理后台路由：管理员登录 + 背景图与接入应用管理
 	RegisterAdminRoutes(r.Group(cfg.Server.APIPrefix+"/admin"),
@@ -73,11 +76,11 @@ func SetupRouter() *gin.Engine {
 
 	// 管理后台页面：内嵌的前端构建产物，与 API 同源，无需跨域配置
 	consoleHandler := console.NewHandler(console.Assets(), cfg.Server.APIPrefix)
-	console.Register(r, cfg.Admin.ConsolePath, consoleHandler)
+	console.Register(r, consoleHandler)
 	if consoleHandler.Built() {
-		log.Printf("管理后台页面: %s/", cfg.Admin.ConsolePath)
+		log.Printf("管理后台页面: %s/", console.BasePath)
 	} else {
-		log.Printf("管理后台前端未内嵌（未执行 pnpm build:console），%s/ 只显示构建提示", cfg.Admin.ConsolePath)
+		log.Printf("管理后台前端未内嵌（未执行 pnpm build:console），%s/ 只显示构建提示", console.BasePath)
 	}
 
 	return r
@@ -92,12 +95,12 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps
 	appCtrl := controllers.NewAppController(apps)
 	rg.Use(middleware.NoCacheMiddleware())
 
-	rg.POST("/login", middleware.RateLimitMiddleware(riskControl), adminCtrl.LoginHandler)
+	rg.POST("/login", middleware.AdminRateLimitMiddleware(riskControl), adminCtrl.LoginHandler)
 
 	authed := rg.Group("", middleware.AdminAuthMiddleware(admin))
 	authed.GET("/session", adminCtrl.SessionHandler)
 	authed.DELETE("/session", adminCtrl.LogoutHandler)
-	authed.PUT("/password", middleware.RateLimitMiddleware(riskControl), adminCtrl.ChangePasswordHandler)
+	authed.PUT("/password", middleware.AdminRateLimitMiddleware(riskControl), adminCtrl.ChangePasswordHandler)
 
 	ready := authed.Group("", middleware.RequirePasswordChanged())
 	ready.GET("/backgrounds", adminCtrl.ListBackgroundsHandler)
@@ -112,19 +115,22 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps
 	ready.DELETE("/apps/:id", appCtrl.DeleteHandler)
 }
 
-// registerCaptchaRoutes 注册验证码相关路由
-func registerCaptchaRoutes(rg *gin.RouterGroup, apps *services.AppService) {
+// registerCaptchaRoutes 注册验证码相关路由；ipPressure 只挂在用户侧的出题与提交接口上
+func registerCaptchaRoutes(rg *gin.RouterGroup, apps *services.AppService, ipPressure gin.HandlerFunc) {
 	// 获取验证码资源
 	rg.GET("/:type",
+		ipPressure,
 		middleware.ValidateCaptchaRequest(),
 		controllers.GetCaptchaHandler)
 
 	// 提交一次验证答案（用户侧）
 	rg.POST("/:type/:key/attempts",
+		ipPressure,
 		middleware.ValidateVerifyRequest(),
 		controllers.VerifyCaptchaHandler)
 
-	// 查询验证会话状态（S2S，需携带 Bearer <应用密钥>）
+	// 查询验证会话状态（S2S，需携带 Bearer <应用密钥>）。不按 IP 计数：调用方是业务后端，
+	// 全站所有用户的二次校验都从它的固定 IP 发出，请求量反映的是全站登录量而不是某个出口的压力
 	rg.GET("/states/:key",
 		middleware.AppAuthMiddleware(apps),
 		middleware.ValidateStateRequest(),
@@ -214,10 +220,10 @@ func statsHandler(c *gin.Context) {
 			"version":     "1.0.0",
 			"environment": cfg.Server.Environment,
 			"config": map[string]interface{}{
-				"server_port":          cfg.Server.Port,
-				"redis_host":           cfg.Redis.Host,
-				"captcha_cache_expire": cfg.Captcha.CacheExpiration.String(),
-				"rate_limit":           cfg.Captcha.IPRateLimit,
+				"server_port":            cfg.Server.Port,
+				"redis_host":             cfg.Redis.Host,
+				"captcha_cache_expire":   cfg.Captcha.CacheExpiration.String(),
+				"ip_escalate_per_minute": cfg.Captcha.IPEscalatePerMin,
 			},
 		},
 		"runtime": map[string]interface{}{
@@ -233,8 +239,10 @@ func statsHandler(c *gin.Context) {
 		stats["services"] = serviceStats
 	}
 
-	// 添加中间件指标
-	stats["metrics"] = middleware.GetMetrics()
+	// 添加中间件指标：关闭采集时请求数恒为 0，GetMetrics 算错误率会除以 0，得到的 NaN/Inf 无法序列化成 JSON
+	if cfg.Monitoring.Enabled {
+		stats["metrics"] = middleware.GetMetrics()
+	}
 
 	c.JSON(http.StatusOK, stats)
 }

@@ -20,6 +20,9 @@ import (
 //go:embed all:dist
 var embedded embed.FS
 
+// BasePath 管理后台页面的挂载路径
+const BasePath = "/console"
+
 // apiPrefixPlaceholder 与前端约定的占位符（见 sdk/playground/console/index.html 与 api.ts）
 const apiPrefixPlaceholder = "__CAPTCHA_API_PREFIX__"
 
@@ -68,16 +71,16 @@ func (h *Handler) Built() bool {
 	return h.index != nil
 }
 
-// Register 把管理后台挂到 basePath（如 /console）：basePath 重定向到 basePath/，
-// basePath/ 返回 index.html，其余路径只提供构建产物中的文件。控制台用 hash 路由，不需要 SPA 回退
-func Register(r gin.IRoutes, basePath string, h *Handler) {
+// Register 把管理后台挂到 BasePath：BasePath 重定向到 BasePath/，
+// BasePath/ 返回 index.html，其余路径只提供构建产物中的文件。控制台用 hash 路由，不需要 SPA 回退
+func Register(r gin.IRoutes, h *Handler) {
 	redirect := func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, basePath+"/")
+		c.Redirect(http.StatusMovedPermanently, BasePath+"/")
 	}
-	r.GET(basePath, redirect)
-	r.HEAD(basePath, redirect)
-	r.GET(basePath+"/*filepath", h.serve)
-	r.HEAD(basePath+"/*filepath", h.serve)
+	r.GET(BasePath, redirect)
+	r.HEAD(BasePath, redirect)
+	r.GET(BasePath+"/*filepath", h.serve)
+	r.HEAD(BasePath+"/*filepath", h.serve)
 }
 
 func (h *Handler) serve(c *gin.Context) {

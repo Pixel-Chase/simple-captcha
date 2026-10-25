@@ -2,11 +2,13 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"simple-captcha/cache"
 	"simple-captcha/config"
 	"simple-captcha/helper"
 	"simple-captcha/models"
@@ -19,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -253,20 +256,94 @@ func TestVerify_ScaledChallengeUsesImageCoordinates(t *testing.T) {
 
 func TestRateLimiter_RedisSlidingWindow(t *testing.T) {
 	cfg := config.LoadConfig()
-	if cfg.Security.RateLimitBackend != "redis" {
-		t.Skip("RATE_LIMIT_BACKEND != redis")
+	if cfg.Admin.IPLimitPerMin <= 0 {
+		t.Skip("ADMIN_IP_LIMIT_PER_MINUTE 为 0，管理员限流已关闭")
 	}
 
 	riskControl := services.NewRiskControlService()
 	testIP := fmt.Sprintf("203.0.113.%d-%d", time.Now().UnixNano()%250, time.Now().UnixNano())
 
-	for i := 0; i < cfg.Captcha.IPRateLimit; i++ {
-		assert.True(t, riskControl.CheckIPLimit(testIP), "第 %d 次请求应放行", i+1)
+	// 管理员接口按 ADMIN_IP_LIMIT_PER_MINUTE 严格限流
+	for i := 0; i < cfg.Admin.IPLimitPerMin; i++ {
+		assert.True(t, riskControl.CheckAdminIP(testIP), "第 %d 次请求应放行", i+1)
 	}
-	assert.False(t, riskControl.CheckIPLimit(testIP), "超过上限应被拒绝")
+	assert.False(t, riskControl.CheckAdminIP(testIP), "超过上限应被拒绝")
+
+	// 验证码请求与管理员接口分开计数，互不挤占
+	assert.Equal(t, 1, riskControl.TrackCaptchaIP(testIP))
 
 	// 另一个 IP 不受影响
-	assert.True(t, riskControl.CheckIPLimit(testIP+"-other"))
+	assert.True(t, riskControl.CheckAdminIP(testIP+"-other"))
+}
+
+// 同一出口 IP 的验证码请求量只让题目变难，任何请求量都不拒绝；业务后端的 S2S 状态查询不计入出口 IP
+func TestRouter_SharedEgressEscalatesInsteadOfBlocking(t *testing.T) {
+	cfg := config.LoadConfig()
+	threshold := cfg.Captcha.IPEscalatePerMin
+	if threshold <= 0 {
+		t.Skip("CAPTCHA_IP_ESCALATE_PER_MINUTE 为 0，按 IP 加难已关闭")
+	}
+
+	const egressIP = "198.51.100.77"
+	bucket := services.RateLimitKeyPrefix + egressIP
+	rdb := cache.GetRedisClient()
+	ctx := context.Background()
+	require.NoError(t, rdb.Del(ctx, bucket).Err())
+	t.Cleanup(func() { rdb.Del(ctx, bucket) })
+
+	// 直接往窗口里预填请求记录，模拟同一出口下很多人在同一分钟里出题
+	seed := func(n int) {
+		require.NoError(t, rdb.Del(ctx, bucket).Err())
+		now := time.Now().UnixMilli()
+		members := make([]*redis.Z, 0, n)
+		for i := 0; i < n; i++ {
+			members = append(members, &redis.Z{Score: float64(now), Member: fmt.Sprintf("seed-%d", i)})
+		}
+		if n > 0 {
+			require.NoError(t, rdb.ZAdd(ctx, bucket, members...).Err())
+		}
+	}
+	// 用一个全新的 UA，保证客户端历史状态为空，难度只受出口 IP 请求量影响
+	userAgent := fmt.Sprintf("shared-egress-test/%d", time.Now().UnixNano())
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = egressIP + ":4321"
+		req.Header.Set("User-Agent", userAgent)
+		w := httptest.NewRecorder()
+		router().ServeHTTP(w, req)
+		return w
+	}
+	levelOf := func(w *httptest.ResponseRecorder) int {
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var body map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		record, err := services.NewBaseService().GetCaptchaData(body["key"].(string))
+		require.Nil(t, err)
+		return services.ParseMeta(record).Difficulty
+	}
+
+	// 每次请求自身也会计入窗口：预填 n 条后实际计数为 n+1
+	const path = "/api/v1/captchas/slide-text"
+	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+
+	seed(0)
+	assert.Equal(t, base, levelOf(get(path)), "低于加难阈值时保持基础难度")
+
+	// S2S 状态查询走应用密钥鉴权，不计入出口 IP 的请求量
+	assert.Equal(t, http.StatusUnauthorized, get("/api/v1/captchas/states/"+strings.Repeat("a", 32)).Code)
+	assert.EqualValues(t, 1, rdb.ZCard(ctx, bucket).Val())
+
+	seed(threshold)
+	assert.Equal(t, services.ClampDifficulty(base+1), levelOf(get(path)), "超过加难阈值 1 倍加 1 级")
+
+	seed(2 * threshold)
+	assert.Equal(t, services.ClampDifficulty(base+2), levelOf(get(path)), "超过加难阈值 2 倍加 2 级")
+
+	// 请求量再大也只是加难到顶，不拒绝；封顶后的请求不再写入窗口
+	flood := 50 * threshold
+	seed(flood)
+	assert.Equal(t, services.ClampDifficulty(base+2), levelOf(get(path)), "任何请求量都不因 IP 被拒绝")
+	assert.EqualValues(t, flood, rdb.ZCard(ctx, bucket).Val())
 }
 
 func TestClientRiskStore_EscalatesDifficulty(t *testing.T) {
@@ -275,15 +352,15 @@ func TestClientRiskStore_EscalatesDifficulty(t *testing.T) {
 	clientHash := fmt.Sprintf("test-client-%d", time.Now().UnixNano())
 
 	base := config.LoadConfig().Captcha.DefaultDifficulty
-	assert.Equal(t, base, policy.DifficultyFor(clientHash))
+	assert.Equal(t, base, policy.DifficultyFor(clientHash, 0))
 
 	store.Record(clientHash, false, 10)
 	store.Record(clientHash, false, 10)
-	assert.Equal(t, services.ClampDifficulty(base+1), policy.DifficultyFor(clientHash), "连续失败 2 次升一级")
+	assert.Equal(t, services.ClampDifficulty(base+1), policy.DifficultyFor(clientHash, 0), "连续失败 2 次升一级")
 
 	store.Record(clientHash, false, 90)
 	store.Record(clientHash, false, 90)
-	assert.Equal(t, services.MaxDifficulty, policy.DifficultyFor(clientHash), "失败 4 次且高风险分应升到顶")
+	assert.Equal(t, services.MaxDifficulty, policy.DifficultyFor(clientHash, 0), "失败 4 次且高风险分应升到顶")
 
 	state := store.Get(clientHash)
 	assert.Equal(t, 4, state.Fails)

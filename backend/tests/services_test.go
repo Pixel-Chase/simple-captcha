@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"simple-captcha/config"
 	"simple-captcha/services"
 	"testing"
 	"time"
@@ -94,15 +95,18 @@ func TestRiskControlService_IPLimit(t *testing.T) {
 	// 限流计数存放在 Redis 中会跨测试运行保留，使用唯一 IP 避免互相干扰
 	testIP := fmt.Sprintf("198.51.100.%d-%d", time.Now().UnixNano()%250, time.Now().UnixNano())
 
-	// 测试IP限制检查
-	for i := 0; i < 30; i++ { // 默认限制是30次
-		result := riskControl.CheckIPLimit(testIP)
-		assert.True(t, result, "前30次请求应该被允许")
+	// 验证码请求只计数不拒绝：计数逐次累加，直到加难封顶
+	saturation := services.IPPressureSaturation(config.LoadConfig().Captcha.IPEscalatePerMin)
+	for i := 1; i <= saturation; i++ {
+		if !assert.Equal(t, i, riskControl.TrackCaptchaIP(testIP)) {
+			return
+		}
 	}
 
-	// 第31次请求应该被拒绝
-	result := riskControl.CheckIPLimit(testIP)
-	assert.False(t, result, "第31次请求应该被拒绝")
+	// 封顶后不再写入窗口，计数保持不变
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, saturation, riskControl.TrackCaptchaIP(testIP))
+	}
 }
 
 func TestRiskControlService_SecondVerifyToken(t *testing.T) {
@@ -226,13 +230,13 @@ func BenchmarkServiceManager_GetCaptchaService(b *testing.B) {
 	}
 }
 
-func BenchmarkRiskControlService_CheckIPLimit(b *testing.B) {
+func BenchmarkRiskControlService_TrackCaptchaIP(b *testing.B) {
 	manager := services.NewServiceManager()
 	riskControl := manager.GetRiskControlService()
 	testIP := fmt.Sprintf("198.51.100.b-%d", time.Now().UnixNano())
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		riskControl.CheckIPLimit(testIP)
+		riskControl.TrackCaptchaIP(testIP)
 	}
 }

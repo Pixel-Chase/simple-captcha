@@ -80,7 +80,7 @@ func main() {
 }
 
 // runResetAdminPassword 子命令 `simple-captcha reset-admin-password`：
-// 重新生成随机管理员密码并打印到标准输出，下次登录后必须修改。数据目录与服务一致取自 ADMIN_DATA_DIR，
+// 重新生成随机管理员密码并打印到标准输出，下次登录后必须修改。数据目录与服务一致（工作目录下的 data），
 // 服务运行中执行也会立即生效，已有会话全部失效；容器部署时用 docker compose exec 在容器内执行。
 func runResetAdminPassword(cfg config.AdminConfig, stdout, stderr io.Writer) int {
 	password, err := services.ResetAdminPassword(cfg.DataDir)

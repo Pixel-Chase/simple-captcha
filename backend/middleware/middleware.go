@@ -87,29 +87,47 @@ func MetricsMiddleware() gin.HandlerFunc {
 	}
 }
 
-// RateLimitMiddleware 增强限流中间件
-func RateLimitMiddleware(riskControl services.RiskControlService) gin.HandlerFunc {
+const ipRequestsKey = "ip_requests"
+
+// CaptchaIPPressureMiddleware 验证码出题与提交的单 IP 计数：记录该 IP 在窗口内的请求数供出题加难，不因请求量拒绝
+func CaptchaIPPressureMiddleware(riskControl services.RiskControlService) gin.HandlerFunc {
+	return ipGuard(func(c *gin.Context, ip string) bool {
+		c.Set(ipRequestsKey, riskControl.TrackCaptchaIP(ip))
+		return true
+	})
+}
+
+// AdminRateLimitMiddleware 管理员登录与改密的单 IP 限流，每分钟超过 ADMIN_IP_LIMIT_PER_MINUTE 即拒绝
+func AdminRateLimitMiddleware(riskControl services.RiskControlService) gin.HandlerFunc {
+	return ipGuard(func(_ *gin.Context, ip string) bool {
+		return riskControl.CheckAdminIP(ip)
+	})
+}
+
+// GetIPRequestCount 返回 CaptchaIPPressureMiddleware 记录的该 IP 最近一分钟请求数；白名单或关闭加难时为 0
+func GetIPRequestCount(c *gin.Context) int {
+	return c.GetInt(ipRequestsKey)
+}
+
+// ipGuard 白名单直接放行、黑名单拒绝，其余交给 allow 判断
+func ipGuard(allow func(c *gin.Context, ip string) bool) gin.HandlerFunc {
 	cfg := config.GetConfig()
 
 	return func(c *gin.Context) {
-		// 获取真实IP
 		realIP := helper.GetRealClientIP(c)
 
-		// 检查IP白名单
 		if isIPInList(realIP, cfg.Security.IPWhitelist) {
 			c.Next()
 			return
 		}
 
-		// 检查IP黑名单
 		if isIPInList(realIP, cfg.Security.IPBlacklist) {
 			helper.SimpleErrorResponse(c, 403, "访问被拒绝")
 			c.Abort()
 			return
 		}
 
-		// 应用限流
-		if cfg.Security.EnableRateLimit && !riskControl.CheckIPLimit(realIP) {
+		if !allow(c, realIP) {
 			helper.SimpleErrorResponse(c, 429, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return

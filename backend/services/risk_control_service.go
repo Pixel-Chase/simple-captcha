@@ -11,12 +11,17 @@ import (
 	"time"
 )
 
-// RiskControlServiceImpl 风险控制服务实现：IP 限流 + 二次验证令牌
+const (
+	// adminRateLimitPrefix 管理员接口的计数与验证码请求分开存放：同一出口下的验证码流量不能挤占管理员的额度
+	adminRateLimitPrefix = "admin:"
+	// ipCounterWindow 单 IP 计数窗口固定为 1 分钟，所有阈值都按每分钟配置
+	ipCounterWindow = time.Minute
+)
+
+// RiskControlServiceImpl 风险控制服务实现：IP 计数与限流 + 二次验证令牌
 type RiskControlServiceImpl struct {
-	config   *config.Config
-	limiter  RateLimiter        // 主限流器（Redis 滑动窗口），可能为 nil
-	fallback *memoryRateLimiter // Redis 不可用时的兜底
-	backend  string             // 当前限流后端名称
+	config  *config.Config
+	limiter *redisSlidingWindowLimiter // 单 IP 计数，多实例共享
 
 	secondTokens map[string]time.Time
 	tokenMutex   sync.RWMutex
@@ -27,14 +32,8 @@ func NewRiskControlService() *RiskControlServiceImpl {
 	cfg := config.LoadConfig()
 	service := &RiskControlServiceImpl{
 		config:       cfg,
-		fallback:     newMemoryRateLimiter(cfg.Captcha.IPRateLimit, cfg.Captcha.RateLimitWindow),
-		backend:      "memory",
+		limiter:      newRedisSlidingWindowLimiter(ipCounterWindow),
 		secondTokens: make(map[string]time.Time),
-	}
-
-	if cfg.Security.RateLimitBackend == "redis" {
-		service.limiter = newRedisSlidingWindowLimiter(cfg.Captcha.IPRateLimit, cfg.Captcha.RateLimitWindow)
-		service.backend = "redis"
 	}
 
 	go service.startCleanupRoutine()
@@ -42,18 +41,29 @@ func NewRiskControlService() *RiskControlServiceImpl {
 	return service
 }
 
-// CheckIPLimit 检查 IP 是否仍在限流额度内；Redis 不可用时自动回退到内存限流
-func (r *RiskControlServiceImpl) CheckIPLimit(ip string) bool {
-	if r.limiter != nil {
-		allowed, err := r.limiter.Allow(ip)
-		if err == nil {
-			return allowed
-		}
-		log.Printf("Redis 限流不可用，回退内存限流: ip=%s, error=%v", ip, err)
-	}
+// TrackCaptchaIP 记录一次来自 ip 的验证码请求，返回最近一分钟内的请求数，只用于给出题加难（见 IPPressureBoost），从不拒绝。
+// 按 IP 拒绝挡不住会换 IP 的攻击者，却会让企业 NAT、运营商 CGNAT 后共用出口的正常用户一起无法使用。
+// 计数达到 IPPressureSaturation 后加难已到顶，之后的请求不再写入窗口，持续高频请求也不会把计数集合撑大。
+func (r *RiskControlServiceImpl) TrackCaptchaIP(ip string) int {
+	count, _ := r.hit(ip, IPPressureSaturation(r.config.Captcha.IPEscalatePerMin))
+	return count
+}
 
-	allowed, _ := r.fallback.Allow(ip)
+// CheckAdminIP 管理员登录与改密的单 IP 限流，每分钟超过 ADMIN_IP_LIMIT_PER_MINUTE 即拒绝
+func (r *RiskControlServiceImpl) CheckAdminIP(ip string) bool {
+	_, allowed := r.hit(adminRateLimitPrefix+ip, r.config.Admin.IPLimitPerMin)
 	return allowed
+}
+
+// hit 记录一次请求。Redis 出错时放行且不计数：验证码只是少加难；管理员登录也要靠 Redis 消费验证码凭证，
+// Redis 不可用时本就无法登录，放行不会多出绕过路径
+func (r *RiskControlServiceImpl) hit(key string, limit int) (int, bool) {
+	count, allowed, err := r.limiter.Hit(key, limit)
+	if err != nil {
+		log.Printf("单 IP 计数失败，本次放行: key=%s, error=%v", key, err)
+		return 0, true
+	}
+	return count, allowed
 }
 
 // ValidateSecondVerifyToken 验证二次验证令牌（一次性消费）
@@ -112,8 +122,6 @@ func (r *RiskControlServiceImpl) startCleanupRoutine() {
 func (r *RiskControlServiceImpl) cleanup() {
 	now := time.Now()
 
-	r.fallback.cleanup(now)
-
 	r.tokenMutex.Lock()
 	for token, expireTime := range r.secondTokens {
 		if now.After(expireTime) {
@@ -130,11 +138,9 @@ func (r *RiskControlServiceImpl) GetStatistics() map[string]interface{} {
 	r.tokenMutex.RUnlock()
 
 	return map[string]interface{}{
-		"backend":            r.backend,
-		"memory_tracked_ips": r.fallback.size(),
-		"active_tokens":      tokenCount,
-		"rate_limit":         r.config.Captcha.IPRateLimit,
-		"time_window":        r.config.Captcha.RateLimitWindow.String(),
-		"token_expire":       r.config.Captcha.SecondVerifyExpire.String(),
+		"active_tokens":             tokenCount,
+		"ip_escalate_per_minute":    r.config.Captcha.IPEscalatePerMin,
+		"admin_ip_limit_per_minute": r.config.Admin.IPLimitPerMin,
+		"token_expire":              r.config.Captcha.SecondVerifyExpire.String(),
 	}
 }

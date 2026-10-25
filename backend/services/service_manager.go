@@ -72,7 +72,7 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	sm.captchaServices["slide-text"] = NewSlideTextCaptchaService(backgrounds)
 	sm.captchaServices["slide-region"] = NewSlideRegionCaptchaService(backgrounds)
 
-	// 管理后台：管理员凭据与接入应用持久化在 ADMIN_DATA_DIR；登录前置验证码由风控服务消费，素材增删作用于同一个仓库
+	// 管理后台：管理员凭据与接入应用持久化在工作目录下的 data；登录前置验证码由风控服务消费，素材增删作用于同一个仓库
 	admin, err := NewAdminService(cfg.Admin, backgrounds, sm.riskControl)
 	if err != nil {
 		log.Fatalln("初始化管理后台失败:", err)

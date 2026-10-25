@@ -21,15 +21,41 @@ func NewChallengePolicy(store *ClientRiskStore) *ChallengePolicy {
 	}
 }
 
-// DifficultyFor 计算该客户端下一题的难度等级
-func (p *ChallengePolicy) DifficultyFor(clientHash string) int {
+// DifficultyFor 计算该客户端下一题的难度等级：先按客户端历史表现定级，
+// 再按其出口 IP 最近一分钟的请求数（ipRequests）加难
+func (p *ChallengePolicy) DifficultyFor(clientHash string, ipRequests int) int {
 	if p == nil {
 		return 3
 	}
-	if p.store == nil || clientHash == "" {
-		return ClampDifficulty(p.cfg.Captcha.DefaultDifficulty)
+	level := p.cfg.Captcha.DefaultDifficulty
+	if p.store != nil && clientHash != "" {
+		level = p.store.LevelFor(clientHash)
 	}
-	return p.store.LevelFor(clientHash)
+	return ClampDifficulty(level + IPPressureBoost(ipRequests, p.cfg.Captcha.IPEscalatePerMin))
+}
+
+// IPPressureBoost 纯函数：出口 IP 每分钟请求数超过阈值 1 倍加 1 级、超过 2 倍加 2 级；阈值 <= 0 时不加难。
+// IP 只调难度不做拒绝：共用出口的正常用户最多是题目变难、PoW 多算一会儿，批量脚本的成本则随请求量上升
+func IPPressureBoost(requests, threshold int) int {
+	if threshold <= 0 {
+		return 0
+	}
+	switch {
+	case requests > 2*threshold:
+		return 2
+	case requests > threshold:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// IPPressureSaturation 计数达到该值时 IPPressureBoost 已到顶，窗口无需再记录更多请求；阈值 <= 0 时不计数
+func IPPressureSaturation(threshold int) int {
+	if threshold <= 0 {
+		return 0
+	}
+	return 2*threshold + 1
 }
 
 // ResolveType 把请求类型解析为具体题型；非 auto 原样返回

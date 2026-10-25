@@ -30,7 +30,7 @@ func builtAssets() fs.FS {
 func newRouter(assets fs.FS, apiPrefix string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	Register(r, "/console", NewHandler(assets, apiPrefix))
+	Register(r, NewHandler(assets, apiPrefix))
 	return r
 }
 

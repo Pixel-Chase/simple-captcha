@@ -87,6 +87,32 @@ func TestLevelFromState(t *testing.T) {
 	}
 }
 
+func TestIPPressureBoost(t *testing.T) {
+	cases := []struct{ requests, threshold, want int }{
+		{0, 30, 0},
+		{30, 30, 0},
+		{31, 30, 1},
+		{60, 30, 1},
+		{61, 30, 2},
+		{100000, 30, 2},
+		{500, 0, 0},
+	}
+	for _, c := range cases {
+		if got := IPPressureBoost(c.requests, c.threshold); got != c.want {
+			t.Errorf("IPPressureBoost(%d, %d) = %d, want %d", c.requests, c.threshold, got, c.want)
+		}
+	}
+
+	// 封顶值恰好是加难到顶所需的最小计数：少一次还没到顶，计数停在这里不影响结果
+	sat := IPPressureSaturation(30)
+	if IPPressureBoost(sat, 30) != 2 || IPPressureBoost(sat-1, 30) != 1 {
+		t.Errorf("IPPressureSaturation(30) = %d should be the first count reaching the top boost", sat)
+	}
+	if IPPressureSaturation(0) != 0 {
+		t.Error("threshold 0 disables counting")
+	}
+}
+
 func TestChooseAutoType(t *testing.T) {
 	first := func(int) int { return 0 }
 	if got := ChooseAutoType(1, first); got != "slide-text" {

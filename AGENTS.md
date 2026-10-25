@@ -79,5 +79,5 @@ simple-captcha/
 > **日常调试指北：**
 > * 启动后端服务 (位于 `backend/`)： `./run-dev.sh`（依次加载 `.env` 与 `.env.development`）；管理后台常驻开启，管理员密码首次启动时随机生成并打印在终端（凭据存 `backend/data/`，遗失用 `./run-dev.sh reset-admin-password`）；S2S 鉴权用管理后台「接入应用」签发的应用密钥，没有 `API_KEY` 配置；生产配置复制 `.env.example` 为 `.env`
 > * 启动前端本地演示页 (位于 `sdk/`，热更新引用 `src` 源码)： `pnpm start`；构建 SDK 产物： `pnpm build`
-> * 管理后台内嵌在 Go 服务的 `/console/`（`CONSOLE_PATH`）：`pnpm build:console` 输出到 `backend/console/dist` 后重新编译才生效；镜像构建上下文是仓库根目录（`docker build -f backend/Dockerfile .`），会自动构建前端。控制台页面改动在 `sdk/playground/console` 与 `playground/pages`，演示站与内嵌页共用
+> * 管理后台内嵌在 Go 服务的 `/console/`：`pnpm build:console` 输出到 `backend/console/dist` 后重新编译才生效；镜像构建上下文是仓库根目录（`docker build -f backend/Dockerfile .`），会自动构建前端。控制台页面改动在 `sdk/playground/console` 与 `playground/pages`，演示站与内嵌页共用
 > * 接入文档页（`/#/docs`）以 `?raw` 读取仓库根目录 `README.md`，按二级标题切分后用 marked 渲染；展示哪些章节、如何分组见 `sdk/playground/docs/content.ts`。修订接入说明只改 README，不要在 playground 里另写一份；README 二级标题改名时同步更新该清单

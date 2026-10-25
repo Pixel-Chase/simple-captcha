@@ -5,16 +5,14 @@ import (
 	"log"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-const (
-	defaultAPIPrefix   = "/api/v1"
-	defaultConsolePath = "/console"
-)
+const defaultAPIPrefix = "/api/v1"
 
 // Config 应用配置结构
 type Config struct {
@@ -74,10 +72,8 @@ type CaptchaConfig struct {
 	CacheExpiration    time.Duration
 	SecondVerifyExpire time.Duration
 	MaxAttempts        int
-	IPRateLimit        int
-	RateLimitWindow    time.Duration
+	IPEscalatePerMin   int // 同一 IP 每分钟出题与提交超过该次数后续题目加 1 级、超过 2 倍加 2 级，0 关闭；验证码请求从不因 IP 被拒绝
 	ImagePath          string
-	FontPath           string
 	DefaultDifficulty  int           // 基础难度等级 1-5，风控状态会在此基础上升级
 	MinSolveTime       time.Duration // 出题到提交的最短间隔，低于该值判定为自动化提交
 	BindClient         bool          // 是否将验证码会话绑定到客户端（IP + UA 哈希）
@@ -103,20 +99,19 @@ type RiskConfig struct {
 // 管理员密码不走配置：首次启动时随机生成并打印到控制台，凭据与接入应用持久化在 DataDir。
 type AdminConfig struct {
 	Username       string        // 管理员用户名
-	DataDir        string        // 控制台数据目录：管理员凭据（admin.json）与接入应用（apps.json）
-	ConsolePath    string        // 内嵌管理后台页面的挂载路径，不能是根路径或与 API / 监控路由重叠
+	DataDir        string        // 控制台数据目录：管理员凭据（admin.json）与接入应用（apps.json），固定为工作目录下的 data（镜像内 /app/data）
 	SessionTTL     time.Duration // 登录会话有效期
 	MaxUploadSize  int64         // 单张背景图上传体积上限（字节）
 	MaxImagePixels int           // 单张背景图像素总数上限，防止解压炸弹
+	IPLimitPerMin  int           // 登录与改密接口的单 IP 每分钟上限，0 不限；与验证码请求分开计数
 }
 
 // MonitoringConfig 监控配置
 type MonitoringConfig struct {
-	Enabled         bool
-	MetricsPath     string
-	HealthPath      string
-	StatsPath       string
-	CollectInterval time.Duration
+	Enabled     bool // 是否采集请求指标并开放 MetricsPath；关闭后 StatsPath 也不再附带请求指标
+	MetricsPath string
+	HealthPath  string
+	StatsPath   string
 }
 
 // SecurityConfig 安全配置
@@ -126,17 +121,10 @@ type SecurityConfig struct {
 	KeyFile           string
 	TrustedProxies    []string
 	RemoteIPHeaders   []string // 解析客户端 IP 时按顺序尝试的代理头；仅在直连来源命中 TrustedProxies 时采信
-	EnableCSRF        bool
-	CSRFSecret        string
-	JWTSecret         string
-	SessionSecret     string
 	MaxRequestSize    int64
 	VerifyMaxBodySize int64 // 校验提交接口（attempts）的请求体上限；遥测数据体积有限，单独收紧
-	EnableRateLimit   bool
-	GlobalRateLimit   int
 	IPWhitelist       []string
 	IPBlacklist       []string
-	RateLimitBackend  string // redis：多实例共享的滑动窗口限流；memory：单实例内存限流
 }
 
 var (
@@ -167,6 +155,9 @@ func LoadConfig() *Config {
 	// 验证配置
 	if err := validateConfig(AppConfig); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
+	}
+	for _, warning := range removedEnvWarnings() {
+		log.Print(warning)
 	}
 
 	log.Printf("Configuration loaded successfully (Environment: %s)", AppConfig.Server.Environment)
@@ -222,10 +213,8 @@ func loadFromEnv() *Config {
 			CacheExpiration:    getDurationEnv("CAPTCHA_EXPIRE_TIME", 5*time.Minute),
 			SecondVerifyExpire: getDurationEnv("CAPTCHA_SECOND_VERIFY_EXPIRE", 2*time.Minute),
 			MaxAttempts:        getIntEnv("CAPTCHA_MAX_ATTEMPTS", 5),
-			IPRateLimit:        getIntEnv("CAPTCHA_IP_RATE_LIMIT", 30),
-			RateLimitWindow:    getDurationEnv("CAPTCHA_RATE_LIMIT_WINDOW", 1*time.Minute),
+			IPEscalatePerMin:   getIntEnv("CAPTCHA_IP_ESCALATE_PER_MINUTE", 30),
 			ImagePath:          getEnv("CAPTCHA_IMAGE_PATH", "./images"),
-			FontPath:           getEnv("CAPTCHA_FONT_PATH", "./fonts"),
 			DefaultDifficulty:  getIntEnv("CAPTCHA_DEFAULT_DIFFICULTY", 3),
 			MinSolveTime:       getDurationEnv("CAPTCHA_MIN_SOLVE_TIME", 500*time.Millisecond),
 			BindClient:         getBoolEnv("CAPTCHA_BIND_CLIENT", true),
@@ -245,11 +234,10 @@ func loadFromEnv() *Config {
 			TelemetryLogSize:  getIntEnv("RISK_TELEMETRY_LOG_SIZE", 1000),
 		},
 		Monitoring: MonitoringConfig{
-			Enabled:         getBoolEnv("ENABLE_METRICS", true),
-			MetricsPath:     getEnv("METRICS_PATH", "/metrics"),
-			HealthPath:      getEnv("HEALTH_PATH", "/health"),
-			StatsPath:       getEnv("STATS_PATH", "/stats"),
-			CollectInterval: getDurationEnv("METRICS_COLLECT_INTERVAL", 30*time.Second),
+			Enabled:     getBoolEnv("ENABLE_METRICS", true),
+			MetricsPath: getEnv("METRICS_PATH", "/metrics"),
+			HealthPath:  getEnv("HEALTH_PATH", "/health"),
+			StatsPath:   getEnv("STATS_PATH", "/stats"),
 		},
 		Security: SecurityConfig{
 			EnableHTTPS:    getBoolEnv("ENABLE_HTTPS", false),
@@ -259,27 +247,42 @@ func loadFromEnv() *Config {
 			// 默认只采信常规反向代理头。CF-Connecting-IP / True-Client-IP 之类的 CDN 头只应在
 			// 确认部署于对应 CDN 之后显式开启，否则前置代理原样透传时攻击者可借此伪造来源 IP。
 			RemoteIPHeaders:   getStringSliceEnv("REMOTE_IP_HEADERS", []string{"X-Forwarded-For", "X-Real-IP"}),
-			EnableCSRF:        getBoolEnv("ENABLE_CSRF", false),
-			CSRFSecret:        getEnv("CSRF_SECRET", ""),
-			JWTSecret:         getEnv("JWT_SECRET", ""),
-			SessionSecret:     getEnv("SESSION_SECRET", ""),
 			MaxRequestSize:    getInt64Env("MAX_REQUEST_SIZE", 32<<20),      // 32MB
 			VerifyMaxBodySize: getInt64Env("VERIFY_MAX_BODY_SIZE", 256<<10), // 256KB：600 个轨迹点加环境信号远小于该值
-			EnableRateLimit:   getBoolEnv("ENABLE_RATE_LIMIT", true),
-			GlobalRateLimit:   getIntEnv("RATE_LIMIT_REQUESTS", 100),
 			IPWhitelist:       getStringSliceEnv("IP_WHITELIST", []string{}),
 			IPBlacklist:       getStringSliceEnv("IP_BLACKLIST", []string{}),
-			RateLimitBackend:  strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_BACKEND", "redis"))),
 		},
 		Admin: AdminConfig{
 			Username:       getEnv("ADMIN_USERNAME", "admin"),
-			DataDir:        getEnv("ADMIN_DATA_DIR", "./data"),
-			ConsolePath:    normalizeConsolePath(getEnv("CONSOLE_PATH", defaultConsolePath)),
+			DataDir:        "./data",
 			SessionTTL:     getDurationEnv("ADMIN_SESSION_TTL", 2*time.Hour),
 			MaxUploadSize:  getInt64Env("ADMIN_MAX_UPLOAD_SIZE", 5<<20), // 5MB
 			MaxImagePixels: getIntEnv("ADMIN_MAX_IMAGE_PIXELS", 24_000_000),
+			IPLimitPerMin:  getIntEnv("ADMIN_IP_LIMIT_PER_MINUTE", 30),
 		},
 	}
+}
+
+// removedEnvVars 已移除且曾经生效的环境变量及替代方式。部署环境里还设着它们时启动打印警告，避免旧配置被静默忽略
+var removedEnvVars = map[string]string{
+	"CAPTCHA_IP_RATE_LIMIT":     "验证码改用 CAPTCHA_IP_ESCALATE_PER_MINUTE（只加难不拒绝），管理员登录与改密改用 ADMIN_IP_LIMIT_PER_MINUTE",
+	"CAPTCHA_RATE_LIMIT_WINDOW": "单 IP 计数窗口固定为 1 分钟，阈值按每分钟配置",
+	"ENABLE_RATE_LIMIT":         "把 CAPTCHA_IP_ESCALATE_PER_MINUTE 或 ADMIN_IP_LIMIT_PER_MINUTE 设为 0 即可关闭对应功能",
+	"RATE_LIMIT_BACKEND":        "单 IP 计数固定存放在 Redis，多实例共享",
+	"ADMIN_DATA_DIR":            "数据目录固定为工作目录下的 data（镜像内 /app/data）；原先指向别处时把卷挂到该路径或迁移 admin.json 与 apps.json，否则会重新生成管理员密码，全部应用密钥失效",
+	"CONSOLE_PATH":              "管理后台固定挂在 /console/",
+}
+
+// removedEnvWarnings 返回当前环境中仍在设置的已移除变量的警告，按变量名排序
+func removedEnvWarnings() []string {
+	var warnings []string
+	for key, hint := range removedEnvVars {
+		if os.Getenv(key) != "" {
+			warnings = append(warnings, fmt.Sprintf("环境变量 %s 已移除，当前设置被忽略：%s", key, hint))
+		}
+	}
+	sort.Strings(warnings)
+	return warnings
 }
 
 // normalizeAPIPrefix 统一 API 路径前缀格式，根路径使用空字符串表示。
@@ -297,37 +300,6 @@ func normalizeAPIPrefix(value string) string {
 	return prefix
 }
 
-// normalizeConsolePath 统一管理后台挂载路径格式：以 / 开头、不带结尾的 /
-func normalizeConsolePath(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return defaultConsolePath
-	}
-	return path.Clean("/" + strings.TrimLeft(value, "/"))
-}
-
-// validateConsolePath 管理后台页面以通配路由挂载：挂在根路径，或与 API、监控路由互相嵌套，都会让路由注册冲突
-func validateConsolePath(config *Config) error {
-	consolePath := config.Admin.ConsolePath
-	if consolePath == "/" {
-		return fmt.Errorf("CONSOLE_PATH cannot be the root path")
-	}
-
-	reserved := []string{config.Monitoring.HealthPath, config.Monitoring.MetricsPath, config.Monitoring.StatsPath}
-	if config.Server.APIPrefix != "" {
-		reserved = append(reserved, config.Server.APIPrefix)
-	} else {
-		// API 挂在根路径时，验证码与管理接口分别占用 /captchas 与 /admin
-		reserved = append(reserved, "/captchas", "/admin")
-	}
-	for _, route := range reserved {
-		if route == consolePath || strings.HasPrefix(consolePath, route+"/") || strings.HasPrefix(route, consolePath+"/") {
-			return fmt.Errorf("CONSOLE_PATH %s overlaps with route %s", consolePath, route)
-		}
-	}
-	return nil
-}
-
 // validateConfig 验证配置
 func validateConfig(config *Config) error {
 	if config.Server.Port == "" {
@@ -335,6 +307,16 @@ func validateConfig(config *Config) error {
 	}
 	if config.Redis.Host == "" {
 		return fmt.Errorf("redis host cannot be empty")
+	}
+	// 连接池参数直接交给 go-redis：池大小为 0 会被替换成 10*GOMAXPROCS，负数则在建池时 panic
+	if config.Redis.PoolSize < 1 {
+		return fmt.Errorf("REDIS_POOL_SIZE must be positive")
+	}
+	if config.Redis.MinIdleConns < 0 || config.Redis.MinIdleConns > config.Redis.PoolSize {
+		return fmt.Errorf("REDIS_MIN_IDLE must be between 0 and REDIS_POOL_SIZE")
+	}
+	if config.Redis.MaxRetries < 0 {
+		return fmt.Errorf("REDIS_MAX_RETRIES cannot be negative")
 	}
 	if config.Captcha.ImagePath == "" {
 		return fmt.Errorf("captcha image path cannot be empty")
@@ -376,17 +358,8 @@ func validateConfig(config *Config) error {
 		config.Risk.EscalateThreshold > config.Risk.BlockThreshold {
 		return fmt.Errorf("risk thresholds must satisfy 0 <= RISK_ESCALATE_THRESHOLD <= RISK_BLOCK_THRESHOLD <= 100")
 	}
-	if config.Security.RateLimitBackend != "redis" && config.Security.RateLimitBackend != "memory" {
-		return fmt.Errorf("RATE_LIMIT_BACKEND must be redis or memory")
-	}
 	if strings.TrimSpace(config.Admin.Username) == "" {
 		return fmt.Errorf("ADMIN_USERNAME cannot be empty")
-	}
-	if strings.TrimSpace(config.Admin.DataDir) == "" {
-		return fmt.Errorf("ADMIN_DATA_DIR cannot be empty")
-	}
-	if err := validateConsolePath(config); err != nil {
-		return err
 	}
 	if config.Admin.SessionTTL <= 0 {
 		return fmt.Errorf("ADMIN_SESSION_TTL must be positive")
@@ -396,6 +369,12 @@ func validateConfig(config *Config) error {
 	}
 	if config.Admin.MaxImagePixels <= 0 {
 		return fmt.Errorf("ADMIN_MAX_IMAGE_PIXELS must be positive")
+	}
+	if config.Captcha.IPEscalatePerMin < 0 {
+		return fmt.Errorf("CAPTCHA_IP_ESCALATE_PER_MINUTE cannot be negative")
+	}
+	if config.Admin.IPLimitPerMin < 0 {
+		return fmt.Errorf("ADMIN_IP_LIMIT_PER_MINUTE cannot be negative")
 	}
 	return nil
 }

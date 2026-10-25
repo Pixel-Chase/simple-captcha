@@ -213,7 +213,7 @@ docker compose logs captcha | grep -A6 管理后台初始密码
 | code | 含义 |
 |---|---|
 | `400` | 参数错误 |
-| `429` | 触发频率限制 |
+| `429` | 触发频率限制（仅管理员登录与改密；验证码接口不按 IP 拒绝） |
 | `1003` | 答案错误 |
 | `1004` | 验证码不存在 / 已过期 / 已失效 |
 | `1005` | 尝试次数过多 |
@@ -430,7 +430,7 @@ function App() {
 | 难度分级 | 1-5 级，决定字符数量、干扰强度、拼图尺寸、旋转区间与校验容差；连续失败或高风险分自动升级 | `CAPTCHA_DEFAULT_DIFFICULTY` |
 | 服务端选题 | `type=auto` 时由服务端按风险等级定题型，客户端无法固定选最易自动化的题型 | — |
 | 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100：达到升级阈值提升后续难度，达到拦截阈值拒绝本次校验（响应与答案错误一致） | `RISK_*` |
-| Redis 限流 | 基于有序集合的滑动窗口，多实例共享；Redis 不可用时回退进程内限流 | `RATE_LIMIT_BACKEND` |
+| 单 IP 加难 | 按出口 IP 统计每分钟出题与提交次数（Redis 有序集合滑动窗口，多实例共享），超过阈值只提升后续题目难度，**不按 IP 拒绝**：攻击者会更换 IP，按 IP 拒绝只会让企业 NAT、运营商 CGNAT 下共用出口的正常用户一起无法使用。S2S 状态查询不计入出口 IP。针对单一来源的流量洪水请在网关或 WAF 层按实际网络情况防护 | `CAPTCHA_IP_ESCALATE_PER_MINUTE` |
 | 可信代理 | 只读取 `REMOTE_IP_HEADERS` 列出的代理头，且仅在直连来源命中 `TRUSTED_PROXIES` 时采信 | `TRUSTED_PROXIES` `REMOTE_IP_HEADERS` |
 | 请求体上限 | 校验提交接口在全局上限之外单独限制请求体（chunked 同样生效），遥测列表单项长度也有上限 | `MAX_REQUEST_SIZE` `VERIFY_MAX_BODY_SIZE` |
 
@@ -467,7 +467,7 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 
 ## 管理后台
 
-管理后台内嵌在服务里、常驻开启，访问 **`http://<服务地址>/console/`**（路径由 `CONSOLE_PATH` 决定），与 API 同源，无需配置跨域。登录受行为验证码保护，登录后可管理背景图、接入应用与管理员密码，不影响任何验证码接口。
+管理后台内嵌在服务里、常驻开启，访问 **`http://<服务地址>/console/`**，与 API 同源，无需配置跨域。登录受行为验证码保护，登录后可管理背景图、接入应用与管理员密码，不影响任何验证码接口。
 
 页面由 `sdk/playground/console` 构建、经 `//go:embed` 打进二进制，镜像构建时自动生成；`API_PREFIX` 在返回页面时注入，修改后无需重新构建前端。页面带严格的 CSP（只允许同源脚本、禁止被 iframe 嵌入）与 `noindex`。
 
@@ -487,7 +487,7 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 
 ### 数据目录
 
-- **`ADMIN_DATA_DIR`**（默认 `./data`）保存管理员凭据 `admin.json` 与接入应用 `apps.json`，只含哈希、权限 0600，**必须持久化**：删掉对应的卷（例如 `docker compose down -v`）会重新生成管理员密码，并使全部应用密钥失效。
+- **`data/`**（工作目录下，镜像内为 `/app/data`）保存管理员凭据 `admin.json` 与接入应用 `apps.json`，只含哈希、权限 0600，**必须持久化**：删掉对应的卷（例如 `docker compose down -v`）会重新生成管理员密码，并使全部应用密钥失效。
 - **`CAPTCHA_IMAGE_PATH`**（默认 `./images`）是背景图目录，上传与删除直接写入，必须可写。容器以 uid 1001 运行，改为绑定宿主机目录时需 `chown -R 1001:1001 <目录>`。
 
 ### 登录流程
@@ -507,7 +507,7 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
  │  ◄── { token, mustChangePassword: false }  （新会话）
 ```
 
-每次登录都必须重新过一次行为验证，暴力猜密码的成本因此与过验证码绑定；登录与改密接口另受 `CAPTCHA_IP_RATE_LIMIT` 限流。会话有效期由 `ADMIN_SESSION_TTL` 控制，注销即失效。
+每次登录都必须重新过一次行为验证，暴力猜密码的成本因此与过验证码绑定；登录与改密接口另按 IP 限流，每分钟上限为 `ADMIN_IP_LIMIT_PER_MINUTE`，与验证码请求分开计数，同一出口下的验证码流量不会挤占管理员的额度。会话有效期由 `ADMIN_SESSION_TTL` 控制，注销即失效。
 
 ### 接入应用
 
@@ -570,13 +570,19 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 | `REDIS_PASSWORD` | Redis 密码 | 空 |
 | `REDIS_DB` | Redis 数据库编号 | `0` |
 | `REDIS_POOL_SIZE` | Redis 连接池大小 | `10` |
+| `REDIS_MIN_IDLE` | 连接池最少保持的空闲连接数，不能超过 `REDIS_POOL_SIZE` | `5` |
+| `REDIS_MAX_RETRIES` | Redis 命令失败后的重试次数，`0` 表示不重试 | `3` |
+| `REDIS_DIAL_TIMEOUT` | 建立 Redis 连接的超时 | `5s` |
+| `REDIS_READ_TIMEOUT` | Redis 读超时 | `3s` |
+| `REDIS_WRITE_TIMEOUT` | Redis 写超时 | `3s` |
+| `REDIS_POOL_TIMEOUT` | 连接池占满时等待空闲连接的最长时间 | `4s` |
+| `REDIS_IDLE_TIMEOUT` | 空闲连接超过该时长后关闭 | `5m` |
+| `REDIS_MAX_CONN_AGE` | 单条连接的最长存活时间，到期后重建；`0` 表示不限 | `30m` |
 | `PORT` | 服务监听端口 | `3321` |
 | `API_PREFIX` | 验证码 API 路径前缀；配置 `/` 表示根路径 | `/api/v1` |
 | `CAPTCHA_EXPIRE_TIME` | 验证码过期时间 | `5m` |
 | `CAPTCHA_MAX_ATTEMPTS` | 最大验证尝试次数 | `5` |
-| `CAPTCHA_IP_RATE_LIMIT` | 单 IP 频率限制 | `30` |
-| `ENABLE_RATE_LIMIT` | 是否启用频率限制 | `true` |
-| `RATE_LIMIT_REQUESTS` | 全局频率限制 | `100` |
+| `CAPTCHA_IP_ESCALATE_PER_MINUTE` | 同一 IP 每分钟出题与提交超过该次数，后续题目加 1 级，超过 2 倍加 2 级（PoW 位数随难度提升）；`0` 关闭。验证码请求不会因 IP 被拒绝 | `30` |
 | `CORS_ENABLED` | 是否启用跨域响应 | `true` |
 | `CORS_ALLOW_ORIGINS` | 允许的来源，逗号分隔 | `*` |
 | `CORS_ALLOW_METHODS` | 允许的方法，逗号分隔 | `GET,POST,PUT,DELETE,OPTIONS` |
@@ -584,10 +590,14 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 | `CORS_EXPOSE_HEADERS` | 向浏览器暴露的响应头，逗号分隔 | 空 |
 | `CORS_ALLOW_CREDENTIALS` | 是否允许 Cookie 等跨域凭证 | `false` |
 | `CORS_MAX_AGE` | 浏览器缓存预检结果的时长 | `24h` |
-| `ENABLE_METRICS` | 是否启用监控指标 | `true` |
+| `ENABLE_METRICS` | 是否采集请求指标并开放 `/metrics`；关闭后 `/stats` 不再附带请求指标 | `true` |
 | `GIN_MODE` | Gin 运行模式 | `release` |
 
 > 生产环境建议把 `CORS_ALLOW_ORIGINS` 配成明确的 HTTPS 来源。启用 `CORS_ALLOW_CREDENTIALS` 时，中间件返回具体来源而不是 `*`。
+
+> **从旧版本升级**：`CAPTCHA_IP_RATE_LIMIT`、`CAPTCHA_RATE_LIMIT_WINDOW`、`ENABLE_RATE_LIMIT`、`RATE_LIMIT_BACKEND` 已移除，验证码接口不再按 IP 返回 `429`。验证码加难改用 `CAPTCHA_IP_ESCALATE_PER_MINUTE`，管理员登录与改密限流改用 `ADMIN_IP_LIMIT_PER_MINUTE`，计数窗口固定为 1 分钟、固定存放在 Redis，想关闭哪项就把对应变量设为 `0`。旧变量留在 `.env` 里不再生效，启动时会打印警告。
+>
+> `ADMIN_DATA_DIR`、`CONSOLE_PATH` 也已移除：数据目录固定为工作目录下的 `data`（镜像内 `/app/data`），管理后台固定为 `/console/`。原先自定义过数据目录的，要把卷挂到 `/app/data`，否则会重新生成管理员密码，全部应用密钥失效。
 
 ### 安全与风控
 
@@ -608,7 +618,6 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 | `RISK_BLOCK_THRESHOLD` | 达到该分数直接拒绝本次校验 | `85` |
 | `RISK_STATE_TTL` | 客户端风控状态保留时长 | `30m` |
 | `RISK_TELEMETRY_LOG_SIZE` | Redis 中保留的最近遥测记录条数（`captcha:telemetry` 列表），0 表示不保存 | `1000` |
-| `RATE_LIMIT_BACKEND` | `redis` 滑动窗口（多实例共享）或 `memory` | `redis` |
 | `TRUSTED_PROXIES` | 可信代理网段，只有来自这些来源的代理头才会被采信；生产环境建议收窄为实际代理地址 | 私有网段 |
 | `REMOTE_IP_HEADERS` | 解析客户端 IP 时按顺序读取的代理头，逗号分隔；部署在 Cloudflare / Akamai 之后追加 `CF-Connecting-IP` / `True-Client-IP` | `X-Forwarded-For,X-Real-IP` |
 | `MAX_REQUEST_SIZE` | 全局请求体上限（字节） | `33554432` |
@@ -619,11 +628,10 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
-| `ADMIN_DATA_DIR` | 管理员凭据与接入应用的保存目录，必须持久化 | `./data` |
-| `CONSOLE_PATH` | 内嵌管理后台的挂载路径；不能是根路径，也不能与 API、健康检查等路由重叠 | `/console` |
 | `ADMIN_SESSION_TTL` | 登录会话有效期 | `2h` |
 | `ADMIN_MAX_UPLOAD_SIZE` | 单张背景图上传体积上限（字节），不能超过 `MAX_REQUEST_SIZE` | `5242880` |
 | `ADMIN_MAX_IMAGE_PIXELS` | 单张背景图像素总数上限，防止解压炸弹 | `24000000` |
+| `ADMIN_IP_LIMIT_PER_MINUTE` | 登录与改密接口的单 IP 每分钟上限，超出返回 `429`；与验证码请求分开计数，`0` 不限 | `30` |
 
 ---
 

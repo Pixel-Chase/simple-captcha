@@ -11,7 +11,7 @@ const outDir = fileURLToPath(new URL('../backend/console/dist', import.meta.url)
  */
 export default defineConfig({
   root: fileURLToPath(new URL('./playground/console', import.meta.url)),
-  // 服务端可通过 CONSOLE_PATH 挂到任意路径下，资源一律使用相对地址
+  // 内嵌页挂在服务端 /console/，演示站也在 /console/ 下调试，资源一律使用相对地址，不依赖挂载路径
   base: './',
   publicDir: false,
   plugins: [

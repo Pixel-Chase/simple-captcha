@@ -43,8 +43,11 @@ type VerifyService interface {
 
 // RiskControlService 风险控制服务接口
 type RiskControlService interface {
-	// CheckIPLimit 检查IP限制
-	CheckIPLimit(ip string) bool
+	// TrackCaptchaIP 记录一次验证码请求，返回该 IP 在计数窗口内的请求数（用于加难，不拒绝）
+	TrackCaptchaIP(ip string) int
+
+	// CheckAdminIP 检查管理员登录 / 改密接口的单 IP 限流
+	CheckAdminIP(ip string) bool
 
 	// ValidateSecondVerifyToken 验证二次验证令牌
 	ValidateSecondVerifyToken(token string) bool

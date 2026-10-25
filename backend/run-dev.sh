@@ -36,6 +36,6 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 if [ $# -eq 0 ]; then
-  echo "启动后端: PORT=${PORT:-8080} GIN_MODE=${GIN_MODE:-release} REDIS=${REDIS_HOST:-localhost}:${REDIS_PORT:-6379} ADMIN_DATA_DIR=${ADMIN_DATA_DIR:-./data}"
+  echo "启动后端: PORT=${PORT:-8080} GIN_MODE=${GIN_MODE:-release} REDIS=${REDIS_HOST:-localhost}:${REDIS_PORT:-6379}"
 fi
 exec go run . "$@"

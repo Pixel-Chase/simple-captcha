@@ -2,6 +2,7 @@ package tests
 
 import (
 	"os"
+	"simple-captcha/config"
 	"testing"
 )
 
@@ -12,9 +13,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	if os.Getenv("ADMIN_DATA_DIR") == "" {
-		_ = os.Setenv("ADMIN_DATA_DIR", dir)
-	}
+	config.LoadConfig().Admin.DataDir = dir
 	code := m.Run()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
