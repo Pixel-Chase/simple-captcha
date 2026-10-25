@@ -12,8 +12,8 @@ export interface SlideRegionConfig {
 export const defaultSlideRegionConfig = (): SlideRegionConfig => ({
   width: 300,
   height: 220,
-  verticalPadding: 16,
-  horizontalPadding: 12,
+  verticalPadding: 20,
+  horizontalPadding: 20,
   showTheme: true,
   iconSize: 22,
   scope: true,

@@ -40,3 +40,5 @@ vendor/
 sdk/node_modules
 sdk/dist
 sdk/playground-dist
+.playwright-mcp
+sdk/stitch

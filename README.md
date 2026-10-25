@@ -356,21 +356,47 @@ function App() {
 |-----|--------|------|
 | `userCancel` | `用户取消` | 用户取消时的提示 |
 | `loading` | `加载中...` | 加载状态文案 |
-| `clickTitle` | `请在下图依次点击` | 点选模式标题 |
-| `slideTitle` | `请拖动滑块完成拼图` | 滑块/旋转模式标题 |
-| `confirmButton` | `确认` | 点选确认按钮 |
+| `clickTitle` | `安全验证` | 点选模式标题 |
+| `slideTitle` | `拼图验证` | 滑块拼图模式标题 |
+| `regionTitle` | `空间拼图` | 滑动区域模式标题 |
+| `rotateTitle` | `旋转验证` | 旋转模式标题 |
+| `clickSubtitle` | `请依次点击图中的文字` | 点选标题下的副标题 |
+| `slideSubtitle` | `拖动滑块使拼图吻合` | 滑块拼图副标题 |
+| `regionSubtitle` | `直接拖动图块至缺口，松手提交` | 滑动区域副标题 |
+| `rotateSubtitle` | `拖动滑块使图片角度摆正` | 旋转副标题 |
+| `confirmButton` | `确认提交` | 点选确认按钮 |
 | `buttonText` | `点击按键进行验证` | 触发验证按钮默认文案 |
+| `clickHint` | `请按顺序点选：` | 点选提示条文案 |
+| `clickMeta` | `已点击 {n} 处` | 点选计数，`{n}` 为已点击数量 |
+| `clickClear` | `清除重选` | 点选清除按钮 |
+| `slideHint` | `向右拖动滑块完成拼图` | 滑块轨道内的待拖动提示 |
+| `rotateHint` | `向右拖动滑块使图片摆正` | 旋转轨道内的待拖动提示 |
+| `slideProgress` | `拖动至与缺口精准咬合` | 滑块轨道下方的说明（右侧显示真实拖动进度） |
+| `rotateProgress` | `松手自动校准判定` | 旋转轨道下方的说明（右侧显示当前角度） |
+| `regionHint` | `按住图块拖入缺口` | 滑动区域图片底部的操作提示 |
+| `regionBadge` | `松手即验` | 滑动区域操作提示右侧的角标 |
+| `rotateAngle` | `当前偏移` | 旋转图片下方的角度标签前缀 |
+| `successText` | `验证通过` | 校验通过画面的文案 |
+| `elapsedText` | `耗时 {s}s` | 校验通过画面的耗时，`{s}` 为秒数 |
+| `doneText` | `已完成` | 点选校验通过后按钮文案 |
+| `failTitle` | `验证未通过，请重试` | 校验未通过时替换副标题 |
+| `failBanner` | `正在重新生成验证码…` | 校验未通过时图片上的提示条 |
+| `trackSuccess` | `验证已通过` | 校验通过时轨道内的文案 |
+| `trackFail` | `验证未通过，请重新拖动` | 校验未通过时轨道内的文案 |
+| `poweredBy` | `行为验证保护中` | 滑动区域底部的安全提示，设为空字符串可隐藏 |
+| `refreshLabel` | `刷新` | 刷新按钮的无障碍标签 |
+| `closeLabel` | `关闭` | 关闭按钮的无障碍标签 |
 
 ### `ThemeTokens` 主题配置
 
 ```tsx
 <CaptchaProvider
   theme={{
-    primaryColor: '#347eff',
+    primaryColor: '#4f46e5',
     backgroundColor: '#ffffff',
-    textColor: '#333333',
-    borderColor: '#e2e2e2',
-    borderRadius: 4,
+    textColor: '#0f172a',
+    borderColor: '#e2e8f0',
+    borderRadius: 16,
   }}
 >
   <App />

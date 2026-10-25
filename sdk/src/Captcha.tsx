@@ -17,6 +17,7 @@ import type { ClickDot, SlideRegionPoint, SlidePoint } from './_internal';
 import { collectEnv, solvePow, useBehaviorTrace } from './_internal/telemetry';
 import { getCaptchaErrorMessage, useCaptchaRequest } from './hooks';
 import { CaptchaProvider, useCaptchaConfig } from './CaptchaProvider';
+import type { CaptchaStatus } from './_internal/shared/status.types';
 import type { ClickData } from './_internal/click/click.types';
 import type { RotateData } from './_internal/rotate/rotate.types';
 import type { SlideData } from './_internal/slide/slide.types';
@@ -26,7 +27,10 @@ const DEFAULT_MAX_RETRY_COUNT = 5;
 /** 与各验证模式默认配置一致的渲染尺寸（CSS 像素） */
 const DEFAULT_RENDER_WIDTH = 300;
 const DEFAULT_RENDER_HEIGHT = 220;
-const DEFAULT_ROTATE_SIZE = 220;
+const DEFAULT_ROTATE_SIZE = 176;
+/** 校验结果画面的停留时长（毫秒） */
+const SUCCESS_HOLD_MS = 900;
+const FAIL_HOLD_MS = 1000;
 
 interface Ratio {
   x: number;
@@ -54,6 +58,7 @@ const CaptchaInternal = forwardRef<
     onCancel = noop,
     onSuccess = noop as (data: CaptchaVerifySuccessData) => void,
     onFail = noop as (error: CaptchaErrorResponse | string) => void,
+    onClosed = noop,
     className,
     style,
     config,
@@ -73,6 +78,12 @@ const CaptchaInternal = forwardRef<
 
   const captchaRef = useRef<any>(null);
   const failCountRef = useRef(0);
+  const [status, setStatus] = useState<CaptchaStatus>('idle');
+  const [elapsed, setElapsed] = useState<number>(0);
+  const shownAtRef = useRef(0);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 关闭 / 重新加载时自增，使仍在等待中的“结果展示后刷新”失效，避免已关闭的弹窗被重新打开
+  const sessionRef = useRef(0);
 
   // ---------- 行为采集 / 环境信号 / PoW ----------
   const telemetryEnabled = telemetry !== 'off';
@@ -100,9 +111,35 @@ const CaptchaInternal = forwardRef<
   useEffect(
     () => () => {
       powCancelRef.current.current = true;
+      if (holdTimerRef.current) {
+        clearTimeout(holdTimerRef.current);
+      }
     },
     [],
   );
+
+  // 题目图片就绪的时刻，作为“耗时”的起点
+  useEffect(() => {
+    if (data) {
+      shownAtRef.current = Date.now();
+    }
+  }, [data]);
+
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  const hideAfter = (ms: number) => {
+    clearHoldTimer();
+    holdTimerRef.current = setTimeout(() => {
+      holdTimerRef.current = null;
+      setVisible(false);
+      onClosed();
+    }, ms);
+  };
 
   // ---------- 坐标归一化：服务端按位图像素校验，SDK 按 CSS 像素渲染 ----------
   const ratio = useMemo<Ratio>(() => {
@@ -177,12 +214,16 @@ const CaptchaInternal = forwardRef<
       captchaRef.current.clear();
     }
 
+    clearHoldTimer();
+    sessionRef.current += 1;
+    setStatus('idle');
     setVisible(true);
     try {
       await get();
     } catch (error) {
       setVisible(false);
       onFail(error as CaptchaErrorResponse | string);
+      onClosed();
       throw error;
     }
   };
@@ -198,9 +239,12 @@ const CaptchaInternal = forwardRef<
 
   const close = () => {
     failCountRef.current = 0;
+    clearHoldTimer();
+    sessionRef.current += 1;
     setVisible(false);
     onFail(locale.userCancel!);
     onCancel();
+    onClosed();
   };
 
   const confirm = async (answer: CaptchaVerifyPayload) => {
@@ -217,7 +261,9 @@ const CaptchaInternal = forwardRef<
     try {
       const result = await check(payload);
       failCountRef.current = 0;
-      setVisible(false);
+      setElapsed((Date.now() - shownAtRef.current) / 1000);
+      setStatus('success');
+      hideAfter(SUCCESS_HOLD_MS);
       onSuccess(result);
     } catch (error) {
       const normalizedError = error as CaptchaErrorResponse | string;
@@ -228,13 +274,19 @@ const CaptchaInternal = forwardRef<
       }
 
       failCountRef.current += 1;
+      setStatus('fail');
       if (failCountRef.current >= maxRetryCount) {
         failCountRef.current = 0;
-        setVisible(false);
+        hideAfter(FAIL_HOLD_MS);
         onFail(normalizedError);
         return;
       }
 
+      const session = sessionRef.current;
+      await new Promise((resolve) => setTimeout(resolve, FAIL_HOLD_MS));
+      if (session !== sessionRef.current) {
+        return;
+      }
       await refresh().catch(noop);
     }
   };
@@ -268,6 +320,8 @@ const CaptchaInternal = forwardRef<
           {clickData && ['click-text', 'click-shape'].includes(resolvedType) && (
             <Click
               config={config}
+              status={status}
+              elapsed={elapsed}
               data={clickData}
               ref={captchaRef}
               events={{ ...events, confirm: click, click: recordClick }}
@@ -276,6 +330,8 @@ const CaptchaInternal = forwardRef<
           {rotateData && resolvedType === 'rotate' && (
             <Rotate
               config={config}
+              status={status}
+              elapsed={elapsed}
               data={rotateData}
               ref={captchaRef}
               events={{ ...events, confirm: rotate }}
@@ -284,6 +340,8 @@ const CaptchaInternal = forwardRef<
           {slideRegionData && resolvedType === 'slide-region' && (
             <SlideRegion
               config={config}
+              status={status}
+              elapsed={elapsed}
               data={slideRegionData}
               ref={captchaRef}
               events={{ ...events, confirm: slide }}
@@ -292,6 +350,8 @@ const CaptchaInternal = forwardRef<
           {slideData && resolvedType === 'slide-text' && (
             <Slide
               config={config}
+              status={status}
+              elapsed={elapsed}
               data={slideData}
               ref={captchaRef}
               events={{ ...events, confirm: slide }}

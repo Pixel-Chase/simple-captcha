@@ -29,23 +29,29 @@ export function useCaptcha(): UseCaptchaReturn {
     setActiveOptions(null);
   }, []);
 
+  // 结果先交给调用方，holder 留到弹窗自己关闭（onClosed）后再卸载，
+  // 这样校验通过 / 未通过的结果画面才有机会展示
   const handleSuccess = useCallback(
     (data: CaptchaVerifySuccessData) => {
       activeOptions?.onSuccess?.(data);
       pendingRef.current?.resolve(data);
-      resetPending();
+      pendingRef.current = null;
     },
-    [activeOptions, resetPending],
+    [activeOptions],
   );
 
   const handleFail = useCallback(
     (error: CaptchaErrorResponse | string) => {
       activeOptions?.onFail?.(error);
       pendingRef.current?.reject(error);
-      resetPending();
+      pendingRef.current = null;
     },
-    [activeOptions, resetPending],
+    [activeOptions],
   );
+
+  const handleClosed = useCallback(() => {
+    setActiveOptions(null);
+  }, []);
 
   const handleCancel = useCallback(() => {
     activeOptions?.onCancel?.();
@@ -110,10 +116,11 @@ export function useCaptcha(): UseCaptchaReturn {
         onCancel={handleCancel}
         onFail={handleFail}
         onSuccess={handleSuccess}
+        onClosed={handleClosed}
         ref={captchaRef}
       />
     );
-  }, [activeOptions, handleCancel, handleFail, handleSuccess]);
+  }, [activeOptions, handleCancel, handleClosed, handleFail, handleSuccess]);
 
   return {
     verify,

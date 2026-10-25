@@ -15,13 +15,13 @@ export interface ClickConfig {
 export const defaultClickConfig = (): ClickConfig => ({
   width: 300,
   height: 220,
-  thumbWidth: 150,
-  thumbHeight: 40,
-  verticalPadding: 16,
-  horizontalPadding: 12,
+  thumbWidth: 112,
+  thumbHeight: 30,
+  verticalPadding: 20,
+  horizontalPadding: 20,
   showTheme: true,
   iconSize: 22,
-  dotSize: 24,
+  dotSize: 28,
 });
 
 export interface ClickData {

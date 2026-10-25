@@ -26,6 +26,40 @@ export interface LocaleTexts {
   slideTitle?: string;
   confirmButton?: string;
   buttonText?: string;
+  /** 滑动区域 / 旋转题型的标题（点选沿用 clickTitle，滑块拼图沿用 slideTitle） */
+  regionTitle?: string;
+  rotateTitle?: string;
+  /** 各题型标题下的副标题 */
+  clickSubtitle?: string;
+  slideSubtitle?: string;
+  regionSubtitle?: string;
+  rotateSubtitle?: string;
+  /** 点选：提示条文案 / 已点击计数（{n} 为数量） / 清除重选 */
+  clickHint?: string;
+  clickMeta?: string;
+  clickClear?: string;
+  /** 滑块 / 旋转：轨道内的待拖动提示，以及轨道下方的说明 */
+  slideHint?: string;
+  rotateHint?: string;
+  slideProgress?: string;
+  rotateProgress?: string;
+  /** 滑动区域：图片底部的操作提示与角标 */
+  regionHint?: string;
+  regionBadge?: string;
+  /** 旋转：角度角标前缀 */
+  rotateAngle?: string;
+  /** 校验结果态文案；elapsedText 中 {s} 为耗时秒数 */
+  successText?: string;
+  elapsedText?: string;
+  doneText?: string;
+  failTitle?: string;
+  failBanner?: string;
+  trackSuccess?: string;
+  trackFail?: string;
+  /** 滑动区域底部的安全提示，设为空字符串可隐藏 */
+  poweredBy?: string;
+  refreshLabel?: string;
+  closeLabel?: string;
 }
 
 export interface ThemeTokens {
@@ -183,4 +217,6 @@ export interface CaptchaRef {
 
 export interface CaptchaProps extends CaptchaVerifyOptions {
   children?: ReactNode;
+  /** 弹窗彻底关闭后触发（含校验结果画面的展示时间），useCaptcha 据此延后卸载 */
+  onClosed?: () => void;
 }

@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { CSSProperties } from 'react';
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { SlideConfig, SlideData, SlideEvent } from './slide.types';
 import { defaultSlideConfig, defaultSlideData } from './slide.types';
-import { CloseIcon, RefreshIcon, LoadingIcon, ArrowsIcon } from '../icons';
+import { LoadingIcon } from '../icons';
 import { useSlideHandler } from './use-slide-handler';
 import { useCaptchaConfig } from '../../CaptchaProvider';
+import { CardHeader, DragTrack, ResultOverlay } from '../shared/parts';
+import type { StatusProps } from '../shared/status.types';
 
 export interface SlideRef {
   reset: () => void;
@@ -13,7 +16,7 @@ export interface SlideRef {
   close: () => void;
 }
 
-export interface SlideProps extends React.HTMLAttributes<HTMLElement> {
+export interface SlideProps extends React.HTMLAttributes<HTMLElement>, StatusProps {
   data: SlideData;
   config?: SlideConfig;
   events?: SlideEvent;
@@ -21,6 +24,7 @@ export interface SlideProps extends React.HTMLAttributes<HTMLElement> {
 
 const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
   const { locale } = useCaptchaConfig();
+  const status = props.status || 'idle';
   const [localConfig, setLocalConfig] = useState<SlideConfig>({
     ...defaultSlideConfig(),
     ...(props.config || {}),
@@ -65,7 +69,7 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
 
   const hPadding = localConfig.horizontalPadding || 0;
   const vPadding = localConfig.verticalPadding || 0;
-  const width = (localConfig.width || 0) + hPadding * 2 + (localConfig.showTheme ? 2 : 0);
+  const width = (localConfig.width || 0) + hPadding * 2;
   const hasDisplayWrapperState = (localConfig.width || 0) > 0 || (localConfig.height || 0) > 0;
   const hasDisplayImageState =
     localData.image && localData.image.length > 0 && localData.thumb && localData.thumb.length > 0;
@@ -87,32 +91,25 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
 
   return (
     <div
-      className={`gc-wrapper ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
-      style={{
-        width: width + 'px',
-        paddingLeft: hPadding + 'px',
-        paddingRight: hPadding + 'px',
-        paddingTop: vPadding + 'px',
-        paddingBottom: vPadding + 'px',
-        display: hasDisplayWrapperState ? 'block' : 'none',
-      }}
+      className={`gc-wrapper gc-type-slide gc-status-${status} ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
+      style={
+        {
+          width: width + 'px',
+          '--gc-px': hPadding + 'px',
+          '--gc-py': vPadding + 'px',
+          display: hasDisplayWrapperState ? 'flex' : 'none',
+        } as CSSProperties
+      }
       ref={rootRef}
     >
-      <div className="gc-header">
-        <span>{localConfig.title || locale.slideTitle}</span>
-        <div className="gc-icon-block">
-          <CloseIcon
-            width={localConfig.iconSize}
-            height={localConfig.iconSize}
-            onClick={handler.closeEvent}
-          />
-          <RefreshIcon
-            width={localConfig.iconSize}
-            height={localConfig.iconSize}
-            onClick={handler.refreshEvent}
-          />
-        </div>
-      </div>
+      <CardHeader
+        icon="puzzle"
+        title={localConfig.title || locale.slideTitle}
+        subtitle={locale.slideSubtitle}
+        status={status}
+        onRefresh={handler.refreshEvent}
+        onClose={handler.closeEvent}
+      />
       <div
         className="gc-body"
         ref={containerRef}
@@ -148,22 +145,19 @@ const Slide = forwardRef<SlideRef, SlideProps>((props, ref) => {
             alt=""
           />
         </div>
+        <ResultOverlay status={status} elapsed={props.elapsed} />
       </div>
-      <div className="gc-footer">
-        <div className="gc-drag-slide-bar" ref={dragBarRef}>
-          <div className="gc-drag-line" />
-          <div
-            className={`gc-drag-block ${!hasDisplayImageState ? 'gc-disabled' : ''}`}
-            ref={dragBlockRef}
-            onMouseDown={handler.dragEvent}
-            style={{ left: handler.getState().dragLeft + 'px' }}
-          >
-            <div className="gc-drag-block-inline" onTouchStart={handler.dragEvent}>
-              <ArrowsIcon />
-            </div>
-          </div>
-        </div>
-      </div>
+      <DragTrack
+        barRef={dragBarRef}
+        blockRef={dragBlockRef}
+        dragLeft={handler.getState().dragLeft}
+        disabled={!hasDisplayImageState}
+        hint={locale.slideHint}
+        status={status}
+        onDragStart={handler.dragEvent}
+        metaLeft={locale.slideProgress}
+        showPercent
+      />
     </div>
   );
 });

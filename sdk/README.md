@@ -140,10 +140,36 @@ export default () => {
 
 | 属性 | 说明 |
 |---|---|
-| clickTitle | 点选模式标题，默认 `请在下图依次点击` |
-| slideTitle | 滑块/旋转模式标题，默认 `请拖动滑块完成拼图` |
-| confirmButton | 点选确认按钮，默认 `确认` |
-| buttonText | 触发按钮文案，默认 `点击按键进行验证` |
+| clickTitle | 点选模式标题，默认 `安全验证` |
+| slideTitle | 滑块拼图模式标题，默认 `拼图验证` |
+| regionTitle | 滑动区域模式标题，默认 `空间拼图` |
+| rotateTitle | 旋转模式标题，默认 `旋转验证` |
+| clickSubtitle | 点选标题下的副标题，默认 `请依次点击图中的文字` |
+| slideSubtitle | 滑块拼图副标题，默认 `拖动滑块使拼图吻合` |
+| regionSubtitle | 滑动区域副标题，默认 `直接拖动图块至缺口，松手提交` |
+| rotateSubtitle | 旋转副标题，默认 `拖动滑块使图片角度摆正` |
+| confirmButton | 点选确认按钮，默认 `确认提交` |
+| buttonText | 触发验证按钮默认文案，默认 `点击按键进行验证` |
+| clickHint | 点选提示条文案，默认 `请按顺序点选：` |
+| clickMeta | 点选计数，`{n}` 为已点击数量，默认 `已点击 {n} 处` |
+| clickClear | 点选清除按钮，默认 `清除重选` |
+| slideHint | 滑块轨道内的待拖动提示，默认 `向右拖动滑块完成拼图` |
+| rotateHint | 旋转轨道内的待拖动提示，默认 `向右拖动滑块使图片摆正` |
+| slideProgress | 滑块轨道下方的说明（右侧显示真实拖动进度），默认 `拖动至与缺口精准咬合` |
+| rotateProgress | 旋转轨道下方的说明（右侧显示当前角度），默认 `松手自动校准判定` |
+| regionHint | 滑动区域图片底部的操作提示，默认 `按住图块拖入缺口` |
+| regionBadge | 滑动区域操作提示右侧的角标，默认 `松手即验` |
+| rotateAngle | 旋转图片下方的角度标签前缀，默认 `当前偏移` |
+| successText | 校验通过画面的文案，默认 `验证通过` |
+| elapsedText | 校验通过画面的耗时，`{s}` 为秒数，默认 `耗时 {s}s` |
+| doneText | 点选校验通过后按钮文案，默认 `已完成` |
+| failTitle | 校验未通过时替换副标题，默认 `验证未通过，请重试` |
+| failBanner | 校验未通过时图片上的提示条，默认 `正在重新生成验证码…` |
+| trackSuccess | 校验通过时轨道内的文案，默认 `验证已通过` |
+| trackFail | 校验未通过时轨道内的文案，默认 `验证未通过，请重新拖动` |
+| poweredBy | 滑动区域底部的安全提示，设为空字符串可隐藏，默认 `行为验证保护中` |
+| refreshLabel | 刷新按钮的无障碍标签，默认 `刷新` |
+| closeLabel | 关闭按钮的无障碍标签，默认 `关闭` |
 | userCancel | 用户取消提示，默认 `用户取消` |
 | loading | 加载中文案，默认 `加载中...` |
 
@@ -151,11 +177,11 @@ export default () => {
 
 | 属性 | 说明 | 默认值 |
 |---|---|---|
-| primaryColor | 主题色 | `#347eff` |
+| primaryColor | 主题色 | `#4f46e5` |
 | backgroundColor | 弹窗背景色 | `#ffffff` |
-| textColor | 文本颜色 | `#333333` |
-| borderColor | 边框颜色 | `#e2e2e2` |
-| borderRadius | 圆角大小 | `4` |
+| textColor | 文本颜色 | `#1b1a25` |
+| borderColor | 边框颜色 | `#e4e0ef` |
+| borderRadius | 圆角大小 | `16` |
 
 ## 二次验证（S2S）
 

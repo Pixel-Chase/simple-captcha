@@ -98,7 +98,6 @@ export default function App() {
     <CaptchaProvider
       api={{ basePath: API_BASE }}
       locale={{ buttonText: '点击完成验证', userCancel: '你已取消本次验证' }}
-      theme={{ primaryColor: '#2f6bff', borderRadius: 12 }}
     >
       <div className="app">
         <header className="topbar">

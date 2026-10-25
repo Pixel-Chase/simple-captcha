@@ -1,10 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { CSSProperties } from 'react';
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { SlideRegionConfig, SlideRegionData, SlideRegionEvent } from './slide-region.types';
 import { defaultSlideRegionConfig, defaultSlideRegionData } from './slide-region.types';
-import { CloseIcon, RefreshIcon, LoadingIcon } from '../icons';
+import { LoadingIcon } from '../icons';
 import { useSlideRegionHandler } from './use-slide-region-handler';
 import { useCaptchaConfig } from '../../CaptchaProvider';
+import { CardHeader, ResultOverlay, SecureNote } from '../shared/parts';
+import { UiHandIcon } from '../shared/icons';
+import type { StatusProps } from '../shared/status.types';
 
 export interface SlideRegionRef {
   reset: () => void;
@@ -13,7 +17,7 @@ export interface SlideRegionRef {
   close: () => void;
 }
 
-export interface SlideRegionProps extends React.HTMLAttributes<HTMLElement> {
+export interface SlideRegionProps extends React.HTMLAttributes<HTMLElement>, StatusProps {
   data: SlideRegionData;
   config?: SlideRegionConfig;
   events?: SlideRegionEvent;
@@ -21,6 +25,7 @@ export interface SlideRegionProps extends React.HTMLAttributes<HTMLElement> {
 
 const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) => {
   const { locale } = useCaptchaConfig();
+  const status = props.status || 'idle';
   const [localConfig, setLocalConfig] = useState<SlideRegionConfig>({
     ...defaultSlideRegionConfig(),
     ...(props.config || {}),
@@ -61,7 +66,7 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
 
   const hPadding = localConfig.horizontalPadding || 0;
   const vPadding = localConfig.verticalPadding || 0;
-  const width = (localConfig.width || 0) + hPadding * 2 + (localConfig.showTheme ? 2 : 0);
+  const width = (localConfig.width || 0) + hPadding * 2;
   const hasDisplayWrapperState = (localConfig.width || 0) > 0 || (localConfig.height || 0) > 0;
   const hasDisplayImageState =
     localData.image && localData.image.length > 0 && localData.thumb && localData.thumb.length > 0;
@@ -83,20 +88,25 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
 
   return (
     <div
-      className={`gc-wrapper ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
-      style={{
-        width: width + 'px',
-        paddingLeft: hPadding + 'px',
-        paddingRight: hPadding + 'px',
-        paddingTop: vPadding + 'px',
-        paddingBottom: vPadding + 'px',
-        display: hasDisplayWrapperState ? 'block' : 'none',
-      }}
+      className={`gc-wrapper gc-type-region gc-status-${status} ${localConfig.showTheme ? 'gc-wrapper-theme' : ''}`}
+      style={
+        {
+          width: width + 'px',
+          '--gc-px': hPadding + 'px',
+          '--gc-py': vPadding + 'px',
+          display: hasDisplayWrapperState ? 'flex' : 'none',
+        } as CSSProperties
+      }
       ref={rootRef}
     >
-      <div className="gc-header gc-header-center">
-        <span>{localConfig.title || locale.slideTitle}</span>
-      </div>
+      <CardHeader
+        icon="move"
+        title={localConfig.title || locale.regionTitle}
+        subtitle={locale.regionSubtitle}
+        status={status}
+        onRefresh={handler.refreshEvent}
+        onClose={handler.closeEvent}
+      />
       <div
         className="gc-body"
         ref={containerRef}
@@ -134,21 +144,18 @@ const SlideRegion = forwardRef<SlideRegionRef, SlideRegionProps>((props, ref) =>
             alt=""
           />
         </div>
+        {status === 'idle' && (
+          <div className="gc-region-tip">
+            <span>
+              <UiHandIcon width={10} height={10} />
+              {locale.regionHint}
+            </span>
+            <em>{locale.regionBadge}</em>
+          </div>
+        )}
+        <ResultOverlay status={status} elapsed={props.elapsed} />
       </div>
-      <div className="gc-footer">
-        <div className="gc-icon-block">
-          <CloseIcon
-            width={localConfig.iconSize}
-            height={localConfig.iconSize}
-            onClick={handler.closeEvent}
-          />
-          <RefreshIcon
-            width={localConfig.iconSize}
-            height={localConfig.iconSize}
-            onClick={handler.refreshEvent}
-          />
-        </div>
-      </div>
+      <SecureNote>{locale.poweredBy}</SecureNote>
     </div>
   );
 });

@@ -34,7 +34,8 @@ const Popup = ({ className, style, visible = false, children }: PopupProps) => {
           top: 0,
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backgroundColor: 'rgba(28, 30, 84, 0.45)',
+          backdropFilter: 'blur(2px)',
         }}
       />
       <div style={{ position: 'relative', zIndex: 1, backgroundColor: 'transparent' }}>
