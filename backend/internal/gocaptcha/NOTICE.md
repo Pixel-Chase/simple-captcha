@@ -20,3 +20,4 @@
 ## 修改记录
 
 - 删除上游标记为 Deprecated 的 API，调用方改用其等价替代：`click.CheckPoint`、`slide.CheckPoint`、`rotate.CheckAngle` → 各包的 `Validate`；`click.Builder.MakeWithShape` → `MakeShape`；`slide.Builder.MakeWithRegion` → `MakeDragDrop`（上游注释误写为 `MakeDrag`）；`slide.Block` 的 `TileX/TileY` → `DX/DY`；`rotate.Block` 的 `ParentWidth/ParentHeight` 字段删除
+- `base/random`：池化生成器由“时间 + math/rand”播种改为以 crypto/rand 为种子的 math/rand/v2 ChaCha8，答案相关的位置、角度与排列不再可从已解题目反推；删除未使用且同样以时间播种的全局生成器 `rnd/getRnd`

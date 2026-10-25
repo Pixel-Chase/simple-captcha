@@ -12,39 +12,23 @@ import (
 	rand2 "crypto/rand"
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
-	"time"
 )
 
-var (
-	// randPool is a pool of random number generators to avoid lock contention
-	randPool = sync.Pool{
-		New: func() interface{} {
-			seed := time.Now().UnixNano() + int64(rand.Uint32())
-			src := rand.NewSource(seed)
-			return rand.New(src)
-		},
-	}
-
-	rnd  *rand.Rand
-	mu   sync.Mutex
-	once sync.Once
-)
-
-// initRnd initializes the global random number generator (deprecated, use getPooledRnd instead)
-func initRnd() {
-	seed := time.Now().UnixNano()
-	src := rand.NewSource(seed)
-	rnd = rand.New(src)
-}
-
-// getRnd returns the global random number generator (deprecated, use getPooledRnd instead)
-func getRnd() *rand.Rand {
-	once.Do(initRnd)
-	mu.Lock()
-	defer mu.Unlock()
-	return rnd
+// randPool is a pool of random number generators to avoid lock contention.
+//
+// 题目答案（拼图位置、点选坐标与校验字、旋转角度）都取自这里，因此每个生成器都是以 crypto/rand
+// 为种子的 ChaCha8（密码学安全的伪随机流）。上游以“时间 + math/rand”为种子，而 math/rand v1
+// 会把种子对 2^31-1 取模，生成器又在池中复用，攻击者可从已解出的题目反推种子并预测后续答案。
+var randPool = sync.Pool{
+	New: func() interface{} {
+		var seed [32]byte
+		if _, err := rand2.Read(seed[:]); err != nil {
+			panic("gocaptcha: 读取系统随机源失败: " + err.Error())
+		}
+		return rand.New(rand.NewChaCha8(seed))
+	},
 }
 
 // getPooledRnd returns a random number generator from the pool
@@ -64,7 +48,7 @@ func Rand63n(ri int64) int64 {
 	}
 	r := getPooledRnd()
 	defer putPooledRnd(r)
-	return r.Int63n(ri)
+	return r.Int64N(ri)
 }
 
 // Rand31n generates a 32-bit random number (thread-safe, high-performance)
@@ -74,7 +58,7 @@ func Rand31n(ri int32) int32 {
 	}
 	r := getPooledRnd()
 	defer putPooledRnd(r)
-	return r.Int31n(ri)
+	return r.Int32N(ri)
 }
 
 // Perm generates a random permutation (thread-safe, high-performance)
@@ -123,7 +107,7 @@ func RandInt(min, max int) int {
 	return min + int(result.Int64())
 }
 
-// RandIntFast generates a random number in the interval [min, max] using math/rand
+// RandIntFast generates a random number in the interval [min, max] using the pooled ChaCha8 generators
 func RandIntFast(min, max int) int {
 	if min > max {
 		min, max = max, min
@@ -140,5 +124,5 @@ func RandIntFast(min, max int) int {
 
 	r := getPooledRnd()
 	defer putPooledRnd(r)
-	return min + r.Intn(rangeSize)
+	return min + r.IntN(rangeSize)
 }
