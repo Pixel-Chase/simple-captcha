@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	ColorLenErr       = errors.New("the color length must be less than or equal to 255")
-	RangeVerifyLenErr = errors.New("the max value of 'rangeVerifyLen' must be less than or equal to the min value of 'rangeLen'")
+	ErrColorLen       = errors.New("the color length must be less than or equal to 255")
+	ErrRangeVerifyLen = errors.New("the max value of 'rangeVerifyLen' must be less than or equal to the min value of 'rangeLen'")
 )
 
 // Options defines the configuration options for the captcha
@@ -245,7 +245,7 @@ func WithRangeSize(val option.RangeVal) Option {
 func WithRangeColors(colors []string) Option {
 	return func(opts *Options) {
 		if len(colors) > 255 {
-			logger.Logx.Warnf("withRangeColors(): %v", ColorLenErr)
+			logger.Logx.Warnf("withRangeColors(): %v", ErrColorLen)
 			return
 		}
 
@@ -299,7 +299,7 @@ func WithRangeThumbImageSize(val option.Size) Option {
 func WithRangeVerifyLen(val option.RangeVal) Option {
 	return func(opts *Options) {
 		if val.Max > opts.rangeLen.Min {
-			logger.Logx.Warnf("withRangeVerifyLen(): %v", RangeVerifyLenErr)
+			logger.Logx.Warnf("withRangeVerifyLen(): %v", ErrRangeVerifyLen)
 			return
 		}
 
@@ -325,7 +325,7 @@ func WithRangeThumbSize(val option.RangeVal) Option {
 func WithRangeThumbColors(val []string) Option {
 	return func(opts *Options) {
 		if len(val) > 255 {
-			logger.Logx.Warnf("WithRangeThumbColors(): %v", ColorLenErr)
+			logger.Logx.Warnf("WithRangeThumbColors(): %v", ErrColorLen)
 			return
 		}
 		opts.rangeThumbColors = val
@@ -336,7 +336,7 @@ func WithRangeThumbColors(val []string) Option {
 func WithRangeThumbBgColors(val []string) Option {
 	return func(opts *Options) {
 		if len(val) > 255 {
-			logger.Logx.Warnf("withRangeThumbBgColors(): %v", ColorLenErr)
+			logger.Logx.Warnf("withRangeThumbBgColors(): %v", ErrColorLen)
 			return
 		}
 

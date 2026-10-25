@@ -35,8 +35,8 @@ func NewResources() *Resources {
 type Resource func(*Resources)
 
 var (
-	ChineseCharLenErr = errors.New("the chinese char length must be equal to 1")
-	CharLenErr        = errors.New("the char length must be less than or equal to 2")
+	ErrChineseCharLen = errors.New("the chinese char length must be equal to 1")
+	ErrCharLen        = errors.New("the char length must be less than or equal to 2")
 )
 
 // WithChars is to set characters
@@ -46,11 +46,11 @@ func WithChars(chars []string) Resource {
 			for _, char := range chars {
 				if helper.IsChineseChar(char) {
 					if helper.LenChineseChar(char) > 1 {
-						logger.Logx.Warnf("WithChars(): %v", ChineseCharLenErr)
+						logger.Logx.Warnf("WithChars(): %v", ErrChineseCharLen)
 						return
 					}
 				} else if helper.LenChineseChar(char) > 2 {
-					logger.Logx.Warnf("WithChars(): %v", CharLenErr)
+					logger.Logx.Warnf("WithChars(): %v", ErrCharLen)
 					return
 				}
 			}
@@ -65,7 +65,7 @@ func WithShapes(shapeMaps map[string]image.Image) Resource {
 	return func(resources *Resources) {
 		resources.shapeMaps = shapeMaps
 		var shapes = make([]string, 0, len(shapeMaps))
-		for name, _ := range shapeMaps {
+		for name := range shapeMaps {
 			shapes = append(shapes, name)
 		}
 		resources.shapes = shapes

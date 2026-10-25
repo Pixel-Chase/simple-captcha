@@ -39,17 +39,16 @@ type Captcha interface {
 var _ Captcha = (*captcha)(nil)
 
 var (
-	GraphImageErr           = errors.New("graph image is invalid")
-	GenerateDataErr         = errors.New("data generation failed")
-	ImageTypeErr            = errors.New("tile image must be of type image.Image")
-	ShadowImageTypeErr      = errors.New("tile shadow image must be of type image.Image")
-	MaskImageTypeErr        = errors.New("tile mask image must be of type image.Image")
-	EmptyBackgroundImageErr = errors.New("no background image")
+	ErrGraphImage           = errors.New("graph image is invalid")
+	ErrGenerateData         = errors.New("data generation failed")
+	ErrImageType            = errors.New("tile image must be of type image.Image")
+	ErrShadowImageType      = errors.New("tile shadow image must be of type image.Image")
+	ErrMaskImageType        = errors.New("tile mask image must be of type image.Image")
+	ErrEmptyBackgroundImage = errors.New("no background image")
 )
 
 // captcha is the concrete implementation of the Captcha interface
 type captcha struct {
-	version   string
 	logger    logger.Logger
 	drawImage DrawImage
 	opts      *Options
@@ -120,7 +119,7 @@ func (c *captcha) Generate() (CaptchaData, error) {
 
 	overlayImage, shadowImage, maskImage := c.genGraph()
 	if overlayImage == nil || shadowImage == nil || maskImage == nil {
-		return nil, GraphImageErr
+		return nil, ErrGraphImage
 	}
 
 	blocks, tilePoint := c.genGraphBlocks(c.opts.imageSize, c.opts.rangeGraphSize, c.opts.genGraphNumber)
@@ -136,7 +135,7 @@ func (c *captcha) Generate() (CaptchaData, error) {
 	}
 
 	if block == nil {
-		return nil, GenerateDataErr
+		return nil, ErrGenerateData
 	}
 
 	var masterImage, masterBgImage, tileImage image.Image
@@ -382,16 +381,16 @@ func (c *captcha) genGraph() (maskImage, shadowImage, templateImage image.Image)
 func (c *captcha) check() error {
 	for _, tile := range c.resources.rangGraphImage {
 		if tile.OverlayImage == nil {
-			return ImageTypeErr
+			return ErrImageType
 		} else if tile.ShadowImage == nil {
-			return ShadowImageTypeErr
+			return ErrShadowImageType
 		} else if tile.MaskImage == nil {
-			return MaskImageTypeErr
+			return ErrMaskImageType
 		}
 	}
 
 	if len(c.resources.rangBackgrounds) == 0 {
-		return EmptyBackgroundImageErr
+		return ErrEmptyBackgroundImage
 	}
 
 	return nil

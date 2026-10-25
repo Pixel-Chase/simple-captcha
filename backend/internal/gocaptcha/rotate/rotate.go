@@ -30,13 +30,12 @@ type Captcha interface {
 var _ Captcha = (*captcha)(nil)
 
 var (
-	EmptyImageErr = errors.New("no image")
-	ImageTypeErr  = errors.New("image must be of type image.Image")
+	ErrEmptyImage = errors.New("no image")
+	ErrImageType  = errors.New("image must be of type image.Image")
 )
 
 // captcha is the concrete implementation of the Captcha interface
 type captcha struct {
-	version   string
 	logger    logger.Logger
 	drawImage DrawImage
 	opts      *Options
@@ -205,11 +204,11 @@ func (c *captcha) genBlock(imageSize int, thumbImageSquareSize int) *Block {
 // return: Error information
 func (c *captcha) check() error {
 	if len(c.resources.rangImages) == 0 {
-		return EmptyImageErr
+		return ErrEmptyImage
 	}
 	for _, img := range c.resources.rangImages {
 		if img == nil {
-			return ImageTypeErr
+			return ErrImageType
 		}
 	}
 	return nil

@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	ImageEmptyErr       = errors.New("image is empty")
-	ImageMissingDataErr = errors.New("missing image data")
+	ErrImageEmpty       = errors.New("image is empty")
+	ErrImageMissingData = errors.New("missing image data")
 )
 
 // saveToFile saves an image to a file
