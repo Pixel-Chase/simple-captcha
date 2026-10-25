@@ -557,7 +557,17 @@ func TestBackgroundStore_ReloadKeepsOldImagesOnFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 2, store.Count())
 	assert.Equal(t, versionBefore, store.Version())
-	assert.Len(t, store.Get(600, 400), 2)
+	// 每张素材按 110% / 125% 两个放大档各一份
+	assert.Len(t, store.Get(600, 400), 4)
+}
+
+// imageSizes 列出图片集合的尺寸，便于与期望集合比较
+func imageSizes(images []image.Image) [][2]int {
+	sizes := make([][2]int, 0, len(images))
+	for _, img := range images {
+		sizes = append(sizes, [2]int{img.Bounds().Dx(), img.Bounds().Dy()})
+	}
+	return sizes
 }
 
 func TestBackgroundStore_GetCoversRequestedSize(t *testing.T) {
@@ -567,17 +577,17 @@ func TestBackgroundStore_GetCoversRequestedSize(t *testing.T) {
 	store, err := services.NewBackgroundStore(dir)
 	require.NoError(t, err)
 
-	// 420x420 素材：各出图尺寸都等比缩放到恰好覆盖“目标 + 10% 外扩”，受限的一边与之相等
-	cases := []struct{ w, h, wantW, wantH int }{
-		{900, 600, 990, 990}, // 3x 主图
-		{600, 400, 660, 660}, // 2x 主图
-		{256, 256, 282, 282}, // 2x 旋转
+	// 420x420 素材：每个出图尺寸按 110% / 125% 两档各缩放到恰好覆盖，受限的一边与之相等
+	cases := []struct {
+		w, h int
+		want [][2]int
+	}{
+		{900, 600, [][2]int{{990, 990}, {1125, 1125}}}, // 3x 主图
+		{600, 400, [][2]int{{660, 660}, {750, 750}}},   // 2x 主图
+		{256, 256, [][2]int{{282, 282}, {320, 320}}},   // 2x 旋转
 	}
 	for _, c := range cases {
-		for _, img := range store.Get(c.w, c.h) {
-			assert.Equal(t, c.wantW, img.Bounds().Dx(), "%dx%d", c.w, c.h)
-			assert.Equal(t, c.wantH, img.Bounds().Dy(), "%dx%d", c.w, c.h)
-		}
+		assert.ElementsMatch(t, c.want, imageSizes(store.Get(c.w, c.h)), "%dx%d", c.w, c.h)
 	}
 }
 
@@ -589,14 +599,8 @@ func TestBackgroundStore_DownscalesLargeOriginals(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3:2 高清原图整张缩小，保留完整构图，而不是从原图里随机裁一小块
-	for _, img := range store.Get(600, 400) {
-		assert.Equal(t, 660, img.Bounds().Dx())
-		assert.Equal(t, 440, img.Bounds().Dy())
-	}
-	for _, img := range store.Get(900, 600) {
-		assert.Equal(t, 990, img.Bounds().Dx())
-		assert.Equal(t, 660, img.Bounds().Dy())
-	}
+	assert.ElementsMatch(t, [][2]int{{660, 440}, {750, 500}}, imageSizes(store.Get(600, 400)))
+	assert.ElementsMatch(t, [][2]int{{990, 660}, {1125, 750}}, imageSizes(store.Get(900, 600)))
 }
 
 // 题型服务在素材热重载后仍能正常出题（生成器实例被重置并用新素材重建）

@@ -6,13 +6,14 @@ import (
 	"log"
 	"math"
 	"simple-captcha/helper"
+	"slices"
 	"sync"
 	"sync/atomic"
 
 	xdraw "golang.org/x/image/draw"
 )
 
-// 背景素材规格：下限保证 3 倍率出图无需放大，建议尺寸为外扩取景与清晰度留出余量
+// 背景素材规格：下限保证 3 倍率出图无需放大，建议尺寸为放大取景与清晰度留出余量
 const (
 	minBackgroundWidth          = baseImageWidth * MaxScale
 	minBackgroundHeight         = baseImageHeight * MaxScale
@@ -20,15 +21,17 @@ const (
 	recommendedBackgroundHeight = 1200
 )
 
-// backgroundOverscanPercent 背景图相对目标尺寸的外扩比例（%）。go-captcha 会在外扩范围内随机选取裁切位置，
-// 同一张素材每次出题的取景都略有偏移，避免像素完全一致而被直接比对出缺口
-const backgroundOverscanPercent = 10
+// backgroundZoomPercents 背景图相对目标尺寸的放大档位（%）。每个出图尺寸按每一档各派生一份，
+// go-captcha 随机挑一份并在多出的范围内随机取景：缩放比例与取景位置都随机，
+// 同一张素材每次出题的像素网格都对不上，无法拿干净原图直接比对出缺口。
+// 档位越多越难比对，但内存按档位数成倍增加
+var backgroundZoomPercents = []int{110, 125}
 
 // BackgroundStore 背景图仓库：全部题型共用同一份素材，并支持热重载。
 //
-// 每张素材加载时等比缩放成工作副本（恰好覆盖 3 倍率主图 + 外扩），原图随即释放，
-// 高清原图不会常驻内存。各题型再按自身目标尺寸，从工作副本派生"恰好覆盖目标 + 外扩"的版本并缓存：
-// 整图等比缩放保留素材的完整构图，外扩部分提供轻微的随机取景。
+// 每张素材加载时等比缩放成工作副本（恰好覆盖 3 倍率主图的最大放大档），原图随即释放，
+// 高清原图不会常驻内存。各题型再按自身目标尺寸和每个放大档，从工作副本派生"恰好覆盖"的版本并缓存：
+// 整图等比缩放保留素材的完整构图，放大档与随机取景提供每次出题的差异。
 //
 // 管理接口增删素材后调用 Reload：重新读取目录、替换素材集合并清空尺寸缓存，
 // 随后通知各题型服务丢弃已构建的生成器实例，下一次出题即使用新素材，无需重启。
@@ -84,7 +87,8 @@ func (s *BackgroundStore) OnReload(fn func()) {
 
 // Reload 重新读取素材目录。读取失败时保留原有素材并返回错误，不会让服务落入无图状态
 func (s *BackgroundStore) Reload() error {
-	workWidth, workHeight := overscan(minBackgroundWidth), overscan(minBackgroundHeight)
+	maxZoom := slices.Max(backgroundZoomPercents)
+	workWidth, workHeight := zoomed(minBackgroundWidth, maxZoom), zoomed(minBackgroundHeight, maxZoom)
 	var undersized atomic.Int32
 	images, err := helper.GetImagesFromDir(s.dir, func(img image.Image) image.Image {
 		if b := img.Bounds(); b.Dx() < minBackgroundWidth || b.Dy() < minBackgroundHeight {
@@ -119,9 +123,9 @@ func (s *BackgroundStore) Reload() error {
 	return nil
 }
 
-// Get 返回用于 width×height 出图的背景图集合：每张都等比缩放到恰好覆盖目标尺寸外扩后的大小
+// Get 返回用于 width×height 出图的背景图集合：每张素材按每个放大档各一份，
+// 等比缩放到恰好覆盖“目标尺寸 × 放大档”的大小
 func (s *BackgroundStore) Get(width, height int) []image.Image {
-	width, height = overscan(width), overscan(height)
 	key := [2]int{width, height}
 
 	s.mu.Lock()
@@ -131,18 +135,20 @@ func (s *BackgroundStore) Get(width, height int) []image.Image {
 		return images
 	}
 
-	images := make([]image.Image, 0, len(s.base))
-	for _, img := range s.base {
-		images = append(images, coverResize(img, width, height))
+	images := make([]image.Image, 0, len(s.base)*len(backgroundZoomPercents))
+	for _, zoom := range backgroundZoomPercents {
+		for _, img := range s.base {
+			images = append(images, coverResize(img, zoomed(width, zoom), zoomed(height, zoom)))
+		}
 	}
 
 	s.sized[key] = images
 	return images
 }
 
-// overscan 目标尺寸加上外扩余量（向上取整，整数运算避免浮点误差）
-func overscan(size int) int {
-	return size + (size*backgroundOverscanPercent+99)/100
+// zoomed 按百分比放大尺寸（向上取整，整数运算避免浮点误差）
+func zoomed(size, percent int) int {
+	return (size*percent + 99) / 100
 }
 
 // coverResize 等比缩放（放大或缩小）到恰好覆盖 width×height：受限的一边与目标相等，另一边不小于目标。

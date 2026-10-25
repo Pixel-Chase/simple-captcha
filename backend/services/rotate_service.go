@@ -3,6 +3,7 @@ package services
 import (
 	"simple-captcha/helper"
 
+	"github.com/wenlng/go-captcha/v2/base/imagedata"
 	"github.com/wenlng/go-captcha/v2/rotate"
 )
 
@@ -59,13 +60,15 @@ func (s *RotateCaptchaService) GenerateCaptcha(req *ChallengeRequest) (*CaptchaD
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码数据为空")
 	}
 
-	// 旋转主图中心为透明圆孔，必须保留 Alpha 通道，因此沿用 PNG
-	masterImageBase64, err := captData.GetMasterImage().ToBase64()
+	// 旋转主图中心为透明圆孔，必须保留 Alpha 通道，因此沿用 PNG；
+	// 主图与内圆共用一组颜色扰动，转正后颜色一致
+	jitter := newImageJitter()
+	masterImageBase64, err := imagedata.NewPNGImageData(jitter.apply(captData.GetMasterImage().Get())).ToBase64()
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
 	}
 
-	thumbImageBase64, err := captData.GetThumbImage().ToBase64()
+	thumbImageBase64, err := imagedata.NewPNGImageData(jitter.apply(captData.GetThumbImage().Get())).ToBase64()
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "缩略图转换失败", err.Error())
 	}

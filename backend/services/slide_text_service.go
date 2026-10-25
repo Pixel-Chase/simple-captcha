@@ -5,6 +5,7 @@ import (
 	"simple-captcha/helper"
 
 	"github.com/wenlng/go-captcha-assets/resources/tiles"
+	"github.com/wenlng/go-captcha/v2/base/imagedata"
 	"github.com/wenlng/go-captcha/v2/slide"
 )
 
@@ -88,12 +89,15 @@ func generateSlideCaptcha(bs *BaseService, captcha slide.Captcha, req *Challenge
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码数据为空")
 	}
 
-	masterImageBase64, err := captData.GetMasterImage().ToBase64WithQuality(bs.config.Captcha.ImageQuality)
+	// 主图与拼图块共用一组颜色扰动，对齐后颜色一致
+	jitter := newImageJitter()
+	masterImageBase64, err := imagedata.NewJPEGImageData(jitter.apply(captData.GetMasterImage().Get())).
+		ToBase64WithQuality(bs.config.Captcha.ImageQuality)
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
 	}
 
-	tileImageBase64, err := captData.GetTileImage().ToBase64()
+	tileImageBase64, err := imagedata.NewPNGImageData(jitter.apply(captData.GetTileImage().Get())).ToBase64()
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "滑动块图片转换失败", err.Error())
 	}

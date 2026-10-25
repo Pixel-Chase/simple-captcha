@@ -7,6 +7,7 @@ import (
 	"github.com/golang/freetype/truetype"
 	"github.com/wenlng/go-captcha-assets/bindata/chars"
 	"github.com/wenlng/go-captcha-assets/resources/fonts/fzshengsksjw"
+	"github.com/wenlng/go-captcha/v2/base/imagedata"
 	"github.com/wenlng/go-captcha/v2/base/option"
 	"github.com/wenlng/go-captcha/v2/click"
 )
@@ -106,7 +107,9 @@ func generateClickCaptcha(bs *BaseService, captcha click.Captcha, req *Challenge
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "验证码数据为空")
 	}
 
-	masterImageBase64, err := captData.GetMasterImage().ToBase64WithQuality(bs.config.Captcha.ImageQuality)
+	// 只扰动主图；提示图不含背景素材，保持原样便于辨认
+	masterImageBase64, err := imagedata.NewJPEGImageData(newImageJitter().apply(captData.GetMasterImage().Get())).
+		ToBase64WithQuality(bs.config.Captcha.ImageQuality)
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
 	}
