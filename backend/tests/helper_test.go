@@ -2,6 +2,7 @@ package tests
 
 import (
 	"simple-captcha/helper"
+	"sync"
 	"testing"
 )
 
@@ -61,6 +62,35 @@ func TestGenerateRandomString(t *testing.T) {
 				t.Errorf("GenerateRandomString(%d) returned invalid character: %c", length, char)
 			}
 		}
+	}
+}
+
+func TestGenerateRandomStringUniqueUnderConcurrency(t *testing.T) {
+	const workers, perWorker = 8, 250
+	results := make(chan string, workers*perWorker)
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < perWorker; i++ {
+				results <- helper.GenerateRandomString(16)
+			}
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	seen := make(map[string]bool, workers*perWorker)
+	for s := range results {
+		if seen[s] {
+			t.Fatalf("GenerateRandomString 并发调用产生了重复结果: %s", s)
+		}
+		seen[s] = true
+	}
+
+	if got := helper.GenerateRandomString(0); got != "" {
+		t.Errorf("GenerateRandomString(0) = %q; expected empty string", got)
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
-	"math/rand" // 添加 math/rand 包
 	"os"
 	"path/filepath"
 	"runtime"
@@ -64,14 +63,27 @@ func GenerateTimestampedID() (string, error) {
 
 // GenerateRandomString 生成指定长度的随机字符串
 // length: 要生成的字符串长度
-// 返回一个包含字母和数字的随机字符串
+// 返回一个包含字母和数字的随机字符串；随机源为 crypto/rand，并发调用之间互不相同且不可预测
 func GenerateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// 只接受小于 charset 长度整数倍的字节，避免取模带来的分布偏差
+	const limit = 256 - 256%len(charset)
 
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
+	b := make([]byte, 0, length)
+	buf := make([]byte, length+8)
+	for len(b) < length {
+		if _, err := crand.Read(buf); err != nil {
+			panic("读取系统随机源失败: " + err.Error())
+		}
+		for _, v := range buf {
+			if int(v) >= limit {
+				continue
+			}
+			b = append(b, charset[int(v)%len(charset)])
+			if len(b) == length {
+				break
+			}
+		}
 	}
 	return string(b)
 }
