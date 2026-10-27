@@ -7,6 +7,7 @@ import (
 	"simple-captcha/helper"
 	"simple-captcha/middleware"
 	"simple-captcha/models"
+	"simple-captcha/risk"
 	"simple-captcha/services"
 	"sync"
 
@@ -19,6 +20,7 @@ type CaptchaController struct {
 	riskControl    services.RiskControlService
 	riskEngine     *services.RiskEngine
 	policy         *services.ChallengePolicy
+	clientRisk     *services.ClientRiskStore
 	config         *config.Config
 }
 
@@ -31,11 +33,22 @@ func NewCaptchaController() *CaptchaController {
 		riskControl:    serviceManager.GetRiskControlService(),
 		riskEngine:     serviceManager.GetRiskEngine(),
 		policy:         serviceManager.GetChallengePolicy(),
+		clientRisk:     serviceManager.GetClientRiskStore(),
 		config:         config.LoadConfig(),
 	}
 }
 
-// GetCaptchaHandler 生成验证码处理器
+// issueParams 出题流程的输入，由 GET 与 POST 两个处理器分别组装
+type issueParams struct {
+	requestedType string
+	mode          string
+	scale         int
+	dpr           float64
+	env           *risk.Env
+	viaPost       bool
+}
+
+// GetCaptchaHandler 生成验证码处理器（GET：旧版 SDK 兼容，不携带环境信号）
 func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
 	req := middleware.GetCaptchaRequest(c)
 	if req == nil {
@@ -43,26 +56,62 @@ func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
 		helper.SimpleErrorResponse(c, helper.ErrCodeInternalError, "内部错误")
 		return
 	}
+	ctrl.issue(c, issueParams{requestedType: req.Type, mode: req.Mode, scale: req.Scale(), dpr: req.Dpr})
+}
 
+// IssueCaptchaHandler 生成验证码处理器（POST：请求体携带环境信号，出题前据此加难）
+func (ctrl *CaptchaController) IssueCaptchaHandler(c *gin.Context) {
+	req := middleware.GetIssueRequest(c)
+	if req == nil {
+		log.Printf("获取请求参数失败: ip=%s", helper.GetRealClientIP(c))
+		helper.SimpleErrorResponse(c, helper.ErrCodeInternalError, "内部错误")
+		return
+	}
+	ctrl.issue(c, issueParams{requestedType: req.Type, mode: req.Mode, scale: req.Scale(), dpr: req.Dpr, env: req.Env, viaPost: true})
+}
+
+// requestSignals 提取请求头信号并附上指纹参考列表（未配置时为 nil，指纹只记录不计分）
+func (ctrl *CaptchaController) requestSignals(c *gin.Context, dpr float64) *risk.RequestSignals {
+	signals := helper.RequestSignalsFrom(c, dpr)
+	signals.Fingerprints = ctrl.serviceManager.GetTLSFingerprintList()
+	return signals
+}
+
+// issue 出题：决定难度与题型、生成题目、记录出题评估。GET 与 POST 的响应完全一致
+func (ctrl *CaptchaController) issue(c *gin.Context, p issueParams) {
+	ip := helper.GetRealClientIP(c)
 	clientHash := helper.ClientFingerprint(c)
 
-	// 难度由服务端根据该客户端的历史表现与出口 IP 的请求量决定；auto 类型也在这里解析为具体题型
+	// 同一份 env 被复制到多个客户端重放时，fp 哈希相同而客户端哈希不同；只在携带 fp 的出题请求上计数
+	fpReplays := 0
+	if p.env != nil && p.env.Fingerprint != "" && ctrl.clientRisk != nil {
+		fpReplays = ctrl.clientRisk.TouchFingerprint(p.env.Fingerprint, clientHash)
+	}
+
+	// 难度由服务端根据客户端历史表现、出口 IP 请求量、请求头核验、环境信号与指纹重放决定，只升不降；auto 类型也在这里解析为具体题型
 	ipRequests := middleware.GetIPRequestCount(c)
-	level := ctrl.policy.DifficultyFor(clientHash, ipRequests)
-	captchaType := ctrl.policy.ResolveType(req.Type, level)
+	signals := ctrl.requestSignals(c, p.dpr)
+	decision := ctrl.policy.Decide(services.IssueInput{
+		ClientHash: clientHash,
+		IPRequests: ipRequests,
+		Env:        p.env,
+		Request:    signals,
+		FPReplays:  fpReplays,
+	})
+	captchaType := ctrl.policy.ResolveType(p.requestedType, decision.Level)
 
 	captchaService, exists := ctrl.serviceManager.GetCaptchaService(captchaType)
 	if !exists {
-		log.Printf("不支持的验证码类型: type=%s, ip=%s", captchaType, helper.GetRealClientIP(c))
+		log.Printf("不支持的验证码类型: type=%s, ip=%s", captchaType, ip)
 		helper.SimpleErrorResponse(c, helper.ErrCodeInvalidParam, "不支持的验证码类型")
 		return
 	}
 
 	challenge := &services.ChallengeRequest{
 		Type:       captchaType,
-		Mode:       req.Mode,
-		Scale:      req.Scale(),
-		Difficulty: level,
+		Mode:       p.mode,
+		Scale:      p.scale,
+		Difficulty: decision.Level,
 	}
 	if ctrl.config.Captcha.BindClient {
 		challenge.ClientHash = clientHash
@@ -70,14 +119,27 @@ func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
 
 	captData, err := captchaService.GenerateCaptcha(challenge)
 	if err != nil {
-		log.Printf("生成验证码失败: type=%s, mode=%s, ip=%s, error=%v",
-			captchaType, req.Mode, helper.GetRealClientIP(c), err)
+		log.Printf("生成验证码失败: type=%s, mode=%s, ip=%s, error=%v", captchaType, p.mode, ip, err)
 		helper.ErrorResponse(c, err)
 		return
 	}
 
-	log.Printf("生成验证码成功: type=%s, mode=%s, scale=%d, level=%d, key=%s, ip=%s, ipRequests=%d",
-		captchaType, req.Mode, captData.Scale, captData.Difficulty, captData.Key, helper.GetRealClientIP(c), ipRequests)
+	via := "get"
+	if p.viaPost {
+		via = "post"
+	}
+	log.Printf("生成验证码成功: type=%s, mode=%s, via=%s, scale=%d, level=%d, boost=%d, envScore=%d, key=%s, ip=%s, ipRequests=%d",
+		captchaType, p.mode, via, captData.Scale, captData.Difficulty, decision.Boost, decision.EnvScore, captData.Key, ip, ipRequests)
+
+	ctrl.riskEngine.RecordIssue(&services.IssueContext{
+		Type:       captchaType,
+		ClientHash: clientHash,
+		IP:         ip,
+		Key:        captData.Key,
+		Env:        p.env,
+		Request:    signals,
+		ViaPost:    p.viaPost,
+	}, decision)
 
 	response := ctrl.buildCaptchaResponse(captchaType, captData)
 
@@ -118,6 +180,7 @@ func (ctrl *CaptchaController) VerifyCaptchaHandler(c *gin.Context) {
 		Key:        req.Key,
 		Trace:      req.Trace,
 		Env:        req.Env,
+		Request:    ctrl.requestSignals(c, 0),
 		Pow:        req.Pow,
 	}
 	riskResult := ctrl.riskEngine.Evaluate(evalCtx)
@@ -245,6 +308,11 @@ func defaultCaptchaController() *CaptchaController {
 // GetCaptchaHandler 全局函数（向后兼容）
 func GetCaptchaHandler(c *gin.Context) {
 	defaultCaptchaController().GetCaptchaHandler(c)
+}
+
+// IssueCaptchaHandler 全局函数（POST 出题）
+func IssueCaptchaHandler(c *gin.Context) {
+	defaultCaptchaController().IssueCaptchaHandler(c)
 }
 
 // VerifyCaptchaHandler 全局函数（向后兼容）

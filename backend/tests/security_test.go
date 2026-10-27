@@ -303,12 +303,13 @@ func TestRouter_SharedEgressEscalatesInsteadOfBlocking(t *testing.T) {
 			require.NoError(t, rdb.ZAdd(ctx, bucket, members...).Err())
 		}
 	}
-	// 用一个全新的 UA，保证客户端历史状态为空，难度只受出口 IP 请求量影响
-	userAgent := fmt.Sprintf("shared-egress-test/%d", time.Now().UnixNano())
+	// 用一个全新的 UA 后缀，保证客户端历史状态为空，难度只受出口 IP 请求量影响；
+	// 请求头按真实浏览器补齐，否则请求头核验会额外加难
+	userAgent := browserUA(fmt.Sprintf("shared-egress-test/%d", time.Now().UnixNano()))
 	get := func(path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.RemoteAddr = egressIP + ":4321"
-		req.Header.Set("User-Agent", userAgent)
+		withBrowserHeaders(req, userAgent)
 		w := httptest.NewRecorder()
 		router().ServeHTTP(w, req)
 		return w
@@ -352,15 +353,15 @@ func TestClientRiskStore_EscalatesDifficulty(t *testing.T) {
 	clientHash := fmt.Sprintf("test-client-%d", time.Now().UnixNano())
 
 	base := config.LoadConfig().Captcha.DefaultDifficulty
-	assert.Equal(t, base, policy.DifficultyFor(clientHash, 0))
+	assert.Equal(t, base, policy.Decide(services.IssueInput{ClientHash: clientHash}).Level)
 
 	store.Record(clientHash, false, 10)
 	store.Record(clientHash, false, 10)
-	assert.Equal(t, services.ClampDifficulty(base+1), policy.DifficultyFor(clientHash, 0), "连续失败 2 次升一级")
+	assert.Equal(t, services.ClampDifficulty(base+1), policy.Decide(services.IssueInput{ClientHash: clientHash}).Level, "连续失败 2 次升一级")
 
 	store.Record(clientHash, false, 90)
 	store.Record(clientHash, false, 90)
-	assert.Equal(t, services.MaxDifficulty, policy.DifficultyFor(clientHash, 0), "失败 4 次且高风险分应升到顶")
+	assert.Equal(t, services.MaxDifficulty, policy.Decide(services.IssueInput{ClientHash: clientHash}).Level, "失败 4 次且高风险分应升到顶")
 
 	state := store.Get(clientHash)
 	assert.Equal(t, 4, state.Fails)

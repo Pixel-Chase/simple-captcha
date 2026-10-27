@@ -1,0 +1,61 @@
+# TLS 指纹代理部署示例：客户端 ──HTTPS──▶ fingerproxy ──HTTP + 指纹头──▶ simple-captcha
+#
+# 用法见同目录 README.md。两种接法：
+#   1. 只起代理，转发到宿主机上已运行的后端（本地联调）：
+#        FORWARD_URL=http://host.docker.internal:3321 docker compose up -d fingerproxy
+#   2. 代理 + 后端一起起（profile=full）：
+#        docker compose --profile full up -d
+services:
+  fingerproxy:
+    build:
+      context: .
+      args:
+        FINGERPROXY_VERSION: v1.1.0
+    # 镜像默认以 uid 1001 运行；证书私钥通常是 0600，要么 chown 1001，要么用 FINGERPROXY_USER 指定能读它的 uid
+    user: "${FINGERPROXY_USER:-1001}"
+    ports:
+      - "8443:8443"
+    volumes:
+      # openssl 自签或正式证书，文件名固定为 tls.crt / tls.key
+      - ./certs:/certs:ro
+    environment:
+      LISTEN_ADDR: ":8443"
+      # 后端地址：profile=full 时为 compose 内的 captcha 服务；本地联调时用 FORWARD_URL 覆盖
+      FORWARD_URL: ${FORWARD_URL:-http://captcha:8080}
+      CERT_FILENAME: /certs/tls.crt
+      CERTKEY_FILENAME: /certs/tls.key
+      # 把客户端的 Host 原样转给后端，后端的 CORS / 日志看到的才是真实域名
+      PRESERVE_HOST: "true"
+      ENABLE_KUBERNETES_PROBE: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  captcha:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    environment:
+      PORT: "8080"
+      REDIS_HOST: redis
+      # 由 fingerproxy 注入的指纹头；只有直连来源命中 TRUSTED_PROXIES 时才采信。
+      # compose 默认网段落在 172.16.0.0/12，已被 TRUSTED_PROXIES 的默认值覆盖；自定义网段时同步调整
+      RISK_TLS_FINGERPRINT_HEADER: X-JA4-Fingerprint
+      RISK_HTTP2_FINGERPRINT_HEADER: X-HTTP2-Fingerprint
+      # 指纹参考列表（可选）：按遥测日志整理后挂载进来；不配置时指纹只记录不计分
+      # RISK_TLS_FINGERPRINT_LIST: /app/data/tls-fingerprints.json
+    volumes:
+      - captcha-data:/app/data
+      - ../../backend/images:/app/images
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    profiles: ["full"]
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  captcha-data:

@@ -2,20 +2,22 @@ import { AppsPage } from '../pages/AppsPage';
 import { ImagesPage } from '../pages/ImagesPage';
 import { LoginPage } from '../pages/LoginPage';
 import { PasswordPage } from '../pages/PasswordPage';
+import { RiskPage } from '../pages/RiskPage';
 import type { AuthState, useConsoleAuth } from './useConsoleAuth';
 
-/** 控制台分区：背景图（默认）、接入应用、修改密码 */
-export type ConsoleSection = 'images' | 'apps' | 'account';
+/** 控制台分区：背景图（默认）、接入应用、风控观察、修改密码 */
+export type ConsoleSection = 'images' | 'apps' | 'risk' | 'account';
 
 const SECTIONS: ReadonlyArray<{ id: ConsoleSection; label: string }> = [
   { id: 'images', label: '背景图' },
   { id: 'apps', label: '接入应用' },
+  { id: 'risk', label: '风控观察' },
   { id: 'account', label: '修改密码' },
 ];
 
-/** 从去掉入口前缀后的路径解析分区：'' → 背景图，'/apps'、'/account' → 对应分区 */
+/** 从去掉入口前缀后的路径解析分区：'' → 背景图，'/apps'、'/risk'、'/account' → 对应分区 */
 export function parseConsoleSection(rest: string): ConsoleSection {
-  const match = /^\/(apps|account)$/.exec(rest);
+  const match = /^\/(apps|risk|account)$/.exec(rest);
   return (match?.[1] as ConsoleSection | undefined) ?? 'images';
 }
 
@@ -81,6 +83,9 @@ export function ConsoleView({
       )}
       {section === 'apps' && (
         <AppsPage token={auth.token} onSessionExpired={handleSessionExpired} />
+      )}
+      {section === 'risk' && (
+        <RiskPage token={auth.token} onSessionExpired={handleSessionExpired} />
       )}
       {section === 'images' && (
         <ImagesPage token={auth.token} onSessionExpired={handleSessionExpired} />

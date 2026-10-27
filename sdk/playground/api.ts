@@ -90,6 +90,40 @@ export interface AppSecretResponse {
   secret: string;
 }
 
+/**
+ * 风控观察：一条遥测记录（已由服务端脱敏）。
+ * kind=issue 为出题评估（level / base / boost / envScore），kind=verify 为校验评分（score / success）；
+ * 早期记录没有 kind 字段，按校验记录展示
+ */
+export interface RiskTelemetryItem {
+  kind?: 'issue' | 'verify';
+  time?: string;
+  type?: string;
+  key?: string;
+  client?: string;
+  ip?: string;
+  ua?: string;
+  level?: number;
+  base?: number;
+  boost?: number;
+  envScore?: number;
+  behaviorScore?: number;
+  score?: number;
+  success?: boolean;
+  consistent?: boolean;
+  viaPost?: boolean;
+  reasons?: string[];
+  anomalies?: string[] | null;
+  tls?: string;
+  h2?: string;
+  [extra: string]: unknown;
+}
+
+export interface RiskTelemetryResponse {
+  items: RiskTelemetryItem[];
+  limit: number;
+}
+
 /** 管理接口错误：status 为 HTTP 状态码，code 为服务端业务错误码 */
 export class AdminApiError extends Error {
   readonly status: number;
@@ -201,6 +235,14 @@ export const adminApi = {
   },
   listApps(token: string) {
     return request<AppListResponse>('/apps', {}, token);
+  },
+  /** 最近的出题评估与校验评分记录，limit 1-500 */
+  riskTelemetry(token: string, limit: number) {
+    return request<RiskTelemetryResponse>(
+      `/risk/telemetry?limit=${encodeURIComponent(limit)}`,
+      {},
+      token,
+    );
   },
   createApp(token: string, name: string) {
     return request<AppSecretResponse>(

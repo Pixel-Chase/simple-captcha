@@ -1,4 +1,5 @@
 import type { CaptchaEnv, TelemetryLevel } from '../../Captcha.types';
+import { collectAnomalies } from './anomalies';
 import { encodeUtf8, sha256, toHex } from './sha256';
 
 /** 常见自动化框架在 window / document 上留下的痕迹 */
@@ -187,4 +188,20 @@ export function collectEnv(level: TelemetryLevel): CaptchaEnv | undefined {
 
   cachedEnv = { level, env };
   return { ...env, visibilityChanges };
+}
+
+/**
+ * 出题前采集：同步环境信号 + 限时的无头 / 篡改痕迹检测。
+ * 检测在 budgetMs 内未完成的部分直接放弃，不让真人感知到出题变慢；没有命中任何标记时不写 anomalies 字段。
+ */
+export async function collectEnvWithAnomalies(
+  level: TelemetryLevel,
+  budgetMs = 150,
+): Promise<CaptchaEnv | undefined> {
+  const env = collectEnv(level);
+  if (!env) {
+    return undefined;
+  }
+  const anomalies = await collectAnomalies(budgetMs);
+  return anomalies.length > 0 ? { ...env, anomalies } : env;
 }

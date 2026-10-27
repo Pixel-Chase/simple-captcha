@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	clientRiskKeyPrefix = "captcha:client:"
-	telemetryLogKey     = "captcha:telemetry"
+	clientRiskKeyPrefix  = "captcha:client:"
+	fingerprintKeyPrefix = "captcha:fp:"
+	telemetryLogKey      = "captcha:telemetry"
 )
 
 // ClientRisk 单个客户端（IP + UA 哈希）在观察窗口内的风控状态
@@ -108,17 +109,6 @@ func (s *ClientRiskStore) Record(clientHash string, success bool, score int) {
 	}
 }
 
-// LevelFor 根据基础难度与客户端状态计算下一题的难度等级
-func (s *ClientRiskStore) LevelFor(clientHash string) int {
-	level := s.cfg.Captcha.DefaultDifficulty
-	if clientHash == "" {
-		return ClampDifficulty(level)
-	}
-
-	state := s.Get(clientHash)
-	return LevelFromState(level, state, s.cfg.Risk)
-}
-
 // LevelFromState 纯函数：基础难度 + 近期失败次数 + 上次风险分 → 难度等级
 func LevelFromState(base int, state ClientRisk, riskCfg config.RiskConfig) int {
 	level := base
@@ -137,6 +127,81 @@ func LevelFromState(base int, state ClientRisk, riskCfg config.RiskConfig) int {
 		}
 	}
 	return ClampDifficulty(level)
+}
+
+// fingerprintScript 原子记录指纹 -> 客户端集合：
+// KEYS[1] 指纹 key；ARGV[1] 客户端哈希；ARGV[2] 饱和上限（阈值 + 1）；ARGV[3] 过期毫秒数。
+// 集合大小达到饱和上限后不再写入新成员（持续重放也不会把集合撑大），但返回值仍按"超过阈值"报告。
+var fingerprintScript = redis.NewScript(`
+local key = KEYS[1]
+local limit = tonumber(ARGV[2])
+local count = redis.call("SCARD", key)
+if count < limit then
+  redis.call("SADD", key, ARGV[1])
+  count = redis.call("SCARD", key)
+elseif redis.call("SISMEMBER", key, ARGV[1]) == 0 then
+  count = count + 1
+end
+redis.call("PEXPIRE", key, ARGV[3])
+return count
+`)
+
+// TouchFingerprint 记录一次出题中 fp 与客户端的对应关系，返回时间窗内该指纹对应的不同客户端数。
+// 同一客户端重复出题不增加计数；阈值配置为 0 或参数为空时不读写 Redis 并返回 0；Redis 出错时 fail-open 返回 0
+func (s *ClientRiskStore) TouchFingerprint(fp, clientHash string) int {
+	return s.touchFingerprint(cache.GetRedisClient(), fp, clientHash)
+}
+
+func (s *ClientRiskStore) touchFingerprint(client redis.Scripter, fp, clientHash string) int {
+	threshold := s.cfg.Risk.FPReplayThreshold
+	if threshold <= 0 || fp == "" || clientHash == "" || client == nil {
+		return 0
+	}
+	window := s.cfg.Risk.FPReplayWindow
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	count, err := fingerprintScript.Run(ctx, client, []string{fingerprintKeyPrefix + fp},
+		clientHash, threshold+1, window.Milliseconds()).Int()
+	if err != nil {
+		log.Printf("记录指纹重放计数失败，本次按未重放处理: fp=%s, error=%v", fp, err)
+		return 0
+	}
+	return count
+}
+
+// MaxRecentTelemetry 管理接口一次最多返回的遥测记录条数
+const MaxRecentTelemetry = 500
+
+// RecentTelemetry 读取最近 limit 条遥测记录（新的在前），无法解析的条目跳过；limit 裁剪到 [1, MaxRecentTelemetry]
+func (s *ClientRiskStore) RecentTelemetry(limit int) ([]map[string]interface{}, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > MaxRecentTelemetry {
+		limit = MaxRecentTelemetry
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	raw, err := cache.GetRedisClient().LRange(ctx, telemetryLogKey, 0, int64(limit-1)).Result()
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]interface{}, 0, len(raw))
+	for _, item := range raw {
+		var entry map[string]interface{}
+		if json.Unmarshal([]byte(item), &entry) != nil {
+			continue
+		}
+		items = append(items, entry)
+	}
+	return items, nil
 }
 
 // LogTelemetry 把一条遥测记录追加到 Redis 列表，保留最近 N 条供离线分析

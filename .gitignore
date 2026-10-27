@@ -48,3 +48,7 @@ backend/data/
 # 管理后台前端构建产物（sdk 中 pnpm build:console 生成，镜像构建时重新生成）；.gitkeep 保证 go:embed 目录存在
 backend/console/dist/*
 !backend/console/dist/.gitkeep
+
+# TLS 指纹代理示例的证书，本地生成不入库
+deploy/fingerproxy/certs/*
+!deploy/fingerproxy/certs/.gitkeep

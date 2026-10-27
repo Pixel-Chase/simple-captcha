@@ -71,3 +71,14 @@ type AppSecretResponse struct {
 	App    services.AppInfo `json:"app"`
 	Secret string           `json:"secret"`
 }
+
+// RiskTelemetryRequest 风控观察：最近 N 条遥测记录，超过上限的 limit 在服务层裁剪
+type RiskTelemetryRequest struct {
+	Limit int `form:"limit" binding:"omitempty,min=1"`
+}
+
+// RiskTelemetryResponse 风控观察响应；条目已脱敏（ip 只保留前两段、ua 为摘要、client 为前缀）
+type RiskTelemetryResponse struct {
+	Items []map[string]interface{} `json:"items"`
+	Limit int                      `json:"limit"`
+}

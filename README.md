@@ -38,14 +38,18 @@
 
   │  点击验证                  │                            │                           │
   ├────────────────────────►│                            │                           │
-  │                          │  GET /captchas/:type       │                           │
+  │                          │  采集环境信号(≤150ms)      │                           │
+  │                          │  POST /captchas/:type      │                           │
+  │                          │  (请求体携带 env)          │                           │
   │                          ├───────────────────────────►│                           │
+  │                          │     核验请求头+环境信号    │                           │
+  │                          │     决定首题是否加难       │                           │
   │                          │  ◄── 返回图片+key           │                           │
   │  ◄── 显示验证码弹窗       │                            │                           │
   │                          │                            │                           │
   │  完成验证操作              │                            │                           │
   ├────────────────────────►│                            │                           │
-  │                          │  POST /captchas/:type/     │                           │
+  │                          │  POST /captchas/:type      │                           │
   │                          │       :key/attempts        │                           │
   │                          ├───────────────────────────►│                           │
   │                          │  ◄── 返回 second_key       │                           │
@@ -140,7 +144,8 @@ docker compose logs captcha | grep -A6 管理后台初始密码
 
 | 方法 | 路径 | 说明 | 鉴权 |
 |------|------|------|------|
-| `GET` | `/api/v1/captchas/:type` | 获取验证码 | — |
+| `POST` | `/api/v1/captchas/:type` | 获取验证码（请求体携带环境信号，服务端出题前据此加难；SDK 默认使用） | — |
+| `GET` | `/api/v1/captchas/:type` | 获取验证码（旧版 SDK 兼容：不携带环境信号，只做请求头核验，响应与 POST 相同） | — |
 | `POST` | `/api/v1/captchas/:type/:key/attempts` | 提交答案 | — |
 | `GET` | `/api/v1/captchas/states/:key` | 查询验证状态（S2S） | 应用密钥 |
 | `GET` | `/health` | 健康检查 | — |
@@ -152,6 +157,7 @@ docker compose logs captcha | grep -A6 管理后台初始密码
 | `GET` / `POST` | `/api/v1/admin/apps` | 列出 / 新建接入应用 | 会话令牌 |
 | `PUT` / `DELETE` | `/api/v1/admin/apps/:id` | 修改名称与启用状态 / 删除应用 | 会话令牌 |
 | `POST` | `/api/v1/admin/apps/:id/secret` | 重置应用密钥 | 会话令牌 |
+| `GET` | `/api/v1/admin/risk/telemetry` | 最近的风控遥测记录（已脱敏，`limit` 默认 100、上限 500） | 会话令牌 |
 
 - 路径前缀由 `API_PREFIX` 决定（默认 `/api/v1`）：配置 `/captcha/api` 后为 `/captcha/api/captchas/:type`，配置 `/` 则挂在根路径。
 - 仍在使用初始密码时，`/admin/*` 只开放会话与改密接口，其余返回 HTTP 403（`code: 2008`）。
@@ -175,6 +181,18 @@ docker compose logs captcha | grep -A6 管理后台初始密码
 |---|---|
 | `mode` | `light` / `dark`，影响点选文字配色，可选 |
 | `dpr` | 前端 `devicePixelRatio`（1-3），服务端按此倍率出图（至少 2 倍，但不超过 `CAPTCHA_MAX_SCALE`），可选 |
+
+**`POST /captchas/:type`**（SDK 默认）
+
+```json
+{
+  "mode": "dark",
+  "dpr": 2,
+  "env": { "ua": "…", "platform": "Win32", "languages": ["zh-CN"], "tz": "Asia/Shanghai", "tzOffset": -480, "screen": [1920, 1080], "viewport": [1536, 864], "dpr": 2, "webdriver": false, "automation": [], "anomalies": [], "fp": "…" }
+}
+```
+
+`env` 为出题前采集的环境信号（可选，`telemetry='off'` 时不携带），服务端用它与请求头（`User-Agent`、`Accept-Language`、`Sec-Fetch-*`、Chromium 的 `Sec-CH-UA*`）交叉核验，连同指纹重放计数一起决定首题是否加难；`anomalies` 是 SDK 检测到的无头 / 篡改痕迹标记。不带请求体的 `POST` 与 `GET` 等价。两个接口的响应完全相同：
 
 响应（HTTP 200）：
 
@@ -201,7 +219,7 @@ docker compose logs captcha | grep -A6 管理后台初始密码
 {
   "point": "123,45",
   "trace": { "points": [[x, y, t], …], "clicks": [[x, y, t]], "pointerType": "mouse", "startedAt": 820, "submittedAt": 2410, "downs": 1, "ups": 1, "moves": 96, "untrusted": 0 },
-  "env":   { "ua": "…", "languages": ["zh-CN"], "screen": [1920, 1080], "viewport": [1440, 900], "dpr": 2, "webdriver": false, "automation": [], "fp": "…" },
+  "env":   { "ua": "…", "languages": ["zh-CN"], "screen": [1920, 1080], "viewport": [1440, 900], "dpr": 2, "webdriver": false, "automation": [], "anomalies": [], "fp": "…" },
   "pow":   { "nonce": "…", "solution": "48213" }
 }
 ```
@@ -427,20 +445,27 @@ function App() {
 | 客户端绑定 | 出题时记录客户端指纹（IP + UA 哈希），提交客户端不一致时题目直接作废 | `CAPTCHA_BIND_CLIENT` |
 | 时间窗口 | 出题到提交间隔低于阈值视为自动化提交，计一次失败 | `CAPTCHA_MIN_SOLVE_TIME` |
 | 工作量证明 PoW | 每道题下发 nonce 与难度位数，SDK 在后台用 SHA-256 碰撞；真人无感，批量脚本成本线性上升，难度随风险等级提升 | `CAPTCHA_POW_*` |
-| 难度分级 | 1-5 级，决定字符数量、干扰强度、拼图尺寸、旋转区间与校验容差；连续失败或高风险分自动升级 | `CAPTCHA_DEFAULT_DIFFICULTY` |
+| 难度分级 | 1-5 级，决定字符数量、干扰强度、拼图尺寸、旋转区间与校验容差；连续失败、高风险分、出口 IP 压力与出题前的环境评估都只会在默认难度之上加难，**只升不降**：真人保持默认难度，脚本逐级变难 | `CAPTCHA_DEFAULT_DIFFICULTY` |
+| 出题前环境评估 | SDK 出题前采集环境信号随 `POST /captchas/:type` 上报，服务端结合请求头核验与指纹重放计数算出环境分：≥ 30 加 1 级、≥ 55 加 2 级。webdriver、自动化框架痕迹、Worker 与主线程不一致等硬性标记单独命中即加 1 级；软件渲染器（VDI、虚拟机）等弱信号单独命中不加难 | `RISK_ENV_SCORE_CAP` |
+| 请求头核验 | 服务端检查请求头是否像真实浏览器：UA 含 `Mozilla/`、Chrome / Firefox 必带 `Sec-Fetch-*`、Chromium 89+ 必带 `Sec-CH-UA*`、有 `Accept-Language`；再与自报环境交叉比对 UA、平台、语言、时区偏移、DPR 与移动标记。curl、requests 等脚本与只改 UA 的伪装直接加难，`GET` 与 `POST` 都核验，Safari / WebView 不因缺少 Chromium 专有头扣分 | — |
+| 指纹重放计数 | 同一设备指纹（SDK 上报的 `fp`）在时间窗内被多个不同客户端复用，即复制真浏览器 env 批量重放，超过阈值加 1 级；同一客户端反复出题不计 | `RISK_FP_REPLAY_THRESHOLD` `RISK_FP_REPLAY_WINDOW` |
+| headless 痕迹检测 | SDK 出题前在 150ms 预算内并行检测：无头窗口（`outerWidth` 为 0）、通知权限矛盾、无媒体设备、桌面 Chrome 缺少 `window.chrome`、Worker 线程与主线程的 navigator 不一致、navigator 关键 getter 被改写。检测思路参考 BotD / CreepJS（声明见 [`sdk/THIRD_PARTY_NOTICES.md`](sdk/THIRD_PARTY_NOTICES.md)），只加难不拦截，检测失败即跳过 | — |
+| TLS / HTTP2 指纹（可选） | 由 fingerproxy 等 TLS 终结代理注入 JA3 / JA4 / HTTP2 指纹头，仅在直连来源命中 `TRUSTED_PROXIES` 时采信：按可配置列表识别脚本工具链的指纹（硬性标记）与"指纹所属浏览器家族 ≠ UA 家族"的伪装；不配置列表时只记录到遥测。部署示例见 [`deploy/fingerproxy/`](deploy/fingerproxy/README.md) | `RISK_TLS_FINGERPRINT_HEADER` `RISK_HTTP2_FINGERPRINT_HEADER` `RISK_TLS_FINGERPRINT_LIST` |
 | 服务端选题 | `type=auto` 时由服务端按风险等级定题型，客户端无法固定选最易自动化的题型 | — |
-| 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100：达到升级阈值提升后续难度，达到拦截阈值拒绝本次校验（响应与答案错误一致） | `RISK_*` |
+| 行为/环境风控 | SDK 采集指针轨迹（速度、直线度、停顿、过冲等）与环境信号（webdriver、自动化框架痕迹、软件渲染器等），服务端规则评分 0-100：达到升级阈值提升后续难度；达到拦截阈值且行为分不低于 `RISK_BLOCK_MIN_BEHAVIOR`（或命中 webdriver 等硬性标记）时拒绝本次校验（响应与答案错误一致）。环境类信号对总分的贡献有上限 `RISK_ENV_SCORE_CAP`，VDI、隐私浏览器等正常环境最多被加难，不会仅凭环境被拦 | `RISK_*` |
 | 单 IP 加难 | 按出口 IP 统计每分钟出题与提交次数（Redis 有序集合滑动窗口，多实例共享），超过阈值只提升后续题目难度，**不按 IP 拒绝**：攻击者会更换 IP，按 IP 拒绝只会让企业 NAT、运营商 CGNAT 下共用出口的正常用户一起无法使用。S2S 状态查询不计入出口 IP。针对单一来源的流量洪水请在网关或 WAF 层按实际网络情况防护 | `CAPTCHA_IP_ESCALATE_PER_MINUTE` |
 | 可信代理 | 只读取 `REMOTE_IP_HEADERS` 列出的代理头，且仅在直连来源命中 `TRUSTED_PROXIES` 时采信 | `TRUSTED_PROXIES` `REMOTE_IP_HEADERS` |
 | 请求体上限 | 校验提交接口在全局上限之外单独限制请求体（chunked 同样生效），遥测列表单项长度也有上限 | `MAX_REQUEST_SIZE` `VERIFY_MAX_BODY_SIZE` |
 
 **采集级别与隐私**
 
-- `telemetry='full'`（默认）：轨迹 + 环境信号 + WebGL 渲染器 + 设备指纹哈希
-- `telemetry='basic'`：轨迹 + 基础环境信号（UA、语言、屏幕、时区、触控能力）
-- `telemetry='off'`：不采集，仅计算 PoW
+- `telemetry='full'`（默认）：轨迹 + 环境信号 + 无头 / 篡改痕迹标记 + WebGL 渲染器 + 设备指纹哈希
+- `telemetry='basic'`：轨迹 + 基础环境信号（UA、语言、屏幕、时区、触控能力）+ 无头 / 篡改痕迹标记
+- `telemetry='off'`：不采集，仅计算 PoW；出题仍走 `POST`，服务端按无环境信号处理
 
-采集内容不含可直接识别个人的信息，服务端只保存客户端哈希与评分，不落原始 IP / UA；建议在隐私政策中声明验证码会采集交互行为用于人机判别。上线初期可用 `RISK_MODE=log` 只记分不拦截，确认误报率后再切到 `enforce`。
+采集内容不含可直接识别个人的信息；遥测记录（Redis `captcha:telemetry`）里的 IP 只保留前两段、UA 只保留浏览器家族与主版本摘要，客户端以 IP + UA 的哈希标识，TLS / HTTP2 指纹与设备指纹哈希原样保存供运维整理规则。建议在隐私政策中声明验证码会采集交互行为与运行环境特征用于人机判别。上线初期可用 `RISK_MODE=log` 只记分不拦截，确认误报率后再切到 `enforce`。
+
+Worker 一致性检测需要站点 CSP 允许 `worker-src blob:`；禁止时该项自动跳过，不影响其他功能，也不会误加难。
 
 ## 二次验证（S2S）
 
@@ -467,7 +492,7 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 
 ## 管理后台
 
-管理后台内嵌在服务里、常驻开启，访问 **`http://<服务地址>/console/`**，与 API 同源，无需配置跨域。登录受行为验证码保护，登录后可管理背景图、接入应用与管理员密码，不影响任何验证码接口。
+管理后台内嵌在服务里、常驻开启，访问 **`http://<服务地址>/console/`**，与 API 同源，无需配置跨域。登录受行为验证码保护，登录后可管理背景图、接入应用与管理员密码，并查看风控观察页，不影响任何验证码接口。
 
 页面由 `sdk/playground/console` 构建、经 `//go:embed` 打进二进制，镜像构建时自动生成；`API_PREFIX` 在返回页面时注入，修改后无需重新构建前端。页面带严格的 CSP（只允许同源脚本、禁止被 iframe 嵌入）与 `noindex`。
 
@@ -555,6 +580,10 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 
 > 素材保存在本地磁盘，适用于单实例部署；多副本部署需挂载共享卷，否则各实例素材不一致。
 
+### 风控观察
+
+只读页面，列出最近的出题评估（难度、加难级数、环境分、原因、是否经 POST 携带环境信号）与校验评分（分数、是否通过、原因），调整 `RISK_*` 权重前先在这里对照真人与脚本的原因分布。数据来自 Redis 的 `captcha:telemetry` 列表（`RISK_TELEMETRY_LOG_SIZE` 条，出题与校验共用），IP、UA 在写入时已脱敏，客户端只显示哈希前缀；可信代理注入的 TLS / HTTP2 指纹原样显示，便于整理指纹列表。对应接口 `GET /api/v1/admin/risk/telemetry?limit=100`（上限 500）。
+
 ---
 
 ## 环境变量参考
@@ -615,9 +644,16 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 | `RISK_ENABLED` | 是否启用行为/环境风控评分 | `true` |
 | `RISK_MODE` | `enforce` 按阈值拦截；`log` 仅记录分数 | `enforce` |
 | `RISK_ESCALATE_THRESHOLD` | 达到该分数后提升该客户端后续难度与 PoW 位数 | `55` |
-| `RISK_BLOCK_THRESHOLD` | 达到该分数直接拒绝本次校验 | `85` |
+| `RISK_BLOCK_THRESHOLD` | 达到该分数且满足行为证据要求时拒绝本次校验 | `85` |
+| `RISK_BLOCK_MIN_BEHAVIOR` | 触发拦截所需的最低行为分；命中 webdriver 等硬性自动化标记时不要求 | `20` |
+| `RISK_ENV_SCORE_CAP` | 环境 / 请求头类信号对风险分的贡献上限，0 不限制；仅凭环境信号达不到拦截阈值 | `60` |
+| `RISK_FP_REPLAY_THRESHOLD` | 同一设备指纹在时间窗内对应的不同客户端数超过该值即视为重放加难，0 关闭 | `5` |
+| `RISK_FP_REPLAY_WINDOW` | 指纹重放计数的时间窗 | `10m` |
+| `RISK_TLS_FINGERPRINT_HEADER` | 可信代理注入的 TLS 指纹（JA3 / JA4）请求头名，空表示不读取 | 空 |
+| `RISK_HTTP2_FINGERPRINT_HEADER` | 可信代理注入的 HTTP/2 指纹请求头名，空表示不读取 | 空 |
+| `RISK_TLS_FINGERPRINT_LIST` | 指纹参考列表 JSON（浏览器家族映射 + 拒绝列表）路径，空表示指纹只记录不计分；配置时必须同时配置至少一个指纹头名 | 空 |
 | `RISK_STATE_TTL` | 客户端风控状态保留时长 | `30m` |
-| `RISK_TELEMETRY_LOG_SIZE` | Redis 中保留的最近遥测记录条数（`captcha:telemetry` 列表），0 表示不保存 | `1000` |
+| `RISK_TELEMETRY_LOG_SIZE` | Redis 中保留的最近遥测记录条数（`captcha:telemetry` 列表，出题评估与校验评分共用），0 表示不保存 | `1000` |
 | `TRUSTED_PROXIES` | 可信代理网段，只有来自这些来源的代理头才会被采信；生产环境建议收窄为实际代理地址 | 私有网段 |
 | `REMOTE_IP_HEADERS` | 解析客户端 IP 时按顺序读取的代理头，逗号分隔；部署在 Cloudflare / Akamai 之后追加 `CF-Connecting-IP` / `True-Client-IP` | `X-Forwarded-For,X-Real-IP` |
 | `MAX_REQUEST_SIZE` | 全局请求体上限（字节） | `33554432` |
@@ -687,3 +723,5 @@ SDK 的开发、构建与测试命令见 [`sdk/README.md`](sdk/README.md#本地�
 ## License
 
 [MIT](LICENSE)
+
+`sdk/src/_internal/telemetry/anomalies.ts` 的无头 / 篡改痕迹检测思路参考了 BotD 与 CreepJS（均为 MIT），声明见 [`sdk/THIRD_PARTY_NOTICES.md`](sdk/THIRD_PARTY_NOTICES.md)。

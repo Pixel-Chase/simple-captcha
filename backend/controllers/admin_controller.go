@@ -15,14 +15,43 @@ import (
 // multipartOverhead 上传请求体在图片本体之外允许的额外体积（表单字段、分隔符等）
 const multipartOverhead = 1 << 20
 
-// AdminController 管理后台控制器：登录会话、管理员密码与背景图管理
+// AdminController 管理后台控制器：登录会话、管理员密码、背景图管理与风控观察
 type AdminController struct {
-	admin *services.AdminService
+	admin      *services.AdminService
+	clientRisk *services.ClientRiskStore
 }
 
 // NewAdminController 创建管理后台控制器
 func NewAdminController(admin *services.AdminService) *AdminController {
-	return &AdminController{admin: admin}
+	return &AdminController{admin: admin, clientRisk: services.NewClientRiskStore()}
+}
+
+// RiskTelemetryHandler 风控观察：返回最近的出题评估与校验评分记录（已脱敏），供调权重时参考
+func (ctrl *AdminController) RiskTelemetryHandler(c *gin.Context) {
+	var req models.RiskTelemetryRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		helper.ErrorResponse(c, helper.NewCaptchaError(helper.ErrCodeInvalidParam, "参数格式错误", err.Error()))
+		return
+	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > services.MaxRecentTelemetry {
+		limit = services.MaxRecentTelemetry
+	}
+
+	items, err := ctrl.clientRisk.RecentTelemetry(limit)
+	if err != nil {
+		log.Printf("读取遥测记录失败: error=%v", err)
+		helper.ErrorResponse(c, helper.NewCaptchaError(helper.ErrCodeCacheError, "读取遥测记录失败", err.Error()))
+		return
+	}
+	masked := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		masked = append(masked, services.MaskTelemetry(item))
+	}
+	helper.SuccessResponse(c, models.RiskTelemetryResponse{Items: masked, Limit: limit})
 }
 
 // LoginHandler 管理员登录：先消费行为验证 second_key，再比对账号密码

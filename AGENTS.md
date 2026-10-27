@@ -18,10 +18,14 @@ simple-captcha/
 │   ├── cache/                   # 缓存配置 (Redis)
 │   ├── config/                  # 应用配置项
 │   ├── helper/                  # 全局工具函数
+│   ├── risk/                    # 人机判别纯计算：轨迹特征、环境 / 请求头 / TLS 指纹规则评分、PoW（与 HTTP、Redis 无关）
 │   ├── assets/fonts/            # 内置字体（go:embed），点选题使用站酷快乐体（OFL 1.1，授权见 OFL.txt）
 │   ├── internal/gocaptcha/      # 验证码图形引擎（fork 自 go-captcha v2.0.5，自行维护，与上游的差异记在 NOTICE.md）
 │   ├── console/                 # 内嵌的管理后台页面（//go:embed dist，dist 由 sdk 的 pnpm build:console 生成，不入库）
 │   └── main.go                  # 后端服务入口
+│
+├── deploy/fingerproxy/          # 可选：TLS / HTTP2 指纹代理（fingerproxy）的 Dockerfile、compose 与说明
+├── docs/tasks/                  # 任务台账：AI 可读的分阶段执行记录与决策
 │
 └── sdk/                         # React 验证码前端组件库 / SDK
     ├── src/

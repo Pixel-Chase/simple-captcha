@@ -96,6 +96,15 @@ type ServiceManager interface {
 
 	// GetChallengePolicy 获取出题策略（难度分级、auto 类型选择）
 	GetChallengePolicy() *ChallengePolicy
+
+	// GetClientRiskStore 获取客户端风控状态存储（历史表现、指纹重放计数、遥测日志）
+	GetClientRiskStore() *ClientRiskStore
+
+	// GetTLSFingerprintList 获取 TLS / HTTP2 指纹参考列表，未配置时为 nil（指纹只记录不计分）
+	GetTLSFingerprintList() *risk.FingerprintList
+
+	// SetTLSFingerprintList 替换指纹参考列表（热更新或测试注入）
+	SetTLSFingerprintList(list *risk.FingerprintList)
 }
 
 // NewServiceManager 创建服务管理器 - 类型别名

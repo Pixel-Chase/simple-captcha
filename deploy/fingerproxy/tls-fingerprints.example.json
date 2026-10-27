@@ -1,0 +1,5 @@
+{
+  "_readme": "复制为 tls-fingerprints.json 并通过 RISK_TLS_FINGERPRINT_LIST 指向它。browser：指纹 → 浏览器家族（chrome / firefox / safari / edge），与 UA 声称的家族不符时加难；deny：已确认属于脚本工具链（curl、Python requests、Go http 等）的指纹，命中即为硬性标记。指纹随浏览器版本变化，请从遥测日志（管理后台「风控观察」或 Redis captcha:telemetry 列表的 tls / h2 字段）中按实际流量整理，不要照抄网上的表。",
+  "browser": {},
+  "deny": []
+}

@@ -120,6 +120,15 @@ export interface CaptchaChallengeData {
   pow?: CaptchaPowChallenge;
 }
 
+/** 出题请求体（POST /captchas/:type）：出题前采集的环境信号随请求上报，服务端据此决定是否加难 */
+export interface CaptchaIssuePayload {
+  mode?: 'light' | 'dark';
+  /** 取整并裁剪到 1-3 的 devicePixelRatio */
+  dpr: number;
+  /** telemetry='off' 时不携带 */
+  env?: CaptchaEnv;
+}
+
 /** 轨迹采样点 [x, y, t]，t 为相对题目加载完成的毫秒数 */
 export type TracePoint = [number, number, number];
 
@@ -156,6 +165,8 @@ export interface CaptchaEnv {
   fp?: string;
   visibilityChanges?: number;
   mobile?: boolean;
+  /** 无头浏览器 / API 篡改痕迹标记（如 zero_outer_size、worker_ua_mismatch、getter_patched:webdriver），没有命中时不携带 */
+  anomalies?: string[];
 }
 
 /** 提交答案时的完整请求体 */

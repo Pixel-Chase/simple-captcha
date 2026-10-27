@@ -1794,3 +1794,94 @@ p {
     transform: none;
   }
 }
+
+/* ---------- 风控观察 ---------- */
+.risk__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.risk__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.risk__limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.risk__limit select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e3e8ee);
+  background: inherit;
+  color: inherit;
+}
+
+.risk__empty {
+  padding: 24px;
+}
+
+.risk__table-wrap {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.risk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.risk-table__cell {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border, rgba(128, 128, 128, 0.2));
+}
+
+.risk-table__head {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.risk-table__time {
+  white-space: nowrap;
+}
+
+.risk-table__reasons ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.risk-table__reason {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.risk-table__fp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.risk-table__client {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.risk__footer {
+  margin-top: 12px;
+  font-size: 12px;
+}

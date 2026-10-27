@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import request from 'axios';
 import type {
+  ApiConfig,
   CaptchaChallengeData,
+  CaptchaEnv,
   CaptchaErrorResponse,
+  CaptchaIssuePayload,
   CaptchaType,
   CaptchaVerifyPayload,
   CaptchaVerifySuccessData,
@@ -15,7 +18,8 @@ export interface GetCaptchaOption {
 }
 
 export interface GetCaptchaResult {
-  get: () => Promise<CaptchaChallengeData>;
+  /** 出题：env 为出题前采集的环境信号，服务端据此决定是否加难；不传则按默认难度出题 */
+  get: (env?: CaptchaEnv) => Promise<CaptchaChallengeData>;
   loading: boolean;
   data: CaptchaChallengeData | null;
   error: CaptchaErrorResponse | null;
@@ -44,28 +48,43 @@ export function getDevicePixelRatio(): number {
   return Math.min(3, Math.max(1, dpr));
 }
 
+/** 拼接验证码接口根路径：basePath 去掉末尾斜杠，prefix 规范化为单个前导斜杠，空 prefix 表示挂在根路径 */
+export function captchaEndpointFor(api: ApiConfig): string {
+  const basePath = (api.basePath || '').replace(/\/+$/, '');
+  const normalizedPrefix = (api.prefix ?? '/api/v1').trim().replace(/^\/+|\/+$/g, '');
+  const apiPrefix = normalizedPrefix ? `/${normalizedPrefix}` : '';
+  return `${basePath}${apiPrefix}/captchas`;
+}
+
+/** 组装出题请求体；未提供的字段不写入，避免服务端把 undefined 当作显式值 */
+export function buildIssuePayload(option: GetCaptchaOption, env?: CaptchaEnv): CaptchaIssuePayload {
+  const payload: CaptchaIssuePayload = { dpr: getDevicePixelRatio() };
+  if (option.mode) {
+    payload.mode = option.mode;
+  }
+  if (env) {
+    payload.env = env;
+  }
+  return payload;
+}
+
 export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<CaptchaChallengeData | null>(null);
   const [error, setError] = useState<CaptchaErrorResponse | null>(null);
   const { api } = useCaptchaConfig();
-  const basePath = (api.basePath || '').replace(/\/+$/, '');
-  const normalizedPrefix = (api.prefix ?? '/api/v1').trim().replace(/^\/+|\/+$/g, '');
-  const apiPrefix = normalizedPrefix ? `/${normalizedPrefix}` : '';
-  const captchaEndpoint = `${basePath}${apiPrefix}/captchas`;
+  const captchaEndpoint = captchaEndpointFor(api);
 
-  const get = async (): Promise<CaptchaChallengeData> => {
+  const get = async (env?: CaptchaEnv): Promise<CaptchaChallengeData> => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (option.mode) {
-        params.set('mode', option.mode);
-      }
-      params.set('dpr', String(getDevicePixelRatio()));
-
-      const url = `${captchaEndpoint}/${option.type}?${params.toString()}`;
-      const res = await request.get<CaptchaChallengeData | CaptchaErrorResponse>(url);
+      // 出题改为 POST：环境信号随请求体上报，服务端出题前据此加难；响应与旧版 GET 完全一致
+      const url = `${captchaEndpoint}/${option.type}`;
+      const res = await request.post<CaptchaChallengeData | CaptchaErrorResponse>(
+        url,
+        buildIssuePayload(option, env),
+      );
       if (isCaptchaErrorResponse(res.data)) {
         setError(res.data);
         throw res.data;

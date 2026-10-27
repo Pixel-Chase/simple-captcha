@@ -2,6 +2,8 @@ package tests
 
 import (
 	"simple-captcha/models"
+	"simple-captcha/risk"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -355,4 +357,50 @@ func BenchmarkStateRequest_Validate(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		req.Validate()
 	}
+}
+
+func TestIssueRequest_Validate(t *testing.T) {
+	valid := models.IssueRequest{Type: "auto", Mode: "dark", Dpr: 2}
+	assert.Nil(t, valid.Validate())
+	assert.Equal(t, 2, valid.Scale())
+
+	noBody := models.IssueRequest{Type: "slide-text"}
+	assert.Nil(t, noBody.Validate(), "不带 mode / dpr / env 也合法")
+	assert.Equal(t, 1, noBody.Scale())
+
+	badMode := models.IssueRequest{Type: "click-text", Mode: "blue"}
+	assert.NotNil(t, badMode.Validate())
+
+	badDpr := models.IssueRequest{Type: "click-text", Dpr: 4}
+	assert.NotNil(t, badDpr.Validate())
+
+	badType := models.IssueRequest{Type: "unknown"}
+	assert.NotNil(t, badType.Validate())
+
+	tooManyLanguages := models.IssueRequest{Type: "rotate", Env: &risk.Env{Languages: make([]string, 33)}}
+	assert.NotNil(t, tooManyLanguages.Validate(), "语言列表超过 32 项应被拒绝")
+
+	longField := models.IssueRequest{Type: "rotate", Env: &risk.Env{UA: strings.Repeat("u", 513)}}
+	assert.NotNil(t, longField.Validate(), "UA 超过 512 字节应被拒绝")
+
+	okEnv := models.IssueRequest{Type: "rotate", Env: &risk.Env{UA: "Mozilla/5.0", Languages: []string{"zh-CN"}}}
+	assert.Nil(t, okEnv.Validate())
+}
+
+func TestIssueRequest_Validate_Anomalies(t *testing.T) {
+	sixteen := make([]string, 16)
+	for i := range sixteen {
+		sixteen[i] = "zero_outer_size"
+	}
+	ok := models.IssueRequest{Type: "rotate", Env: &risk.Env{Anomalies: sixteen}}
+	assert.Nil(t, ok.Validate(), "16 个标记在上限内")
+
+	tooMany := models.IssueRequest{Type: "rotate", Env: &risk.Env{Anomalies: make([]string, 17)}}
+	assert.NotNil(t, tooMany.Validate(), "17 个标记应被拒绝")
+
+	tooLong := models.IssueRequest{Type: "rotate", Env: &risk.Env{Anomalies: []string{strings.Repeat("a", 65)}}}
+	assert.NotNil(t, tooLong.Validate(), "单个标记超过 64 字节应被拒绝")
+
+	verify := models.VerifyRequest{Type: "slide-text", Key: "k", Point: "1,1", Env: &risk.Env{Anomalies: make([]string, 17)}}
+	assert.NotNil(t, verify.Validate(), "校验接口同样受上限约束")
 }

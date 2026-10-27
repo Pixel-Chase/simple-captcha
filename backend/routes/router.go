@@ -108,6 +108,8 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps
 	ready.GET("/backgrounds/:name", adminCtrl.PreviewBackgroundHandler)
 	ready.DELETE("/backgrounds/:name", adminCtrl.DeleteBackgroundHandler)
 
+	ready.GET("/risk/telemetry", adminCtrl.RiskTelemetryHandler)
+
 	ready.GET("/apps", appCtrl.ListHandler)
 	ready.POST("/apps", appCtrl.CreateHandler)
 	ready.PUT("/apps/:id", appCtrl.UpdateHandler)
@@ -117,11 +119,17 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps
 
 // registerCaptchaRoutes 注册验证码相关路由；ipPressure 只挂在用户侧的出题与提交接口上
 func registerCaptchaRoutes(rg *gin.RouterGroup, apps *services.AppService, ipPressure gin.HandlerFunc) {
-	// 获取验证码资源
+	// 获取验证码资源（GET：旧版 SDK 兼容，不携带环境信号）
 	rg.GET("/:type",
 		ipPressure,
 		middleware.ValidateCaptchaRequest(),
 		controllers.GetCaptchaHandler)
+
+	// 获取验证码资源（POST：请求体携带环境信号，服务端出题前据此加难；响应与 GET 一致）
+	rg.POST("/:type",
+		ipPressure,
+		middleware.ValidateIssueRequest(),
+		controllers.IssueCaptchaHandler)
 
 	// 提交一次验证答案（用户侧）
 	rg.POST("/:type/:key/attempts",

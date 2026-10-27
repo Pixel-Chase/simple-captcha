@@ -5,6 +5,7 @@ import (
 	"log"
 	"simple-captcha/config"
 	"simple-captcha/helper"
+	"simple-captcha/risk"
 	"sync"
 )
 
@@ -20,6 +21,7 @@ type ServiceManagerImpl struct {
 	clientRisk      *ClientRiskStore
 	riskEngine      *RiskEngine
 	policy          *ChallengePolicy
+	tlsFingerprints *risk.FingerprintList
 	mutex           sync.RWMutex
 	initialized     bool
 }
@@ -57,8 +59,19 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	sm.riskEngine = NewRiskEngine(sm.clientRisk)
 	sm.policy = NewChallengePolicy(sm.clientRisk)
 
-	// 背景图仓库：全部题型共用一份解码后的素材，管理接口增删素材后可热重载
 	cfg := config.LoadConfig()
+
+	// TLS / HTTP2 指纹参考列表（可选）：配置校验阶段已确认文件可读且为合法 JSON
+	if path := cfg.Risk.TLSFingerprintList; path != "" {
+		list, err := risk.LoadFingerprintList(path)
+		if err != nil {
+			log.Fatalln("加载 TLS 指纹列表失败:", err)
+		}
+		sm.tlsFingerprints = list
+		log.Printf("TLS 指纹列表已加载: path=%s, browser=%d, deny=%d", path, len(list.Browser), len(list.Deny))
+	}
+
+	// 背景图仓库：全部题型共用一份解码后的素材，管理接口增删素材后可热重载
 	backgrounds, err := NewBackgroundStore(helper.ResolveImageDir(cfg.Captcha.ImagePath))
 	if err != nil {
 		log.Fatalln("加载背景图失败:", err)
@@ -152,6 +165,20 @@ func (sm *ServiceManagerImpl) GetClientRiskStore() *ClientRiskStore {
 	defer sm.mutex.RUnlock()
 
 	return sm.clientRisk
+}
+
+// GetTLSFingerprintList 获取 TLS / HTTP2 指纹参考列表，未配置时为 nil
+func (sm *ServiceManagerImpl) GetTLSFingerprintList() *risk.FingerprintList {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+	return sm.tlsFingerprints
+}
+
+// SetTLSFingerprintList 替换指纹参考列表
+func (sm *ServiceManagerImpl) SetTLSFingerprintList(list *risk.FingerprintList) {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+	sm.tlsFingerprints = list
 }
 
 // GetBackgroundStore 获取全部题型共用的背景图仓库

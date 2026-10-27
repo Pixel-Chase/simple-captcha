@@ -1,11 +1,54 @@
 package services
 
 import (
+	"fmt"
 	"math/rand"
 	"simple-captcha/config"
+	"simple-captcha/risk"
 )
 
-// ChallengePolicy 出题策略：根据客户端风控状态决定难度等级，并为 auto 类型挑选具体题型
+// 出题前按环境分加难的阈值与分值。
+// 这里的阈值作用于出题前的环境 / 请求侧得分，与 RISK_ESCALATE_THRESHOLD（作用于上一次校验的总分）语义不同：
+// 单个明显痕迹（webdriver 45、automation 35、指纹重放 30）即可加 1 级，两个以上叠加加 2 级。
+const (
+	issueBoostOneAt = 30
+	issueBoostTwoAt = 55
+	// fpReplayPoints 同一指纹在时间窗内被多个客户端复用的分值，单独命中即加 1 级
+	fpReplayPoints = 30
+)
+
+// IssueInput 出题前的难度决策输入
+type IssueInput struct {
+	ClientHash string
+	// IPRequests 出口 IP 最近一分钟的请求数
+	IPRequests int
+	// Env 客户端自报的环境信号，旧版 SDK 或 telemetry=off 时为 nil
+	Env *risk.Env
+	// Request 服务端从请求头提取的信号，可为 nil
+	Request *risk.RequestSignals
+	// FPReplays 该指纹在时间窗内对应的不同客户端数，0 表示未统计；超过 RISK_FP_REPLAY_THRESHOLD 视为重放
+	FPReplays int
+	// State 客户端历史状态；nil 时由策略按 ClientHash 从存储读取
+	State *ClientRisk
+}
+
+// IssueDecision 出题前的难度决策结果
+type IssueDecision struct {
+	// Level 最终难度等级，永不低于 Base
+	Level int
+	// Base 配置的默认难度
+	Base int
+	// Boost 环境 / 请求侧信号带来的加难级数（0-2）
+	Boost int
+	// EnvScore 环境 / 请求侧得分（已按上限裁剪）
+	EnvScore int
+	// Consistent 请求头齐全且与自报环境一致，仅记录不参与决策；无请求侧信号时为 false
+	Consistent bool
+	// Reasons 本次加难的全部原因，格式 name(+级数或分值)
+	Reasons []string
+}
+
+// ChallengePolicy 出题策略：根据客户端风控状态与环境信号决定难度等级，并为 auto 类型挑选具体题型
 type ChallengePolicy struct {
 	cfg   *config.Config
 	store *ClientRiskStore
@@ -14,24 +57,77 @@ type ChallengePolicy struct {
 
 // NewChallengePolicy 创建出题策略
 func NewChallengePolicy(store *ClientRiskStore) *ChallengePolicy {
+	return newChallengePolicyWithConfig(config.LoadConfig(), store)
+}
+
+func newChallengePolicyWithConfig(cfg *config.Config, store *ClientRiskStore) *ChallengePolicy {
 	return &ChallengePolicy{
-		cfg:   config.LoadConfig(),
+		cfg:   cfg,
 		store: store,
 		pick:  rand.Intn,
 	}
 }
 
-// DifficultyFor 计算该客户端下一题的难度等级：先按客户端历史表现定级，
-// 再按其出口 IP 最近一分钟的请求数（ipRequests）加难
-func (p *ChallengePolicy) DifficultyFor(clientHash string, ipRequests int) int {
-	if p == nil {
-		return 3
+// Decide 计算该客户端下一题的难度等级。难度只会在默认值之上向上调整：
+//  1. 按客户端历史表现（近期失败次数、上次风险分）升级；
+//  2. 按出口 IP 最近一分钟的请求数加难；
+//  3. 按环境 / 请求侧得分加难：>= issueBoostOneAt 加 1 级，>= issueBoostTwoAt 加 2 级。
+//
+// 没有任何降级分支：真人不需要证明自己就拿默认难度，脚本因为忘了藏的痕迹逐级变难。
+func (p *ChallengePolicy) Decide(in IssueInput) IssueDecision {
+	if p == nil || p.cfg == nil {
+		return IssueDecision{Level: ClampDifficulty(0), Base: ClampDifficulty(0)}
 	}
-	level := p.cfg.Captcha.DefaultDifficulty
-	if p.store != nil && clientHash != "" {
-		level = p.store.LevelFor(clientHash)
+	base := ClampDifficulty(p.cfg.Captcha.DefaultDifficulty)
+	decision := IssueDecision{Base: base}
+	reasons := make([]string, 0, 8)
+
+	state := in.State
+	if state == nil {
+		loaded := ClientRisk{}
+		if p.store != nil && in.ClientHash != "" {
+			loaded = p.store.Get(in.ClientHash)
+		}
+		state = &loaded
 	}
-	return ClampDifficulty(level + IPPressureBoost(ipRequests, p.cfg.Captcha.IPEscalatePerMin))
+
+	level := LevelFromState(base, *state, p.cfg.Risk)
+	if up := level - base; up > 0 {
+		reasons = append(reasons, fmt.Sprintf("client_history(%+d)", up))
+	}
+	if ip := IPPressureBoost(in.IPRequests, p.cfg.Captcha.IPEscalatePerMin); ip > 0 {
+		level += ip
+		reasons = append(reasons, fmt.Sprintf("ip_pressure(%+d)", ip))
+	}
+
+	if p.cfg.Risk.Enabled && (in.Env != nil || in.Request != nil) {
+		env := risk.EvaluateEnv(in.Env, in.Request)
+		reasons = append(reasons, env.Reasons...)
+		decision.Consistent = env.Consistent
+		envScore := env.Score
+		if threshold := p.cfg.Risk.FPReplayThreshold; threshold > 0 && in.FPReplays > threshold {
+			envScore += fpReplayPoints
+			reasons = append(reasons, fmt.Sprintf("fp_replayed(%+d)", fpReplayPoints))
+		}
+		if cap := p.cfg.Risk.EnvScoreCap; cap > 0 && envScore > cap {
+			envScore = cap
+		}
+		decision.EnvScore = envScore
+		switch {
+		case envScore >= issueBoostTwoAt:
+			decision.Boost = 2
+		case envScore >= issueBoostOneAt:
+			decision.Boost = 1
+		}
+		if decision.Boost > 0 {
+			reasons = append(reasons, fmt.Sprintf("env_boost(%+d)", decision.Boost))
+			level += decision.Boost
+		}
+	}
+
+	decision.Level = ClampDifficulty(level)
+	decision.Reasons = reasons
+	return decision
 }
 
 // IPPressureBoost 纯函数：出口 IP 每分钟请求数超过阈值 1 倍加 1 级、超过 2 倍加 2 级；阈值 <= 0 时不加难。

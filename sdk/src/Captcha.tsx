@@ -15,7 +15,7 @@ import Popup from './Popup';
 import { CaptchaStyle } from './CaptchaStyle';
 import { Click, Slide, SlideRegion, Rotate } from './_internal';
 import type { ClickDot, SlideRegionPoint, SlidePoint } from './_internal';
-import { collectEnv, solvePow, useBehaviorTrace } from './_internal/telemetry';
+import { collectEnvWithAnomalies, solvePow, useBehaviorTrace } from './_internal/telemetry';
 import { useCaptchaRequest } from './hooks';
 import { useCaptchaConfig } from './CaptchaProvider';
 import { CaptchaError } from './CaptchaError';
@@ -29,6 +29,8 @@ const DEFAULT_MAX_ATTEMPTS = 5;
 /** 与各验证模式默认配置一致的渲染宽度（CSS 像素），题图统一 3:2 */
 const DEFAULT_RENDER_WIDTH = 300;
 const RENDER_ASPECT = 3 / 2;
+/** 出题前异常检测的总预算（毫秒），超时部分直接放弃 */
+const ANOMALY_BUDGET_MS = 150;
 const DEFAULT_ROTATE_SIZE = 128;
 /** 校验结果画面的停留时长（毫秒） */
 const SUCCESS_HOLD_MS = 900;
@@ -107,7 +109,6 @@ export const CaptchaInternal = forwardRef<CaptchaRef, CaptchaInternalProps>((pro
       return;
     }
     markLoaded();
-    envRef.current = telemetryEnabled ? collectEnv(telemetry) : undefined;
 
     // 题目一到就在后台开始算 PoW，用户完成操作时通常已算完
     powCancelRef.current.current = true;
@@ -116,7 +117,7 @@ export const CaptchaInternal = forwardRef<CaptchaRef, CaptchaInternalProps>((pro
     powRef.current = data.pow
       ? solvePow(data.pow, data.key, { cancelled }).catch(() => null)
       : Promise.resolve(null);
-  }, [data, markLoaded, telemetry, telemetryEnabled]);
+  }, [data, markLoaded]);
 
   useEffect(
     () => () => {
@@ -227,7 +228,11 @@ export const CaptchaInternal = forwardRef<CaptchaRef, CaptchaInternalProps>((pro
     setStatus('idle');
     setVisible(true);
     try {
-      await get();
+      // 出题前采集环境信号（含限时的无头 / 篡改痕迹检测）随请求上报，服务端据此决定首题是否加难；提交答案时沿用同一份
+      envRef.current = telemetryEnabled
+        ? await collectEnvWithAnomalies(telemetry, ANOMALY_BUDGET_MS)
+        : undefined;
+      await get(envRef.current);
     } catch (error) {
       // 加载期间用户已关闭弹窗，取消已经通知过，不再补报失败
       if (session !== sessionRef.current) {

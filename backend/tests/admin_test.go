@@ -380,7 +380,13 @@ func TestAdmin_ListBackgrounds(t *testing.T) {
 	for _, field := range []string{"name", "size", "width", "height", "format", "modifiedAt"} {
 		assert.Contains(t, first, field)
 	}
-	assert.Equal(t, float64(420), first["width"])
+	// 宽高与文件实际尺寸一致；从文件读取期望值，不绑定仓库素材的规格
+	data, err := os.ReadFile(filepath.Join(h.dir, first["name"].(string)))
+	require.NoError(t, err)
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	require.NoError(t, err)
+	assert.Equal(t, float64(cfg.Width), first["width"])
+	assert.Equal(t, float64(cfg.Height), first["height"])
 
 	constraints := body["constraints"].(map[string]interface{})
 	assert.Equal(t, float64(900), constraints["minWidth"])
@@ -597,12 +603,12 @@ func imageSizes(images []image.Image) [][2]int {
 
 func TestBackgroundStore_GetCoversRequestedSize(t *testing.T) {
 	dir := t.TempDir()
-	copySampleImages(t, dir, 1)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "square.png"), encodePNG(t, 420, 420), 0o644))
 
 	store, err := services.NewBackgroundStore(dir)
 	require.NoError(t, err)
 
-	// 420x420 素材：每个出图尺寸按 110% / 125% 两档各缩放到恰好覆盖，受限的一边与之相等
+	// 420x420 方图（与出图比例不同）：每个出图尺寸按 110% / 125% 两档各缩放到恰好覆盖，受限的一边与之相等
 	cases := []struct {
 		w, h int
 		want [][2]int

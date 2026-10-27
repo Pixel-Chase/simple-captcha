@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -93,6 +94,14 @@ type RiskConfig struct {
 	BlockThreshold    int           // 达到该分数直接拒绝本次校验（enforce 模式）
 	StateTTL          time.Duration // 客户端风控状态在 Redis 中的保留时间
 	TelemetryLogSize  int           // Redis 中保留的最近遥测记录条数，0 表示不落 Redis
+	EnvScoreCap       int           // 环境 / 请求侧信号对风险分的贡献上限 0-100，0 不限制；仅凭环境信号达不到拦截阈值
+	BlockMinBehavior  int           // 触发拦截所需的最低行为分 0-100（命中 webdriver 等硬性标记时不要求）
+	FPReplayThreshold int           // 同一设备指纹在时间窗内对应的不同客户端数超过该值即视为重放加难，0 关闭计数
+	FPReplayWindow    time.Duration // 指纹重放计数的时间窗
+
+	TLSFingerprintHeader   string // 可信代理注入的 TLS 指纹（JA3 / JA4）请求头名，空表示不读取
+	HTTP2FingerprintHeader string // 可信代理注入的 HTTP/2 指纹请求头名，空表示不读取
+	TLSFingerprintList     string // 指纹参考列表 JSON（browser 家族映射 + deny 列表）路径，空表示只记录不计分
 }
 
 // AdminConfig 管理控制台配置（管理员登录、背景图与接入应用管理），随服务常驻开启。
@@ -232,6 +241,14 @@ func loadFromEnv() *Config {
 			BlockThreshold:    getIntEnv("RISK_BLOCK_THRESHOLD", 85),
 			StateTTL:          getDurationEnv("RISK_STATE_TTL", 30*time.Minute),
 			TelemetryLogSize:  getIntEnv("RISK_TELEMETRY_LOG_SIZE", 1000),
+			EnvScoreCap:       getIntEnv("RISK_ENV_SCORE_CAP", 60),
+			BlockMinBehavior:  getIntEnv("RISK_BLOCK_MIN_BEHAVIOR", 20),
+			FPReplayThreshold: getIntEnv("RISK_FP_REPLAY_THRESHOLD", 5),
+			FPReplayWindow:    getDurationEnv("RISK_FP_REPLAY_WINDOW", 10*time.Minute),
+
+			TLSFingerprintHeader:   strings.TrimSpace(getEnv("RISK_TLS_FINGERPRINT_HEADER", "")),
+			HTTP2FingerprintHeader: strings.TrimSpace(getEnv("RISK_HTTP2_FINGERPRINT_HEADER", "")),
+			TLSFingerprintList:     strings.TrimSpace(getEnv("RISK_TLS_FINGERPRINT_LIST", "")),
 		},
 		Monitoring: MonitoringConfig{
 			Enabled:     getBoolEnv("ENABLE_METRICS", true),
@@ -357,6 +374,34 @@ func validateConfig(config *Config) error {
 		config.Risk.BlockThreshold < 0 || config.Risk.BlockThreshold > 100 ||
 		config.Risk.EscalateThreshold > config.Risk.BlockThreshold {
 		return fmt.Errorf("risk thresholds must satisfy 0 <= RISK_ESCALATE_THRESHOLD <= RISK_BLOCK_THRESHOLD <= 100")
+	}
+	if config.Risk.EnvScoreCap < 0 || config.Risk.EnvScoreCap > 100 {
+		return fmt.Errorf("RISK_ENV_SCORE_CAP must be between 0 and 100")
+	}
+	if config.Risk.BlockMinBehavior < 0 || config.Risk.BlockMinBehavior > 100 {
+		return fmt.Errorf("RISK_BLOCK_MIN_BEHAVIOR must be between 0 and 100")
+	}
+	if config.Risk.FPReplayThreshold < 0 {
+		return fmt.Errorf("RISK_FP_REPLAY_THRESHOLD cannot be negative")
+	}
+	if config.Risk.FPReplayThreshold > 0 && config.Risk.FPReplayWindow <= 0 {
+		return fmt.Errorf("RISK_FP_REPLAY_WINDOW must be positive when fingerprint replay counting is enabled")
+	}
+	if path := config.Risk.TLSFingerprintList; path != "" {
+		if config.Risk.TLSFingerprintHeader == "" && config.Risk.HTTP2FingerprintHeader == "" {
+			return fmt.Errorf("RISK_TLS_FINGERPRINT_LIST requires RISK_TLS_FINGERPRINT_HEADER or RISK_HTTP2_FINGERPRINT_HEADER")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("RISK_TLS_FINGERPRINT_LIST cannot be read: %w", err)
+		}
+		var list struct {
+			Browser map[string]string `json:"browser"`
+			Deny    []string          `json:"deny"`
+		}
+		if err := json.Unmarshal(data, &list); err != nil {
+			return fmt.Errorf("RISK_TLS_FINGERPRINT_LIST is not valid JSON: %w", err)
+		}
 	}
 	if strings.TrimSpace(config.Admin.Username) == "" {
 		return fmt.Errorf("ADMIN_USERNAME cannot be empty")
