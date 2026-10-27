@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+
+<html class="h-full bg-canvas-soft" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>接入应用 - simple-captcha 自托管行为验证码控制台</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter,+sans-serif:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "inverse-on-surface": "#f3eefe",
+            "secondary-fixed": "#e1e0ff",
+            "on-secondary-fixed-variant": "#3f4178",
+            "primary-fixed": "#e3dfff",
+            "on-primary-container": "#ddd9ff",
+            "canvas-soft": "#f6f9fc",
+            "tertiary-fixed-dim": "#ffb59b",
+            "on-tertiary": "#ffffff",
+            "on-tertiary-fixed": "#380d00",
+            "on-primary": "#ffffff",
+            "surface-tint": "#5036fa",
+            "on-secondary-fixed": "#12144b",
+            "secondary-fixed-dim": "#c0c1ff",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "tertiary-fixed": "#ffdbcf",
+            "on-primary-fixed-variant": "#3600e1",
+            "primary-fixed-dim": "#c5c0ff",
+            "on-background": "#1b1a25",
+            "surface-container-low": "#f6f2ff",
+            "surface-container-high": "#eae6f5",
+            "on-surface": "#1b1a25",
+            "tertiary-container": "#ae3900",
+            "ink": "#0d253d",
+            "on-tertiary-container": "#ffd3c5",
+            "on-secondary-container": "#494b83",
+            "on-primary-fixed": "#130067",
+            "outline": "#777588",
+            "inverse-surface": "#302f3a",
+            "outline-variant": "#c8c4da",
+            "surface-variant": "#e4e0ef",
+            "canvas": "#ffffff",
+            "on-surface-variant": "#474556",
+            "surface": "#fcf8ff",
+            "ink-secondary": "#273951",
+            "error-container": "#ffdad6",
+            "primary-deep": "#4434d4",
+            "primary": "#3904e7",
+            "inverse-primary": "#c5c0ff",
+            "on-secondary": "#ffffff",
+            "surface-container-highest": "#e4e0ef",
+            "tertiary": "#862a00",
+            "canvas-cream": "#f5e9d4",
+            "on-error-container": "#93000a",
+            "surface-container": "#f0ecfb",
+            "primary-soft": "#665efd",
+            "hairline": "#e3e8ee",
+            "ink-mute": "#64748d",
+            "on-error": "#ffffff",
+            "surface-dim": "#dcd8e7",
+            "brand-dark-900": "#1c1e54",
+            "surface-container-lowest": "#ffffff",
+            "on-tertiary-fixed-variant": "#812800",
+            "hairline-input": "#a8c3de",
+            "primary-container": "#533afd",
+            "secondary": "#575992",
+            "surface-bright": "#fcf8ff",
+            "ink-mute-2": "#61718a",
+            "background": "#fcf8ff",
+            "primary-press": "#2e2b8c",
+            "error": "#ba1a1a",
+            "secondary-container": "#bdbefe"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-sm": "8px",
+            "space-md": "12px",
+            "space-xxl": "32px",
+            "space-xxs": "2px",
+            "space-xs": "4px",
+            "space-huge": "64px",
+            "margin": "24px",
+            "space-lg": "16px",
+            "space-xl": "24px",
+            "gutter": "16px"
+          },
+          "fontFamily": {
+            "button-md": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"Inter, sans-serif\""],
+            "heading-sm": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "micro-cap": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""],
+            "display-xl": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "body-lg": ["\"Inter, sans-serif\""],
+            "display-xxl": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "button-sm": ["\"Inter, sans-serif\""],
+            "body-md": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }],
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 18px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .font-mono-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-body-md text-ink antialiased bg-canvas-soft selection:bg-primary-fixed selection:text-ink">
+<!-- TOP NAVIGATION BAR (Derived from Shared Component TopNavBar) -->
+<header class="bg-canvas sticky top-0 z-40 border-b border-hairline">
+<div class="flex justify-between items-center w-full px-space-xl h-16 max-w-7xl mx-auto">
+<!-- Brand & Nav Cluster -->
+<div class="flex items-center space-x-space-xxl">
+<div class="flex items-center space-x-space-sm">
+<a class="text-heading-md font-heading-md tracking-tight font-normal text-ink flex items-center space-x-2" href="#">
+<span class="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-canvas text-xs font-mono-code font-bold">sc</span>
+<span>simple-captcha</span>
+</a>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-micro-cap font-micro-cap bg-canvas-soft border border-hairline text-ink-mute tracking-tight">自托管服务</span>
+</div>
+<!-- Navigation Links: Active = 接入应用 -->
+<nav class="hidden md:flex items-center space-x-6 pt-4">
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">概览</a>
+<a class="text-primary font-normal border-b-2 border-primary pb-4 font-body-md text-body-md flex items-center space-x-1" href="#">
+<span>接入应用</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary inline-block mb-0.5"></span>
+</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">风控观察</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">策略配置</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">背景图</a>
+</nav>
+</div>
+<!-- Trailing Cluster -->
+<div class="flex items-center space-x-space-md">
+<!-- Quick Documentation Link -->
+<a class="hidden sm:inline-flex items-center space-x-1 text-caption font-caption text-ink-mute hover:text-primary transition-colors py-1.5 px-2.5 rounded-md hover:bg-canvas-soft" href="#doc-notice">
+<span class="material-symbols-outlined text-base">menu_book</span>
+<span>接口文档</span>
+</a>
+<div class="h-4 w-[1px] bg-hairline hidden sm:block"></div>
+<!-- Admin Profile Dropdown Trigger -->
+<div class="relative group">
+<button class="flex items-center space-x-2 px-2.5 py-1.5 rounded-md hover:bg-canvas-soft transition-colors cursor-pointer text-ink text-body-md font-body-md focus:outline-none">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-soft opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+<span class="font-normal">admin</span>
+<span class="material-symbols-outlined text-ink-mute group-hover:text-ink transition-transform duration-200 group-hover:rotate-180">expand_more</span>
+</button>
+<!-- Dropdown Menu -->
+<div class="absolute right-0 top-full mt-1.5 w-48 bg-canvas rounded-lg border border-hairline shadow-sm py-1.5 hidden group-hover:block hover:block z-50">
+<div class="px-3 py-1.5 border-b border-hairline mb-1">
+<p class="text-micro font-micro text-ink-mute">当前角色</p>
+<p class="text-caption font-caption text-ink font-medium">超级管理员 (Root)</p>
+</div>
+<a class="flex items-center space-x-2 px-3 py-2 text-caption font-caption text-ink hover:bg-canvas-soft transition-colors" href="#">
+<span class="material-symbols-outlined text-ink-mute">shield</span>
+<span>账号与安全</span>
+</a>
+<div class="my-1 border-t border-hairline"></div>
+<a class="flex items-center space-x-2 px-3 py-2 text-caption font-caption text-error hover:bg-error-container/20 transition-colors" href="#">
+<span class="material-symbols-outlined text-error">logout</span>
+<span>退出登录</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- MAIN CANVAS -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-space-xl py-space-xl flex flex-col space-y-6">
+<!-- PAGE HEADER & ACTION BAR -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
+<div>
+<div class="flex items-center space-x-3">
+<h1 class="text-display-md font-display-md text-ink tracking-tight font-normal">接入应用</h1>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-caption font-caption bg-canvas border border-hairline text-ink-mute">共 4 个接入实例</span>
+</div>
+<p class="mt-1 text-body-md font-body-md text-ink-mute max-w-3xl">
+          管理已接入验证码的前端站点与业务服务端密钥。每个接入站点对应一个独立应用，只有「允许来源」内的页面可发起出题与提交。
+        </p>
+</div>
+<div class="flex items-center space-x-space-sm self-start sm:self-auto">
+<button class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-canvas border border-hairline hover:border-hairline-input text-ink text-button-sm font-button-sm transition-colors shadow-none active:scale-95" onclick="simulateRefresh()">
+<span class="material-symbols-outlined text-ink-mute" id="refresh-icon">refresh</span>
+<span>刷新列表</span>
+</button>
+<button class="inline-flex items-center space-x-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-deep active:bg-primary-press text-on-primary text-button-sm font-button-sm transition-all shadow-none active:scale-95" onclick="openDrawer()">
+<span class="material-symbols-outlined text-on-primary">add</span>
+<span>+ 新建应用</span>
+</button>
+</div>
+</div>
+<!-- ARCHITECTURE & INTEGRATION NOTICE CALLOUT BANNER -->
+<section class="bg-canvas border border-hairline rounded-lg p-space-lg" id="doc-notice">
+<div class="flex items-start justify-between gap-4">
+<div class="flex items-start space-x-3">
+<div class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-primary text-lg">integration_instructions</span>
+</div>
+<div>
+<h2 class="text-body-lg font-body-lg text-ink font-normal">架构与安全验证规范</h2>
+<p class="text-caption font-caption text-ink-mute mt-0.5">自托管实例运行于内网或公网网关下，出题行为与二次验证遵循零信任凭证隔离原则：</p>
+</div>
+</div>
+<span class="inline-flex items-center px-2 py-1 rounded bg-canvas-soft border border-hairline text-micro font-micro text-ink-secondary">v1.2.0 API 规范</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-lg mt-4 pt-4 border-t border-hairline text-caption font-caption">
+<!-- Step 1 -->
+<div class="flex flex-col space-y-1.5 bg-canvas-soft p-3 rounded-md border border-hairline">
+<div class="flex items-center space-x-1.5 text-primary font-medium">
+<span class="w-4 h-4 rounded-full bg-primary-fixed text-primary flex items-center justify-center text-[10px] font-mono-code">1</span>
+<span>前端出题 (Client Challenge)</span>
+</div>
+<p class="text-ink-mute">
+            前端 SDK 传入应用 ID (<code class="font-mono-code text-ink bg-canvas px-1 py-0.5 rounded border border-hairline">App ID</code>)，系统校验来源请求头；仅在「允许来源」列表内的 Origin 允许获取题目与提交轨迹。
+          </p>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-col space-y-1.5 bg-canvas-soft p-3 rounded-md border border-hairline">
+<div class="flex items-center space-x-1.5 text-primary font-medium">
+<span class="w-4 h-4 rounded-full bg-primary-fixed text-primary flex items-center justify-center text-[10px] font-mono-code">2</span>
+<span>二次校验 (Server Verification)</span>
+</div>
+<p class="text-ink-mute">
+            业务后端调用接口 <code class="font-mono-code text-ink bg-canvas px-1 py-0.5 rounded border border-hairline">GET /api/v1/captchas/states/:key</code>，请求头携带 <code class="font-mono-code text-ink bg-canvas px-1 py-0.5 rounded border border-hairline">Authorization: Bearer <应用密钥></code> 完成最终合法性确认。
+          </p>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-col space-y-1.5 bg-canvas-soft p-3 rounded-md border border-hairline">
+<div class="flex items-center space-x-1.5 text-ink-secondary font-medium">
+<span class="w-4 h-4 rounded-full bg-tertiary-fixed text-tertiary flex items-center justify-center text-[10px] font-mono-code">!</span>
+<span>安全防泄露原则 (Zero Trust)</span>
+</div>
+<p class="text-ink-mute">
+            停用、重置或删除后旧密钥立即失效并清理 Redis 缓存；密钥在生成时仅完整展示一次，后续永久遮蔽仅显示前缀。严禁将密钥暴露于前端代码。
+          </p>
+</div>
+</div>
+</section>
+<!-- APPLICATIONS TABLE CONTAINER -->
+<div class="bg-canvas border border-hairline rounded-lg overflow-hidden shadow-none">
+<!-- Table Filter & Search Header -->
+<div class="px-space-lg py-3 border-b border-hairline bg-canvas flex flex-col sm:flex-row items-center justify-between gap-3 text-caption font-caption">
+<div class="flex items-center space-x-2 text-ink-mute w-full sm:w-auto">
+<span class="text-ink font-medium">接入列表</span>
+<span class="text-hairline">|</span>
+<span class="text-micro font-micro bg-canvas-soft px-2 py-0.5 rounded border border-hairline">默认按创建时间倒序</span>
+</div>
+<div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+<div class="relative w-full sm:w-64">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-mute text-base">search</span>
+<input class="w-full pl-8 pr-3 py-1.5 bg-canvas-soft border border-hairline rounded-md text-caption font-caption text-ink placeholder-ink-mute focus:outline-none focus:border-primary focus:bg-canvas" placeholder="过滤应用名称或 App ID..." type="text"/>
+</div>
+</div>
+</div>
+<!-- Responsive Table View -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-canvas-soft border-b border-hairline text-ink-mute font-micro text-micro uppercase tracking-wider">
+<th class="py-3 px-space-lg font-normal">应用名称 & 标识</th>
+<th class="py-3 px-space-md font-normal">状态</th>
+<th class="py-3 px-space-md font-normal">应用 ID (App ID)</th>
+<th class="py-3 px-space-md font-normal">密钥提示</th>
+<th class="py-3 px-space-md font-normal min-w-[240px]">允许来源 (Allowed Origins)</th>
+<th class="py-3 px-space-md font-normal">最近使用时间</th>
+<th class="py-3 px-space-md font-normal">密钥更新于</th>
+<th class="py-3 px-space-lg font-normal text-right">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-hairline text-caption font-caption">
+<!-- ROW 1: 系统内置应用: 管理后台 (app_console) -->
+<tr class="hover:bg-canvas-soft/60 transition-colors">
+<td class="py-4 px-space-lg">
+<div class="flex items-center space-x-2">
+<div class="w-7 h-7 rounded bg-brand-dark-900 text-canvas flex items-center justify-center font-mono-code text-xs">
+<span class="material-symbols-outlined text-sm">terminal</span>
+</div>
+<div>
+<div class="flex items-center space-x-2">
+<span class="text-ink font-medium text-body-md">管理后台</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-micro-cap font-micro-cap bg-primary-fixed text-primary font-medium">系统应用</span>
+</div>
+<span class="text-micro font-micro text-ink-mute">控制台自身登录人机校验</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<span class="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-micro font-micro bg-canvas-soft border border-hairline text-ink">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+<span>已启用</span>
+</span>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1">
+<span class="font-mono-code text-ink font-body-tabular">app_console</span>
+<button class="p-1 hover:bg-canvas-soft rounded text-ink-mute hover:text-primary transition-colors" onclick="copyToClipboard('app_console')" title="复制 App ID">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1 text-ink-mute">
+<span class="font-mono-code text-xs">无密钥</span>
+<span class="text-micro text-ink-mute-2">(同源直接校验)</span>
+</div>
+<div class="text-micro-cap text-ink-mute mt-0.5">无需且不支持 S2S 服务端密钥</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="inline-flex items-center space-x-1 px-2 py-1 rounded bg-canvas-soft border border-hairline text-ink-secondary text-micro">
+<span class="material-symbols-outlined text-xs text-ink-mute">lock</span>
+<span class="font-mono-code">Same-Origin Only</span>
+<span class="text-ink-mute">(内置锁定)</span>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1 text-ink font-body-tabular">
+<span class="text-emerald-600 font-medium">刚刚</span>
+<span class="text-ink-mute text-micro">(1 分钟前)</span>
+</div>
+</td>
+<td class="py-4 px-space-md text-ink-mute font-body-tabular">
+                系统内置 (<span class="text-hairline-input">—</span>)
+              </td>
+<td class="py-4 px-space-lg text-right">
+<span class="inline-flex items-center px-2 py-1 rounded text-micro text-ink-mute cursor-not-allowed bg-canvas-soft border border-hairline/60" title="系统内置应用不可改名、停用、重置或删除">
+<span class="material-symbols-outlined text-xs mr-1 text-ink-mute">lock</span>
+                  不可操作
+                </span>
+</td>
+</tr>
+<!-- ROW 2: 订单系统 (app_ord_8f192b0c) -->
+<tr class="hover:bg-canvas-soft/60 transition-colors">
+<td class="py-4 px-space-lg">
+<div class="flex items-center space-x-2">
+<div class="w-7 h-7 rounded bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-mono-code text-xs">
+<span class="material-symbols-outlined text-sm">shopping_cart</span>
+</div>
+<div>
+<span class="text-ink font-medium text-body-md block">订单系统</span>
+<span class="text-micro font-micro text-ink-mute">在线商城下单验证</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<span class="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-micro font-micro bg-emerald-50 text-emerald-700 border border-emerald-200">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+<span>已启用</span>
+</span>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1">
+<span class="font-mono-code text-ink font-body-tabular">app_ord_8f192b0c</span>
+<button class="p-1 hover:bg-canvas-soft rounded text-ink-mute hover:text-primary transition-colors" onclick="copyToClipboard('app_ord_8f192b0c')" title="复制 App ID">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1">
+<span class="material-symbols-outlined text-xs text-ink-mute">shield_lock</span>
+<span class="font-mono-code text-xs text-ink">cap_sk_8f19...</span>
+<span class="material-symbols-outlined text-xs text-ink-mute cursor-help" title="完整密钥不可再查看，若遗失请重置">info</span>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex flex-wrap gap-1.5">
+<span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-canvas-soft border border-hairline font-mono-code text-micro text-ink-secondary">
+<span class="material-symbols-outlined text-[11px] text-ink-mute">https</span>
+<span>https://shop.example.com</span>
+</span>
+<span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-canvas-soft border border-hairline font-mono-code text-micro text-ink-secondary">
+<span class="material-symbols-outlined text-[11px] text-ink-mute">https</span>
+<span>https://m.shop.example.com</span>
+</span>
+</div>
+</td>
+<td class="py-4 px-space-md font-body-tabular text-ink">
+<div>今天 14:28:10</div>
+<div class="text-micro text-ink-mute">今天使用过</div>
+</td>
+<td class="py-4 px-space-md font-body-tabular text-ink-secondary">
+                2025-02-18 10:15
+              </td>
+<td class="py-4 px-space-lg text-right">
+<div class="flex items-center justify-end space-x-1">
+<button class="px-2.5 py-1 text-primary hover:bg-primary-fixed/40 rounded transition-colors text-caption font-medium" onclick="openDrawer('订单系统', 'app_ord_8f192b0c')">编辑来源</button>
+<button class="p-1 text-ink-mute hover:text-ink rounded hover:bg-canvas-soft" onclick="openActionModal('重置密钥', '订单系统 (app_ord_8f192b0c)')" title="重置密钥 / 更多">
+<span class="material-symbols-outlined text-base">more_horiz</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 3: 会员中心 (app_usr_4c78119a) -->
+<tr class="hover:bg-canvas-soft/60 transition-colors bg-canvas-soft/30">
+<td class="py-4 px-space-lg">
+<div class="flex items-center space-x-2">
+<div class="w-7 h-7 rounded bg-surface-variant text-ink-mute flex items-center justify-center font-mono-code text-xs">
+<span class="material-symbols-outlined text-sm">badge</span>
+</div>
+<div>
+<span class="text-ink font-medium text-body-md block">会员中心</span>
+<span class="text-micro font-micro text-ink-mute">用户注册登录二次验证</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<span class="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-micro font-micro bg-canvas-soft border border-hairline text-ink-mute">
+<span class="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block"></span>
+<span>已停用</span>
+</span>
+<div class="text-micro-cap text-error mt-0.5">已拒绝出题请求</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1">
+<span class="font-mono-code text-ink-mute font-body-tabular line-through decoration-slate-400">app_usr_4c78119a</span>
+<button class="p-1 hover:bg-canvas-soft rounded text-ink-mute hover:text-primary transition-colors" onclick="copyToClipboard('app_usr_4c78119a')" title="复制 App ID">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1 text-ink-mute">
+<span class="material-symbols-outlined text-xs">lock</span>
+<span class="font-mono-code text-xs">cap_sk_4c78...</span>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-canvas-soft border border-hairline font-mono-code text-micro text-ink-mute">
+<span class="material-symbols-outlined text-[11px] text-ink-mute">https</span>
+<span>https://user.example.com</span>
+</span>
+</td>
+<td class="py-4 px-space-md font-body-tabular text-ink-mute">
+                2025-02-15 09:30
+              </td>
+<td class="py-4 px-space-md font-body-tabular text-ink-mute">
+                2025-01-10 16:45
+              </td>
+<td class="py-4 px-space-lg text-right">
+<div class="flex items-center justify-end space-x-2">
+<button class="px-2 py-1 text-ink-mute hover:text-ink rounded transition-colors text-caption" onclick="openDrawer('会员中心', 'app_usr_4c78119a')">编辑来源</button>
+<button class="px-2 py-1 text-primary hover:bg-primary-fixed/30 rounded transition-colors text-caption font-medium" onclick="toggleAppStatus('会员中心')">启用</button>
+<button class="px-2 py-1 text-error hover:bg-error-container/30 rounded transition-colors text-caption" onclick="openActionModal('重置密钥', '会员中心 (app_usr_4c78119a)')">重置</button>
+</div>
+</td>
+</tr>
+<!-- ROW 4: 营销活动页 (app_mkt_6e208fa1) -->
+<tr class="hover:bg-canvas-soft/60 transition-colors">
+<td class="py-4 px-space-lg">
+<div class="flex items-center space-x-2">
+<div class="w-7 h-7 rounded bg-tertiary-fixed text-tertiary flex items-center justify-center font-mono-code text-xs">
+<span class="material-symbols-outlined text-sm">campaign</span>
+</div>
+<div>
+<span class="text-ink font-medium text-body-md block">营销活动页</span>
+<span class="text-micro font-micro text-ink-mute">春季大促领券领礼包</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<span class="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-micro font-micro bg-emerald-50 text-emerald-700 border border-emerald-200">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+<span>已启用</span>
+</span>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1">
+<span class="font-mono-code text-ink font-body-tabular">app_mkt_6e208fa1</span>
+<button class="p-1 hover:bg-canvas-soft rounded text-ink-mute hover:text-primary transition-colors" onclick="copyToClipboard('app_mkt_6e208fa1')" title="复制 App ID">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<div class="flex items-center space-x-1 text-ink">
+<span class="material-symbols-outlined text-xs text-ink-mute">shield_lock</span>
+<span class="font-mono-code text-xs">cap_sk_6e20...</span>
+</div>
+</td>
+<td class="py-4 px-space-md">
+<!-- Empty Origin Warning Tag -->
+<div class="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800 text-micro">
+<span class="material-symbols-outlined text-amber-600 text-xs">warning</span>
+<span class="font-medium">未配置允许来源 (出题请求将被拒绝)</span>
+</div>
+</td>
+<td class="py-4 px-space-md font-body-tabular text-ink-mute italic">
+                从未使用
+              </td>
+<td class="py-4 px-space-md font-body-tabular text-ink-secondary">
+                2025-02-23 11:02
+              </td>
+<td class="py-4 px-space-lg text-right">
+<div class="flex items-center justify-end space-x-1">
+<button class="px-3 py-1 rounded bg-primary text-on-primary hover:bg-primary-deep transition-all text-caption font-medium shadow-none" onclick="openDrawer('营销活动页', 'app_mkt_6e208fa1')">配置来源</button>
+<button class="p-1 text-ink-mute hover:text-ink rounded hover:bg-canvas-soft" onclick="openActionModal('重置密钥', '营销活动页 (app_mkt_6e208fa1)')" title="更多操作">
+<span class="material-symbols-outlined text-base">more_horiz</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Footer / Tabular Summary -->
+<div class="px-space-lg py-3 border-t border-hairline bg-canvas-soft flex flex-col sm:flex-row items-center justify-between text-caption font-caption text-ink-mute gap-2">
+<div class="flex items-center space-x-4">
+<span>共 <strong class="text-ink font-body-tabular">4</strong> 个应用接入</span>
+<span class="w-1 h-1 rounded-full bg-hairline"></span>
+<span>正常提供服务: <span class="text-emerald-700 font-medium">3</span></span>
+<span class="w-1 h-1 rounded-full bg-hairline"></span>
+<span>已停用: <span class="text-ink-mute font-medium">1</span></span>
+</div>
+<div class="text-micro font-micro">
+          安全提示：所有跨域 Origin 出题均在 HTTP Referer / Origin 请求头上由底层算法强制匹配。
+        </div>
+</div>
+</div>
+<!-- QUICK DEV CLI / VERIFICATION SNIPPET -->
+<div class="bg-brand-dark-900 text-canvas rounded-lg p-space-lg border border-brand-dark-900">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary-fixed-dim">terminal</span>
+<span class="font-mono-code text-caption text-white font-medium">二次校验调试 cURL 命令 (业务服务端示例)</span>
+</div>
+<div class="text-micro-cap text-hairline">
+          Header: Authorization: Bearer <SecretKey>
+        </div>
+</div>
+<div class="mt-3 bg-black/30 p-3 rounded font-mono-code text-caption text-inverse-primary overflow-x-auto flex items-center justify-between">
+<code>curl -X GET "https://captcha.your-domain.internal/api/v1/captchas/states/TICKET_KEY_HERE" \<br/>  -H "Authorization: Bearer cap_sk_8f19..."</code>
+<button class="ml-4 px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-micro transition-colors flex items-center space-x-1 flex-shrink-0" onclick="copyToClipboard('curl -X GET "https://captcha.your-domain.internal/api/v1/captchas/states/TICKET_KEY_HERE" -H "Authorization: Bearer cap_sk_8f19..."')">
+<span class="material-symbols-outlined text-xs">content_copy</span>
+<span>复制</span>
+</button>
+</div>
+</div>
+</main>
+<!-- EDIT ALLOWED ORIGINS SLIDE DRAWER OVERLAY -->
+<div class="fixed inset-0 bg-ink/40 z-50 transition-opacity duration-300 opacity-0 pointer-events-none flex justify-end" id="drawer-backdrop" onclick="closeDrawer(event)">
+<div class="w-full max-w-lg bg-canvas h-full shadow-2xl flex flex-col justify-between transform translate-x-full transition-transform duration-300 ease-out" id="drawer-panel" onclick="event.stopPropagation()">
+<!-- Drawer Header -->
+<div class="px-space-xl py-space-lg border-b border-hairline flex items-center justify-between">
+<div>
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary">domain_verification</span>
+<h3 class="text-heading-sm font-heading-sm text-ink font-normal">编辑允许来源</h3>
+</div>
+<p class="text-caption font-caption text-ink-mute mt-0.5" id="drawer-app-subtitle">
+            订单系统 (app_ord_8f192b0c)
+          </p>
+</div>
+<button class="p-1 rounded text-ink-mute hover:text-ink hover:bg-canvas-soft transition-colors" onclick="closeDrawer()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Drawer Body -->
+<div class="p-space-xl flex-1 overflow-y-auto space-y-5 text-caption font-caption">
+<!-- Explanation Note -->
+<div class="bg-canvas-soft border border-hairline p-3 rounded-md text-ink-mute">
+<p class="text-ink font-medium mb-1">来源匹配说明：</p>
+<p>每行输入一个 Origin，要求精确匹配（包含协议、完整主机名与非默认端口）。保存后即时在所有集群节点生效。</p>
+</div>
+<!-- Textarea Field -->
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="text-caption font-caption text-ink font-medium" for="origins-input">配置列表 (Allowed Origins)</label>
+<span class="text-micro font-micro text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">格式校验通过 (2 / 20)</span>
+</div>
+<textarea class="w-full rounded-md border border-hairline-input font-mono-code text-caption p-3 text-ink focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none" id="origins-input" placeholder="https://example.com
+https://m.example.com
+http://localhost:3000" rows="5">https://shop.example.com
+https://m.shop.example.com</textarea>
+<div class="flex justify-between text-micro text-ink-mute">
+<span>支持协议：http:// 或 https://</span>
+<span>最多支持 20 行</span>
+</div>
+</div>
+<!-- Formatting Guidelines / Code Examples -->
+<div class="border border-hairline rounded-md p-3.5 space-y-2 bg-canvas">
+<div class="text-caption font-medium text-ink flex items-center space-x-1">
+<span class="material-symbols-outlined text-xs text-primary">rule</span>
+<span>合规书写示范</span>
+</div>
+<ul class="text-micro space-y-1 text-ink-mute list-disc pl-4">
+<li><strong class="text-ink">支持本地联调：</strong> <code class="font-mono-code text-ink">http://localhost:3000</code> 或 <code class="font-mono-code text-ink">http://127.0.0.1:8080</code></li>
+<li><strong class="text-ink">支持自定义端口：</strong> <code class="font-mono-code text-ink">https://app.example.com:8443</code></li>
+<li><strong class="text-error">不支持路径 (Path)：</strong> 请勿输入 <code class="line-through">https://example.com/login</code></li>
+<li><strong class="text-error">不支持通配符 (Wildcard)：</strong> 安全策略禁止 <code class="line-through">*.example.com</code></li>
+</ul>
+</div>
+<!-- Mini Security Notice -->
+<div class="p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-900 text-micro">
+<div class="flex items-start space-x-1.5">
+<span class="material-symbols-outlined text-sm text-amber-600 mt-0.5">info</span>
+<span>清空所有允许来源将导致该应用前端出题直接返回 403 Forbidden（同源内置应用除外）。</span>
+</div>
+</div>
+</div>
+<!-- Drawer Footer -->
+<div class="px-space-xl py-space-md border-t border-hairline bg-canvas-soft flex items-center justify-between">
+<button class="px-4 py-2 rounded-md border border-hairline bg-canvas hover:bg-canvas-soft text-ink text-button-sm font-button-sm transition-colors" onclick="closeDrawer()">
+          取消
+        </button>
+<button class="px-5 py-2 rounded-full bg-primary hover:bg-primary-deep active:bg-primary-press text-on-primary text-button-sm font-button-sm transition-all shadow-none" onclick="saveOrigins()">
+          保存并即时生效
+        </button>
+</div>
+</div>
+</div>
+<!-- SECONDARY CONFIRMATION MODAL (e.g. Reset Secret Key Warning) -->
+<div class="fixed inset-0 bg-ink/40 z-50 transition-opacity duration-200 opacity-0 pointer-events-none flex items-center justify-center p-4" id="confirm-modal">
+<div class="bg-canvas border border-hairline rounded-xl max-w-md w-full p-space-xl shadow-xl space-y-4">
+<div class="flex items-start space-x-3">
+<div class="w-10 h-10 rounded-full bg-error-container text-on-error-container flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-error">warning</span>
+</div>
+<div>
+<h4 class="text-heading-sm font-heading-sm text-ink font-normal" id="modal-title">重置应用密钥确认</h4>
+<p class="text-caption font-caption text-ink-mute mt-1" id="modal-desc">
+            你正在为 <strong class="text-ink" id="modal-target-app">订单系统</strong> 重新生成密钥。
+          </p>
+</div>
+</div>
+<div class="bg-error-container/20 border border-error-container p-3 rounded text-caption font-caption text-ink">
+<div class="text-error font-medium mb-1">操作后果说明：</div>
+<ul class="text-micro space-y-1 text-ink-mute list-disc pl-4">
+<li>重置后<strong class="text-ink">旧密钥将立即永久作废</strong>。</li>
+<li>所有依赖此密钥的业务后端请求将直接返回 <code class="font-mono-code text-error bg-canvas px-1 rounded">401 Unauthorized</code>。</li>
+<li>新密钥将只在弹窗中完整显示一次，请及时更新到业务配置中心。</li>
+</ul>
+</div>
+<div class="flex items-center justify-end space-x-2 pt-2">
+<button class="px-4 py-2 rounded-md border border-hairline bg-canvas hover:bg-canvas-soft text-ink text-button-sm font-button-sm" onclick="closeConfirmModal()">
+          取消
+        </button>
+<button class="px-4 py-2 rounded-full bg-error hover:bg-red-700 text-on-error text-button-sm font-button-sm transition-colors" onclick="executeResetSecret()">
+          确认重置密钥
+        </button>
+</div>
+</div>
+</div>
+<!-- TOAST NOTIFICATION CONTAINER -->
+<div class="fixed bottom-6 right-6 z-50 transform translate-y-12 opacity-0 pointer-events-none transition-all duration-300 bg-brand-dark-900 text-canvas px-4 py-2.5 rounded-lg border border-white/10 shadow-lg text-caption font-caption flex items-center space-x-2" id="toast">
+<span class="material-symbols-outlined text-primary-fixed-dim text-base" id="toast-icon">check_circle</span>
+<span id="toast-message">已成功复制到剪贴板</span>
+</div>
+<!-- MINIMAL DASHBOARD FOOTER (From Shared Components JSON) -->
+<footer class="bg-canvas-soft border-t border-hairline mt-auto">
+<div class="flex justify-between items-center w-full px-space-xl py-space-md max-w-7xl mx-auto text-caption font-caption">
+<div class="text-micro font-micro text-ink-mute">
+        simple-captcha v1.2.0 • 社区开源独立部署
+      </div>
+<div class="flex items-center space-x-space-lg text-ink-mute-2">
+<a class="hover:text-primary transition-colors duration-150" href="#">账号与安全</a>
+<span class="text-hairline">|</span>
+<a class="hover:text-primary transition-colors duration-150" href="#">退出登录</a>
+</div>
+</div>
+</footer>
+<!-- SCRIPT FOR UI INTERACTIONS & ACCURATE ACTIONS -->
+<script>
+    // Copy To Clipboard Feedback
+    function copyToClipboard(text) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast(`已复制: ${text}`);
+        });
+      } else {
+        const dummy = document.createElement("input");
+        document.body.appendChild(dummy);
+        dummy.value = text;
+        dummy.select();
+        document.execCommand("copy");
+        document.body.removeChild(dummy);
+        showToast(`已复制: ${text}`);
+      }
+    }
+
+    // Toast Trigger
+    function showToast(msg, icon = 'check_circle') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      const toastIcon = document.getElementById('toast-icon');
+      
+      toastMsg.innerText = msg;
+      toastIcon.innerText = icon;
+
+      toast.classList.remove('translate-y-12', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-12', 'opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    // Refresh animation simulation
+    function simulateRefresh() {
+      const icon = document.getElementById('refresh-icon');
+      icon.classList.add('animate-spin');
+      setTimeout(() => {
+        icon.classList.remove('animate-spin');
+        showToast('应用接入列表已刷新');
+      }, 400);
+    }
+
+    // Side Drawer for Editing Allowed Origins
+    function openDrawer(appName = '订单系统', appId = 'app_ord_8f192b0c') {
+      const backdrop = document.getElementById('drawer-backdrop');
+      const panel = document.getElementById('drawer-panel');
+      const subtitle = document.getElementById('drawer-app-subtitle');
+      
+      subtitle.innerText = `${appName} (${appId})`;
+
+      backdrop.classList.remove('opacity-0', 'pointer-events-none');
+      panel.classList.remove('translate-x-full');
+    }
+
+    function closeDrawer(event) {
+      const backdrop = document.getElementById('drawer-backdrop');
+      const panel = document.getElementById('drawer-panel');
+
+      panel.classList.add('translate-x-full');
+      backdrop.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function saveOrigins() {
+      closeDrawer();
+      showToast('来源配置已更新，集群所有节点已生效', 'verified');
+    }
+
+    // Confirmation Modal for Resetting Secret
+    function openActionModal(action, appDesc) {
+      const modal = document.getElementById('confirm-modal');
+      document.getElementById('modal-target-app').innerText = appDesc;
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+    }
+
+    function closeConfirmModal() {
+      const modal = document.getElementById('confirm-modal');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function executeResetSecret() {
+      closeConfirmModal();
+      showToast('已生成新密钥 cap_sk_7c99... 请妥善保存', 'key');
+    }
+
+    function toggleAppStatus(appName) {
+      showToast(`已成功变更「${appName}」运行状态`, 'swap_horiz');
+    }
+  </script>
+</body></html>

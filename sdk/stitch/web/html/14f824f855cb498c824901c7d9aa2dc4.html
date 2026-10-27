@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>simple-captcha - 接入应用与密钥生成</title>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration Injection -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary": "#575992",
+            "primary-fixed": "#e3dfff",
+            "on-primary": "#ffffff",
+            "tertiary": "#862a00",
+            "primary-deep": "#4434d4",
+            "secondary-fixed-dim": "#c0c1ff",
+            "inverse-primary": "#c5c0ff",
+            "tertiary-fixed-dim": "#ffb59b",
+            "on-secondary-fixed": "#12144b",
+            "tertiary-fixed": "#ffdbcf",
+            "surface-dim": "#dcd8e7",
+            "on-tertiary": "#ffffff",
+            "on-tertiary-fixed-variant": "#812800",
+            "ink": "#0d253d",
+            "primary-container": "#533afd",
+            "on-primary-fixed": "#130067",
+            "ink-mute": "#64748d",
+            "on-secondary": "#ffffff",
+            "on-error-container": "#93000a",
+            "on-tertiary-container": "#ffd3c5",
+            "surface-container-low": "#f6f2ff",
+            "surface-container-lowest": "#ffffff",
+            "error-container": "#ffdad6",
+            "canvas-cream": "#f5e9d4",
+            "brand-dark-900": "#1c1e54",
+            "outline": "#777588",
+            "primary-fixed-dim": "#c5c0ff",
+            "surface": "#fcf8ff",
+            "surface-bright": "#fcf8ff",
+            "on-surface-variant": "#474556",
+            "on-background": "#1b1a25",
+            "surface-container": "#f0ecfb",
+            "on-secondary-container": "#494b83",
+            "primary-soft": "#665efd",
+            "ink-secondary": "#273951",
+            "on-error": "#ffffff",
+            "on-tertiary-fixed": "#380d00",
+            "primary": "#3904e7",
+            "canvas": "#ffffff",
+            "surface-container-highest": "#e4e0ef",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "outline-variant": "#c8c4da",
+            "on-primary-container": "#ddd9ff",
+            "on-surface": "#1b1a25",
+            "surface-container-high": "#eae6f5",
+            "on-secondary-fixed-variant": "#3f4178",
+            "inverse-on-surface": "#f3eefe",
+            "error": "#ba1a1a",
+            "background": "#fcf8ff",
+            "surface-tint": "#5036fa",
+            "primary-press": "#2e2b8c",
+            "secondary-fixed": "#e1e0ff",
+            "secondary-container": "#bdbefe",
+            "hairline-input": "#a8c3de",
+            "tertiary-container": "#ae3900",
+            "ink-mute-2": "#61718a",
+            "hairline": "#e3e8ee",
+            "canvas-soft": "#f6f9fc",
+            "surface-variant": "#e4e0ef",
+            "on-primary-fixed-variant": "#3600e1",
+            "inverse-surface": "#302f3a"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "gutter": "16px",
+            "space-xxs": "2px",
+            "space-xl": "24px",
+            "margin": "24px",
+            "space-md": "12px",
+            "space-lg": "16px",
+            "space-xs": "4px",
+            "space-sm": "8px",
+            "space-huge": "64px",
+            "space-xxl": "32px"
+          },
+          "fontFamily": {
+            "display-xl": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"Inter, sans-serif\""],
+            "button-sm": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""],
+            "micro-cap": ["\"Inter, sans-serif\""],
+            "heading-sm": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "body-lg": ["\"Inter, sans-serif\""],
+            "button-md": ["\"Inter, sans-serif\""],
+            "body-md": ["\"Inter, sans-serif\""],
+            "display-xxl": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }],
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }],
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .font-mono-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  </style>
+</head>
+<body class="bg-canvas-soft text-ink font-body-md text-body-md antialiased min-h-full flex flex-col relative selection:bg-primary-fixed selection:text-ink">
+<!-- TopNavBar (Shared Component) -->
+<header class="bg-canvas dark:bg-brand-dark-900 border-b border-hairline dark:border-ink-secondary docked full-width top-0 z-30 sticky w-full">
+<div class="flex justify-between items-center w-full px-space-xl h-16 max-w-7xl mx-auto">
+<!-- Left: Logo & Badge -->
+<div class="flex items-center space-x-space-md">
+<span class="text-heading-md font-heading-md tracking-tight font-normal text-ink dark:text-canvas">
+          simple-captcha
+        </span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-micro font-micro bg-surface-container text-ink-mute border border-hairline">
+          自托管服务
+        </span>
+</div>
+<!-- Navigation Links (接入应用 is Active) -->
+<nav class="hidden md:flex items-center space-x-space-xl pt-4">
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors text-body-md font-body-md" href="#">
+          概览
+        </a>
+<a class="text-primary dark:text-primary-soft font-normal border-b-2 border-primary dark:border-primary-soft pb-4 text-body-md font-body-md flex items-center" href="#">
+          接入应用
+        </a>
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors text-body-md font-body-md" href="#">
+          风控观察
+        </a>
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors text-body-md font-body-md" href="#">
+          策略配置
+        </a>
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors text-body-md font-body-md" href="#">
+          背景图
+        </a>
+</nav>
+<!-- Right Trailing User Action -->
+<div class="flex items-center space-x-space-sm cursor-pointer active:scale-95 transition-all duration-150 py-1.5 px-3 rounded-full hover:bg-surface-container">
+<div class="w-7 h-7 rounded-full bg-brand-dark-900 text-canvas flex items-center justify-center text-caption font-caption">
+          A
+        </div>
+<span class="text-caption font-caption text-ink font-normal">admin</span>
+<span class="material-symbols-outlined text-ink-mute text-base" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+</header>
+<!-- Background Main Content: 接入应用 Page Canvas -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-space-xl py-space-xl pb-space-huge">
+<!-- Header Page Row -->
+<div class="flex flex-col md:flex-row md:items-center justify-between pb-space-xl border-b border-hairline gap-space-md">
+<div>
+<h1 class="text-heading-lg font-heading-lg text-ink font-normal tracking-tight">接入应用</h1>
+<p class="text-caption font-caption text-ink-mute mt-1 max-w-2xl">
+          管理已接入验证码的前端站点与业务服务端密钥。每个接入站点对应一个独立应用，只有「允许来源」内的页面可发起出题与提交。
+        </p>
+</div>
+<div class="flex items-center space-x-space-md">
+<button class="inline-flex items-center px-4 py-2 border border-hairline rounded-full bg-canvas text-ink text-button-sm font-button-sm hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-base mr-1 text-ink-mute" data-icon="refresh">refresh</span>
+          刷新列表
+        </button>
+<button class="inline-flex items-center px-5 py-2 rounded-full bg-primary text-on-primary text-button-sm font-button-sm hover:bg-primary-press transition-colors shadow-sm">
+<span class="material-symbols-outlined text-base mr-1" data-icon="add">add</span>
+          新建应用
+        </button>
+</div>
+</div>
+<!-- Stats & Application Table Container -->
+<div class="mt-space-xl bg-canvas border border-hairline rounded-[12px] overflow-hidden">
+<!-- Search & Filters -->
+<div class="px-space-xl py-space-md bg-canvas border-b border-hairline flex items-center justify-between">
+<div class="flex items-center space-x-space-sm text-caption font-caption text-ink-mute">
+<span class="text-ink font-medium">全部应用 (4)</span>
+<span>•</span>
+<span>活跃密钥 (4)</span>
+</div>
+<div class="flex items-center space-x-space-sm">
+<span class="text-micro-cap font-micro-cap text-ink-mute uppercase">集群状态: 正常响应</span>
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+</div>
+</div>
+<!-- App Table -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse text-caption font-caption">
+<thead>
+<tr class="bg-canvas-soft border-b border-hairline text-ink-mute font-normal">
+<th class="py-3 px-space-xl">应用名称</th>
+<th class="py-3 px-space-xl">应用 ID (App ID)</th>
+<th class="py-3 px-space-xl">允许来源 (Origins)</th>
+<th class="py-3 px-space-xl">创建时间</th>
+<th class="py-3 px-space-xl text-right">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-hairline">
+<!-- Newly Created Row: 订单系统 -->
+<tr class="bg-primary-fixed/20 transition-colors">
+<td class="py-4 px-space-xl">
+<div class="flex items-center space-x-space-sm">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-ink font-medium text-body-tabular font-body-tabular">订单系统</span>
+<span class="px-2 py-0.5 text-micro font-micro rounded-full bg-primary-container text-canvas">刚刚创建</span>
+</div>
+</td>
+<td class="py-4 px-space-xl font-mono-code text-ink-secondary">app_8f192b0c</td>
+<td class="py-4 px-space-xl text-ink-mute">
+<span class="block">https://shop.example.com</span>
+<span class="block">https://m.shop.example.com</span>
+</td>
+<td class="py-4 px-space-xl text-ink-mute-2">刚刚 (1 分钟前)</td>
+<td class="py-4 px-space-xl text-right">
+<button class="text-primary hover:text-primary-press font-normal mr-3">编辑</button>
+<button class="text-ink-mute hover:text-ink">重置密钥</button>
+</td>
+</tr>
+<!-- Existing App 1 -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-4 px-space-xl">
+<span class="text-ink font-medium text-body-tabular font-body-tabular">管理后台</span>
+</td>
+<td class="py-4 px-space-xl font-mono-code text-ink-secondary">app_console</td>
+<td class="py-4 px-space-xl text-ink-mute">https://admin.example.com</td>
+<td class="py-4 px-space-xl text-ink-mute-2">2025-01-12 10:24</td>
+<td class="py-4 px-space-xl text-right">
+<button class="text-primary hover:text-primary-press font-normal mr-3">编辑</button>
+<button class="text-ink-mute hover:text-ink">重置密钥</button>
+</td>
+</tr>
+<!-- Existing App 2 -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-4 px-space-xl">
+<span class="text-ink font-medium text-body-tabular font-body-tabular">会员中心</span>
+</td>
+<td class="py-4 px-space-xl font-mono-code text-ink-secondary">app_usr_4c78119a</td>
+<td class="py-4 px-space-xl text-ink-mute">https://passport.example.com</td>
+<td class="py-4 px-space-xl text-ink-mute-2">2025-01-15 14:02</td>
+<td class="py-4 px-space-xl text-right">
+<button class="text-primary hover:text-primary-press font-normal mr-3">编辑</button>
+<button class="text-ink-mute hover:text-ink">重置密钥</button>
+</td>
+</tr>
+<!-- Existing App 3 -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-4 px-space-xl">
+<span class="text-ink font-medium text-body-tabular font-body-tabular">营销活动页</span>
+</td>
+<td class="py-4 px-space-xl font-mono-code text-ink-secondary">app_mkt_6e208fa1</td>
+<td class="py-4 px-space-xl text-ink-mute">https://act.example.com</td>
+<td class="py-4 px-space-xl text-ink-mute-2">2025-02-01 09:18</td>
+<td class="py-4 px-space-xl text-right">
+<button class="text-primary hover:text-primary-press font-normal mr-3">编辑</button>
+<button class="text-ink-mute hover:text-ink">重置密钥</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+<!-- Modal Backdrop & Modal Layer (Focused Core Experience) -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark-900/60 backdrop-blur-sm overflow-y-auto" id="modal-container">
+<!-- Modal Card Dialog -->
+<div class="relative w-full max-w-[680px] bg-canvas border border-hairline rounded-[16px] shadow-2xl p-6 md:p-8 my-8 text-left transition-all">
+<!-- Top Success Indicator & Header -->
+<div class="flex items-start justify-between pb-space-md border-b border-hairline">
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
+<span class="material-symbols-outlined text-2xl" data-icon="check_circle">check_circle</span>
+</div>
+<div>
+<h2 class="text-heading-md font-heading-md text-ink font-normal">应用创建成功与密钥生成</h2>
+<p class="text-caption font-caption text-ink-mute mt-0.5">接入身份已生效，请复制生成的服务端私钥并进行环境配置。</p>
+</div>
+</div>
+<button class="text-ink-mute hover:text-ink p-1 rounded-full hover:bg-surface-container transition-colors" onclick="dismissModal()" title="关闭窗口">
+<span class="material-symbols-outlined text-xl" data-icon="close">close</span>
+</button>
+</div>
+<!-- Critical Zero-Knowledge Amber Warning Banner -->
+<div class="mt- space-md mt-4 p-4 rounded-[10px] bg-canvas-cream border border-tertiary-fixed-dim/60 text-tertiary flex items-start space-x-3">
+<span class="material-symbols-outlined text-xl mt-0.5 flex-shrink-0 text-tertiary" data-icon="warning">warning</span>
+<div class="text-caption font-caption leading-relaxed">
+<p class="font-medium text-tertiary mb-1">
+            请立即复制并妥善保管此密钥。出于零知识安全原则，服务端仅保存密钥的加盐哈希值，一旦离开或关闭本窗口，将无法再次查看明文密钥。若遗失，只能重新生成重置密钥。
+          </p>
+<div class="text-micro font-micro text-tertiary/80 flex items-center mt-1.5 pt-1.5 border-t border-tertiary-fixed-dim/40">
+<span class="material-symbols-outlined text-sm mr-1" data-icon="info">info</span>
+            对已有应用重置密钥后也是同样的一次性展示，并提示旧密钥已立即失效。
+          </div>
+</div>
+</div>
+<!-- App Metadata Rows -->
+<div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 bg-canvas-soft rounded-[8px] border border-hairline text-caption font-caption">
+<div>
+<span class="text-ink-mute text-micro font-micro block">应用名称</span>
+<span class="text-ink font-medium mt-0.5 block">订单系统</span>
+</div>
+<div>
+<span class="text-ink-mute text-micro font-micro block">应用 ID (App ID)</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="font-mono-code text-ink font-medium">app_8f192b0c</span>
+<button class="text-ink-mute hover:text-primary transition-colors text-xs" onclick="copySnippet('app_8f192b0c', this)" title="复制 App ID">
+<span class="material-symbols-outlined text-sm" data-icon="content_copy">content_copy</span>
+</button>
+</div>
+</div>
+<div class="md:col-span-2 pt-2 border-t border-hairline/80">
+<span class="text-ink-mute text-micro font-micro block">允许来源 (Origins)</span>
+<div class="font-mono-code text-ink-secondary text-micro font-micro mt-0.5 space-y-0.5">
+<div>https://shop.example.com</div>
+<div>https://m.shop.example.com</div>
+</div>
+</div>
+</div>
+<!-- Main Plaintext Secret Key Card (Hero Value) -->
+<div class="mt-5">
+<div class="flex items-center justify-between mb-1.5">
+<label class="text-caption font-caption text-ink font-medium flex items-center">
+<span class="material-symbols-outlined text-sm text-primary mr-1" data-icon="key">key</span>
+            服务端 Secret Key (一次性明文)
+          </label>
+<span class="text-micro font-micro text-tertiary font-medium">关闭后永久隐藏</span>
+</div>
+<div class="p-3 bg-brand-dark-900 rounded-[8px] border border-brand-dark-900 flex items-center justify-between gap-3 shadow-inner">
+<code class="font-mono-code text-canvas text-caption font-caption tracking-tight break-all select-all selection:bg-primary-container">
+            cap_sk_8f192b0ca71e49d8bc391f28e5792d04
+          </code>
+<button class="inline-flex items-center px-3.5 py-1.5 rounded-full bg-primary-container hover:bg-primary text-canvas text-caption font-caption font-medium transition-all flex-shrink-0 active:scale-95 shadow-sm" onclick="copySnippet('cap_sk_8f192b0ca71e49d8bc391f28e5792d04', this)">
+<span class="material-symbols-outlined text-sm mr-1" data-icon="content_copy">content_copy</span>
+<span>复制密钥</span>
+</button>
+</div>
+</div>
+<!-- Integration Code Snippet: Frontend -->
+<div class="mt-4">
+<div class="flex items-center justify-between mb-1">
+<span class="text-caption font-caption text-ink-mute">前端接入代码 (React / Web Component SDK)</span>
+<button class="text-primary hover:text-primary-press text-caption font-caption flex items-center" onclick="copySnippet('&lt;CaptchaProvider api={{ baseURL: \'https://captcha.example.com\', appId: \'app_8f192b0c\' }}&gt;', this)">
+<span class="material-symbols-outlined text-sm mr-0.5" data-icon="content_copy">content_copy</span>
+            复制
+          </button>
+</div>
+<div class="p-2.5 bg-canvas-soft rounded-[6px] border border-hairline font-mono-code text-ink text-micro font-micro overflow-x-auto select-all">
+          &lt;CaptchaProvider api={{ baseURL: 'https://captcha.example.com', appId: 'app_8f192b0c' }}&gt;
+        </div>
+</div>
+<!-- Integration Code Snippet: Backend cURL -->
+<div class="mt-3">
+<div class="flex items-center justify-between mb-1">
+<span class="text-caption font-caption text-ink-mute">服务端二次校验接口 (cURL 调试)</span>
+<button class="text-primary hover:text-primary-press text-caption font-caption flex items-center" onclick="copySnippet('curl -H &quot;Authorization: Bearer cap_sk_8f192b0ca71e49d8bc391f28e5792d04&quot; https://captcha.example.com/api/v1/captchas/states/&lt;second_key&gt;', this)">
+<span class="material-symbols-outlined text-sm mr-0.5" data-icon="content_copy">content_copy</span>
+            复制
+          </button>
+</div>
+<div class="p-2.5 bg-canvas-soft rounded-[6px] border border-hairline font-mono-code text-ink text-micro font-micro overflow-x-auto select-all">
+          curl -H "Authorization: Bearer cap_sk_8f192b0ca71e49d8bc391f28e5792d04" https://captcha.example.com/api/v1/captchas/states/&lt;second_key&gt;
+        </div>
+</div>
+<!-- Modal Footer Action Area -->
+<div class="mt-6 pt-4 border-t border-hairline flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+<button class="text-ink-mute hover:text-ink text-button-sm font-button-sm px-3 py-2 transition-colors text-center" onclick="dismissModal()">
+          暂不关闭，稍后再看
+        </button>
+<button class="inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-primary text-on-primary text-button-md font-button-md hover:bg-primary-press active:scale-95 transition-all shadow-md font-medium" onclick="dismissModal()">
+<span class="material-symbols-outlined text-base mr-1.5" data-icon="task_alt">task_alt</span>
+          我已保存并知晓无法找回
+        </button>
+</div>
+</div>
+</div>
+<!-- Toast Notification Feedback -->
+<div class="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-brand-dark-900 text-canvas px-4 py-2 rounded-full text-caption font-caption shadow-lg flex items-center space-x-2 transition-opacity duration-200 opacity-0 pointer-events-none" id="toast">
+<span class="material-symbols-outlined text-base text-emerald-400" data-icon="check_circle">check_circle</span>
+<span id="toast-message">已复制到剪贴板</span>
+</div>
+<!-- Footer (Shared Component) -->
+<footer class="bg-canvas-soft dark:bg-brand-dark-900 border-t border-hairline dark:border-ink-secondary docked full-width bottom-0 w-full mt-auto">
+<div class="flex justify-between items-center w-full px-space-xl py-space-md max-w-7xl mx-auto text-caption font-caption">
+<!-- Copyright / Version -->
+<div class="text-micro font-micro text-ink-mute dark:text-hairline">
+        simple-captcha v1.2.0 • 社区开源独立部署
+      </div>
+<!-- Footer Secondary Navigation -->
+<div class="flex items-center space-x-space-lg">
+<a class="text-ink-mute-2 dark:text-hairline hover:text-ink dark:hover:text-canvas transition-colors" href="#">
+          账号与安全
+        </a>
+<a class="text-ink-mute-2 dark:text-hairline hover:text-ink dark:hover:text-canvas transition-colors" href="#">
+          退出登录
+        </a>
+</div>
+</div>
+</footer>
+<!-- Vanilla JS Interactive Helpers -->
+<script>
+    function copySnippet(text, buttonEl) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+      }
+      showToast('已成功复制到剪贴板');
+      
+      if (buttonEl) {
+        const originalText = buttonEl.innerHTML;
+        buttonEl.classList.add('opacity-75');
+        setTimeout(() => {
+          buttonEl.classList.remove('opacity-75');
+        }, 800);
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      toastMsg.innerText = msg;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2000);
+    }
+
+    function dismissModal() {
+      const modal = document.getElementById('modal-container');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        modal.style.display = 'none';
+      }, 200);
+    }
+  </script>
+</body></html>

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>账号与安全 - simple-captcha</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-background": "#1b1a25",
+            "on-primary-container": "#ddd9ff",
+            "ink-secondary": "#273951",
+            "surface-tint": "#5036fa",
+            "primary-fixed-dim": "#c5c0ff",
+            "on-error-container": "#93000a",
+            "on-primary": "#ffffff",
+            "canvas-cream": "#f5e9d4",
+            "surface-container-highest": "#e4e0ef",
+            "surface-container-low": "#f6f2ff",
+            "surface-container-lowest": "#ffffff",
+            "on-surface": "#1b1a25",
+            "secondary-fixed-dim": "#c0c1ff",
+            "secondary": "#575992",
+            "on-tertiary-fixed-variant": "#812800",
+            "primary": "#3904e7",
+            "canvas": "#ffffff",
+            "surface-dim": "#dcd8e7",
+            "on-error": "#ffffff",
+            "canvas-soft": "#f6f9fc",
+            "on-secondary-container": "#494b83",
+            "primary-fixed": "#e3dfff",
+            "on-surface-variant": "#474556",
+            "ink-mute-2": "#61718a",
+            "tertiary": "#862a00",
+            "primary-press": "#2e2b8c",
+            "on-tertiary": "#ffffff",
+            "surface-container": "#f0ecfb",
+            "inverse-on-surface": "#f3eefe",
+            "on-secondary-fixed": "#12144b",
+            "error-container": "#ffdad6",
+            "hairline": "#e3e8ee",
+            "surface-bright": "#fcf8ff",
+            "primary-soft": "#665efd",
+            "hairline-input": "#a8c3de",
+            "tertiary-fixed-dim": "#ffb59b",
+            "tertiary-fixed": "#ffdbcf",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "outline-variant": "#c8c4da",
+            "on-primary-fixed-variant": "#3600e1",
+            "brand-dark-900": "#1c1e54",
+            "secondary-fixed": "#e1e0ff",
+            "primary-deep": "#4434d4",
+            "surface": "#fcf8ff",
+            "inverse-primary": "#c5c0ff",
+            "surface-container-high": "#eae6f5",
+            "on-tertiary-fixed": "#380d00",
+            "primary-container": "#533afd",
+            "error": "#ba1a1a",
+            "on-secondary": "#ffffff",
+            "ink-mute": "#64748d",
+            "secondary-container": "#bdbefe",
+            "on-secondary-fixed-variant": "#3f4178",
+            "on-tertiary-container": "#ffd3c5",
+            "surface-variant": "#e4e0ef",
+            "background": "#fcf8ff",
+            "inverse-surface": "#302f3a",
+            "outline": "#777588",
+            "on-primary-fixed": "#130067",
+            "ink": "#0d253d",
+            "tertiary-container": "#ae3900"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-huge": "64px",
+            "space-xl": "24px",
+            "space-md": "12px",
+            "margin": "24px",
+            "space-xxs": "2px",
+            "gutter": "16px",
+            "space-sm": "8px",
+            "space-lg": "16px",
+            "space-xxl": "32px",
+            "space-xs": "4px"
+          },
+          "fontFamily": {
+            "button-sm": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""],
+            "heading-sm": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""],
+            "display-xl": ["\"Inter, sans-serif\""],
+            "micro-cap": ["\"Inter, sans-serif\""],
+            "body-md": ["\"Inter, sans-serif\""],
+            "body-lg": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "display-xxl": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"Inter, sans-serif\""],
+            "button-md": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }],
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }]
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-canvas text-ink min-h-full flex flex-col font-body-md text-body-md antialiased selection:bg-primary-fixed selection:text-ink">
+<!-- TopNavBar (Shared Component) -->
+<header class="w-full bg-canvas border-b border-hairline sticky top-0 z-50">
+<div class="flex justify-between items-center w-full px-space-xl h-16 max-w-7xl mx-auto">
+<!-- Left: Brand Logo & Deployment Badge -->
+<div class="flex items-center gap-3">
+<a class="text-heading-md font-heading-md tracking-tight font-normal text-ink flex items-center gap-2" href="#">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container inline-block"></span>
+          simple-captcha
+        </a>
+<span class="px-2 py-0.5 rounded-full bg-canvas-soft border border-hairline text-ink-mute-2 text-micro-cap font-micro-cap">自托管独立部署</span>
+</div>
+<!-- Center: Navigation Links (Shared Component Keys: 概览, 接入应用, 风控观察, 策略配置, 背景图) -->
+<nav class="hidden md:flex items-center gap-6 h-full pt-4">
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">概览</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">接入应用</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">风控观察</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">策略配置</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors font-body-md text-body-md" href="#">背景图</a>
+</nav>
+<!-- Right: Docs Link & Admin Profile Trigger -->
+<div class="flex items-center gap-5">
+<a class="hidden sm:flex items-center gap-1.5 text-ink-mute hover:text-primary transition-colors duration-150 font-caption text-caption" href="#">
+<span class="material-symbols-outlined text-[18px]">menu_book</span>
+<span>接口文档</span>
+</a>
+<div class="h-4 w-[1px] bg-hairline hidden sm:block"></div>
+<div class="flex items-center gap-1.5 text-ink cursor-pointer active:scale-95 transition-all duration-150 group">
+<div class="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-primary font-caption text-caption border border-hairline">
+<span class="material-symbols-outlined text-[16px]">shield_person</span>
+</div>
+<span class="text-caption font-caption text-ink font-normal">admin</span>
+<span class="material-symbols-outlined text-ink-mute-2 group-hover:text-ink transition-colors text-[18px]">expand_more</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-space-xl py-8">
+<!-- Page Header Area -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-hairline">
+<div>
+<div class="flex items-center gap-2">
+<h1 class="text-display-md font-display-md text-ink tracking-tight font-normal">账号与安全</h1>
+<span class="text-micro font-micro px-2 py-0.5 rounded-full bg-primary-fixed text-primary font-normal">单管理员控制台</span>
+</div>
+<p class="text-ink-mute text-caption font-caption mt-1">管理当前实例管理员凭据与会话有效性。自托管单管理员架构，凭据由本地服务安全存储。</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft text-ink-secondary text-button-sm font-button-sm transition-colors active:scale-95 duration-150" type="button">
+<span class="material-symbols-outlined text-[16px]">sync</span>
+<span>检查会话状态</span>
+</button>
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft text-ink text-button-sm font-button-sm transition-colors active:scale-95 duration-150" type="button">
+<span class="material-symbols-outlined text-[16px]">arrow_back</span>
+<span>返回控制台概览</span>
+</button>
+</div>
+</div>
+<!-- Status Banner / Notification Demo (Dismissable / Demonstrative) -->
+<div class="mt-6 p-4 rounded-xl bg-surface-bright border border-hairline flex items-start sm:items-center justify-between gap-3 shadow-none transition-all" id="successBanner">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-[#ecfdf5] border border-[#a7f3d0] flex items-center justify-center flex-shrink-0 text-[#059669]">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+</div>
+<div>
+<p class="text-caption font-caption text-ink font-normal">密码已修改，其他会话已全部退出</p>
+<p class="text-micro font-micro text-ink-mute-2">当前控制台已自动换发新令牌，其余终端后续请求将被拒绝。</p>
+</div>
+</div>
+<button class="text-ink-mute hover:text-ink p-1 rounded transition-colors" onclick="document.getElementById('successBanner').style.display='none'">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Bento Grid Section: Current Session + Main Password Form + Operational Recovery -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+<!-- Left Column (8 cols): Change Password Form Card -->
+<div class="lg:col-span-8 flex flex-col gap-6">
+<!-- Card: 修改登录密码 -->
+<section class="bg-canvas border border-hairline rounded-xl p-8 transition-colors">
+<div class="flex items-center justify-between pb-5 border-b border-hairline">
+<div>
+<h2 class="text-heading-md font-heading-md text-ink font-normal">修改登录密码</h2>
+<p class="text-caption font-caption text-ink-mute mt-1">更新本地实例的唯一管理员密码。请确保保存妥当，避免误锁。</p>
+</div>
+<div class="w-9 h-9 rounded-full bg-canvas-soft border border-hairline flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[20px]">key</span>
+</div>
+</div>
+<form class="mt-6 space-y-6" id="passwordForm" onsubmit="event.preventDefault(); triggerSave();">
+<!-- Field 1: Current Password -->
+<div>
+<label class="block text-caption font-caption text-ink mb-1.5 font-normal" for="currentPassword">
+                当前密码 <span class="text-error">*</span>
+</label>
+<div class="relative rounded-md">
+<input class="w-full px-3.5 py-2.5 rounded-[6px] border border-hairline-input text-ink text-body-md font-body-md bg-canvas placeholder:text-ink-mute-2 focus:border-primary-container focus:ring-1 focus:ring-primary-container focus:outline-none transition-colors pr-10" id="currentPassword" name="currentPassword" placeholder="输入当前正在使用的管理员口令" type="password"/>
+<button class="absolute inset-y-0 right-0 pr-3 flex items-center text-ink-mute hover:text-ink" onclick="togglePasswordVisibility('currentPassword', 'eyeCurrent')" type="button">
+<span class="material-symbols-outlined text-[18px]" id="eyeCurrent">visibility</span>
+</button>
+</div>
+<p class="hidden text-micro font-micro text-error mt-1.5 flex items-center gap-1" id="currPwdError">
+<span class="material-symbols-outlined text-[14px]">error</span>
+<span>当前密码错误，请重新输入</span>
+</p>
+</div>
+<!-- Field 2: New Password -->
+<div>
+<label class="block text-caption font-caption text-ink mb-1.5 font-normal" for="newPassword">
+                新密码 <span class="text-error">*</span>
+</label>
+<div class="relative rounded-md">
+<input class="w-full px-3.5 py-2.5 rounded-[6px] border border-hairline-input text-ink text-body-md font-body-md bg-canvas placeholder:text-ink-mute-2 focus:border-primary-container focus:ring-1 focus:ring-primary-container focus:outline-none transition-colors pr-10" id="newPassword" name="newPassword" oninput="checkPasswordRules(this.value)" placeholder="输入全新管理员密码" type="password"/>
+<button class="absolute inset-y-0 right-0 pr-3 flex items-center text-ink-mute hover:text-ink" onclick="togglePasswordVisibility('newPassword', 'eyeNew')" type="button">
+<span class="material-symbols-outlined text-[18px]" id="eyeNew">visibility</span>
+</button>
+</div>
+<!-- Password Rules Checklist Box -->
+<div class="mt-3 p-3.5 bg-canvas-soft rounded-[8px] border border-hairline text-caption font-caption">
+<span class="text-micro-cap font-micro-cap text-ink-mute uppercase tracking-wider block mb-2">密码安全规范（实时校验）</span>
+<ul class="space-y-1.5 text-micro font-micro">
+<li class="flex items-center gap-2 text-ink-mute-2 transition-colors" id="rule-len">
+<span class="material-symbols-outlined text-[14px] text-ink-mute-2" id="icon-len">radio_button_unchecked</span>
+<span>至少 10 个字符</span>
+</li>
+<li class="flex items-center gap-2 text-ink-mute-2 transition-colors" id="rule-byte">
+<span class="material-symbols-outlined text-[14px] text-ink-mute-2" id="icon-byte">radio_button_unchecked</span>
+<span>不超过 72 字节（bcrypt / argon2 安全上限）</span>
+</li>
+<li class="flex items-center gap-2 text-ink-mute-2 transition-colors" id="rule-diff">
+<span class="material-symbols-outlined text-[14px] text-ink-mute-2" id="icon-diff">radio_button_unchecked</span>
+<span>不能与当前密码相同</span>
+</li>
+</ul>
+</div>
+</div>
+<!-- Field 3: Confirm Password -->
+<div>
+<label class="block text-caption font-caption text-ink mb-1.5 font-normal" for="confirmPassword">
+                确认新密码 <span class="text-error">*</span>
+</label>
+<div class="relative rounded-md">
+<input class="w-full px-3.5 py-2.5 rounded-[6px] border border-hairline-input text-ink text-body-md font-body-md bg-canvas placeholder:text-ink-mute-2 focus:border-primary-container focus:ring-1 focus:ring-primary-container focus:outline-none transition-colors pr-10" id="confirmPassword" name="confirmPassword" placeholder="再次输入新密码以确认" type="password"/>
+<button class="absolute inset-y-0 right-0 pr-3 flex items-center text-ink-mute hover:text-ink" onclick="togglePasswordVisibility('confirmPassword', 'eyeConfirm')" type="button">
+<span class="material-symbols-outlined text-[18px]" id="eyeConfirm">visibility</span>
+</button>
+</div>
+<p class="hidden text-micro font-micro text-error mt-1.5 flex items-center gap-1" id="mismatchError">
+<span class="material-symbols-outlined text-[14px]">error</span>
+<span>两次输入的新密码不一致</span>
+</p>
+</div>
+<!-- Pre-rendered Feedback Demo Toggle Section -->
+<div class="pt-2">
+<div class="p-3 bg-error-container/40 border border-error/20 rounded-md text-micro font-micro text-on-error-container flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-error">info</span>
+<span>交互校验预演：密码错误反馈与比对拦截器已就绪</span>
+</div>
+<button class="underline text-error hover:text-on-error-container font-normal text-micro" onclick="toggleSimulatedErrors()" type="button">切换演示错误反馈</button>
+</div>
+</div>
+<!-- Form Actions -->
+<div class="pt-4 flex items-center gap-3 border-t border-hairline">
+<button class="px-6 py-2.5 rounded-full bg-primary-container text-on-primary hover:bg-primary-deep active:bg-primary-press text-button-sm font-button-sm transition-all duration-150 inline-flex items-center gap-2" id="submitBtn" type="submit">
+<span class="hidden material-symbols-outlined text-[16px] animate-spin" id="submitSpinner">progress_activity</span>
+<span id="submitText">保存新密码</span>
+</button>
+<button class="px-5 py-2.5 rounded-full bg-canvas border border-hairline text-ink-mute hover:text-ink hover:bg-canvas-soft text-button-sm font-button-sm transition-all duration-150" onclick="resetFormFeedback()" type="reset">
+                重置输入
+              </button>
+</div>
+</form>
+</section>
+<!-- Session Impact Notice -->
+<div class="p-5 rounded-xl border border-hairline bg-surface-container-low flex items-start gap-3.5">
+<span class="material-symbols-outlined text-primary-container text-[22px] flex-shrink-0 mt-0.5">devices_fold</span>
+<div>
+<h4 class="text-caption font-caption text-ink font-normal">会话影响说明</h4>
+<p class="text-caption font-caption text-ink-mute mt-1 leading-relaxed">
+              修改后，其他浏览器或设备上的登录会全部退出，当前页面自动换用新会话。
+            </p>
+</div>
+</div>
+</div>
+<!-- Right Column (4 cols): Session Info & Emergency Recovery -->
+<div class="lg:col-span-4 flex flex-col gap-6">
+<!-- Read-only Card: 当前管理员凭据与会话信息 -->
+<section class="bg-canvas border border-hairline rounded-xl p-6 transition-colors">
+<div class="flex items-center justify-between pb-4 border-b border-hairline">
+<h3 class="text-heading-sm font-heading-sm text-ink font-normal">管理员与会话状态</h3>
+<span class="w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/10"></span>
+</div>
+<div class="mt-4 space-y-4">
+<div>
+<span class="text-micro-cap font-micro-cap text-ink-mute uppercase tracking-wider block">当前管理员账号</span>
+<div class="mt-1 flex items-center justify-between">
+<span class="text-body-md font-body-md text-ink font-normal flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-ink-mute-2">person</span>
+                  admin
+                </span>
+<span class="text-micro font-micro px-2 py-0.5 rounded bg-canvas-soft border border-hairline text-ink-mute-2">单管理员凭据</span>
+</div>
+</div>
+<div class="pt-3 border-t border-hairline">
+<span class="text-micro-cap font-micro-cap text-ink-mute uppercase tracking-wider block">当前会话到期时间</span>
+<div class="mt-1 flex items-baseline justify-between">
+<span class="text-body-tabular font-body-tabular text-ink">2025-02-28 16:45:00</span>
+</div>
+<div class="mt-2 flex items-center gap-1.5 text-micro font-micro text-primary-container bg-surface-container-low px-2.5 py-1.5 rounded-[6px]">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span>还有 6 天 14 小时后过期（连续活动自动顺延）</span>
+</div>
+</div>
+<div class="pt-3 border-t border-hairline">
+<span class="text-micro-cap font-micro-cap text-ink-mute uppercase tracking-wider block mb-1">会话安全机制</span>
+<p class="text-caption font-caption text-ink-mute-2 leading-relaxed">
+                自托管控制台采用服务端内存/本地状态维护单一活跃 Session，不依赖第三方授权中心。无活动超时机制将自动重置会话，保障内网环境运维基线安全。
+              </p>
+</div>
+</div>
+</section>
+<!-- Disaster Recovery / Forgot Password Shell Terminal Card -->
+<section class="bg-brand-dark-900 border border-ink-secondary rounded-xl p-6 text-on-primary shadow-none">
+<div class="flex items-center justify-between pb-3 border-b border-white/10">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-primary-container text-[18px]">terminal</span>
+<h3 class="text-caption font-caption text-on-primary font-normal">灾难恢复 / 忘记密码应急指引</h3>
+</div>
+<span class="text-micro font-micro text-primary-fixed-dim px-1.5 py-0.5 rounded bg-white/5 border border-white/10">CLI 运维</span>
+</div>
+<p class="mt-3.5 text-caption font-caption text-hairline leading-relaxed">
+            忘记密码时，在服务器执行命令行：
+          </p>
+<!-- Terminal Block -->
+<div class="mt-2.5 bg-black/40 rounded-lg p-3 border border-white/10 flex items-center justify-between font-mono text-caption">
+<span class="text-primary-fixed-dim select-all">./simple-captcha reset-admin</span>
+<button class="text-hairline hover:text-white transition-colors p-1 rounded hover:bg-white/10 active:scale-95" onclick="copyCliCommand(this)" title="复制命令" type="button">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+</button>
+</div>
+<!-- Ops Notes -->
+<div class="mt-4 pt-3.5 border-t border-white/10 space-y-2">
+<div class="flex items-start gap-2 text-micro font-micro text-hairline/80 leading-normal">
+<span class="material-symbols-outlined text-[14px] text-primary-fixed-dim flex-shrink-0 mt-0.5">info</span>
+<span>管理员账号将被删除，系统将用服务启动日志中打印的全新初始化临时口令重新设置用户名与密码。</span>
+</div>
+<div class="flex items-start gap-2 text-micro font-micro text-hairline/80 leading-normal">
+<span class="material-symbols-outlined text-[14px] text-emerald-400 flex-shrink-0 mt-0.5">verified_user</span>
+<span>所有已接入的应用与风控策略不受任何影响。</span>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Footer (Shared Component) -->
+<footer class="w-full bg-canvas-soft border-t border-hairline mt-auto">
+<div class="flex justify-between items-center w-full px-space-xl py-space-md max-w-7xl mx-auto text-caption font-caption">
+<!-- Left: Brand Version & License Text -->
+<div class="text-micro font-micro text-ink-mute">
+        simple-captcha v1.2.0 • 社区开源独立部署
+      </div>
+<!-- Right: Links with active '账号与安全' and '退出登录' -->
+<div class="flex items-center gap-6">
+<a class="text-primary font-normal" href="#">账号与安全</a>
+<a class="text-ink-mute-2 hover:text-ink transition-colors" href="#">退出登录</a>
+</div>
+</div>
+</footer>
+<!-- Micro-interactions Script -->
+<script>
+    function togglePasswordVisibility(inputId, iconId) {
+      const input = document.getElementById(inputId);
+      const icon = document.getElementById(iconId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = 'visibility_off';
+      } else {
+        input.type = 'password';
+        icon.textContent = 'visibility';
+      }
+    }
+
+    function checkPasswordRules(val) {
+      const ruleLen = document.getElementById('rule-len');
+      const iconLen = document.getElementById('icon-len');
+      const ruleByte = document.getElementById('rule-byte');
+      const iconByte = document.getElementById('icon-byte');
+      const ruleDiff = document.getElementById('rule-diff');
+      const iconDiff = document.getElementById('icon-diff');
+
+      const byteLength = new TextEncoder().encode(val).length;
+      const currentPwdVal = document.getElementById('currentPassword').value;
+
+      // Rule 1: at least 10 chars
+      if (val.length >= 10) {
+        ruleLen.className = "flex items-center gap-2 text-[#059669]";
+        iconLen.textContent = "check_circle";
+        iconLen.className = "material-symbols-outlined text-[14px] text-[#059669]";
+      } else {
+        ruleLen.className = "flex items-center gap-2 text-ink-mute-2";
+        iconLen.textContent = "radio_button_unchecked";
+        iconLen.className = "material-symbols-outlined text-[14px] text-ink-mute-2";
+      }
+
+      // Rule 2: <= 72 bytes
+      if (byteLength > 0 && byteLength <= 72) {
+        ruleByte.className = "flex items-center gap-2 text-[#059669]";
+        iconByte.textContent = "check_circle";
+        iconByte.className = "material-symbols-outlined text-[14px] text-[#059669]";
+      } else {
+        ruleByte.className = "flex items-center gap-2 text-ink-mute-2";
+        iconByte.textContent = "radio_button_unchecked";
+        iconByte.className = "material-symbols-outlined text-[14px] text-ink-mute-2";
+      }
+
+      // Rule 3: different from current
+      if (val.length > 0 && currentPwdVal.length > 0 && val !== currentPwdVal) {
+        ruleDiff.className = "flex items-center gap-2 text-[#059669]";
+        iconDiff.textContent = "check_circle";
+        iconDiff.className = "material-symbols-outlined text-[14px] text-[#059669]";
+      } else {
+        ruleDiff.className = "flex items-center gap-2 text-ink-mute-2";
+        iconDiff.textContent = "radio_button_unchecked";
+        iconDiff.className = "material-symbols-outlined text-[14px] text-ink-mute-2";
+      }
+    }
+
+    function toggleSimulatedErrors() {
+      const currErr = document.getElementById('currPwdError');
+      const misErr = document.getElementById('mismatchError');
+      const isHidden = currErr.classList.contains('hidden');
+      if (isHidden) {
+        currErr.classList.remove('hidden');
+        misErr.classList.remove('hidden');
+      } else {
+        currErr.classList.add('hidden');
+        misErr.classList.add('hidden');
+      }
+    }
+
+    function triggerSave() {
+      const btn = document.getElementById('submitBtn');
+      const spinner = document.getElementById('submitSpinner');
+      const text = document.getElementById('submitText');
+      const currErr = document.getElementById('currPwdError');
+      const misErr = document.getElementById('mismatchError');
+      const successBanner = document.getElementById('successBanner');
+
+      currErr.classList.add('hidden');
+      misErr.classList.add('hidden');
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      text.textContent = '保存中...';
+
+      setTimeout(() => {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+        text.textContent = '保存新密码';
+        successBanner.style.display = 'flex';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 1200);
+    }
+
+    function resetFormFeedback() {
+      document.getElementById('currPwdError').classList.add('hidden');
+      document.getElementById('mismatchError').classList.add('hidden');
+      ['rule-len', 'rule-byte', 'rule-diff'].forEach(id => {
+        document.getElementById(id).className = "flex items-center gap-2 text-ink-mute-2";
+      });
+      ['icon-len', 'icon-byte', 'icon-diff'].forEach(id => {
+        const el = document.getElementById(id);
+        el.textContent = "radio_button_unchecked";
+        el.className = "material-symbols-outlined text-[14px] text-ink-mute-2";
+      });
+    }
+
+    function copyCliCommand(btn) {
+      navigator.clipboard.writeText('./simple-captcha reset-admin').then(() => {
+        const icon = btn.querySelector('.material-symbols-outlined');
+        icon.textContent = 'check';
+        setTimeout(() => {
+          icon.textContent = 'content_copy';
+        }, 1500);
+      });
+    }
+  </script>
+</body></html>

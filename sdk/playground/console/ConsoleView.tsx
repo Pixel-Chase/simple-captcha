@@ -1,27 +1,29 @@
+import { AccountPage } from '../pages/AccountPage';
 import { AppsPage } from '../pages/AppsPage';
 import { ImagesPage } from '../pages/ImagesPage';
 import { LoginPage } from '../pages/LoginPage';
-import { PasswordPage } from '../pages/PasswordPage';
+import { OverviewPage } from '../pages/OverviewPage';
 import { RiskPage } from '../pages/RiskPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { SetupPage } from '../pages/SetupPage';
 import type { AuthState, useConsoleAuth } from './useConsoleAuth';
 
-/** 控制台分区：背景图（默认）、接入应用、策略配置、风控观察、修改密码 */
-export type ConsoleSection = 'images' | 'apps' | 'settings' | 'risk' | 'account';
+/** 控制台分区：概览（默认）、接入应用、风控观察、策略配置、背景图，以及管理员菜单里的账号与安全 */
+export type ConsoleSection = 'overview' | 'apps' | 'risk' | 'settings' | 'images' | 'account';
 
-const SECTIONS: ReadonlyArray<{ id: ConsoleSection; label: string }> = [
-  { id: 'images', label: '背景图' },
+/** 顶栏导航的分区；账号与安全不在导航里，从管理员菜单进入 */
+export const NAV_SECTIONS: ReadonlyArray<{ id: ConsoleSection; label: string }> = [
+  { id: 'overview', label: '概览' },
   { id: 'apps', label: '接入应用' },
-  { id: 'settings', label: '策略配置' },
   { id: 'risk', label: '风控观察' },
-  { id: 'account', label: '修改密码' },
+  { id: 'settings', label: '策略配置' },
+  { id: 'images', label: '背景图' },
 ];
 
-/** 从去掉入口前缀后的路径解析分区：'' → 背景图，'/apps'、'/settings'、'/risk'、'/account' → 对应分区 */
+/** 从去掉入口前缀后的路径解析分区：'' → 概览，'/apps'、'/risk' 等 → 对应分区 */
 export function parseConsoleSection(rest: string): ConsoleSection {
-  const match = /^\/(apps|settings|risk|account)$/.exec(rest);
-  return (match?.[1] as ConsoleSection | undefined) ?? 'images';
+  const match = /^\/(apps|risk|settings|images|account)$/.exec(rest);
+  return (match?.[1] as ConsoleSection | undefined) ?? 'overview';
 }
 
 type ConsoleHandlers = Omit<ReturnType<typeof useConsoleAuth>, 'auth' | 'handleLogout'>;
@@ -29,11 +31,10 @@ type ConsoleHandlers = Omit<ReturnType<typeof useConsoleAuth>, 'auth' | 'handleL
 interface ConsoleViewProps extends ConsoleHandlers {
   auth: AuthState;
   section: ConsoleSection;
-  /** 分区链接：演示站为 #/console/apps，内嵌管理后台为 #/apps */
   hrefFor: (section: ConsoleSection) => string;
 }
 
-/** 控制台主体：初始化、登录、分区导航与各分区页面 */
+/** 控制台主体：初始化、登录与各分区页面（导航在 ConsoleShell 的顶栏里） */
 export function ConsoleView({
   auth,
   section,
@@ -53,61 +54,31 @@ export function ConsoleView({
     return <LoginPage onLogin={handleSession} onNotInitialized={handleNotInitialized} />;
   }
 
-  return (
-    <>
-      <nav className="subnav" aria-label="控制台">
-        {SECTIONS.map((item) => (
-          <a
-            key={item.id}
-            href={hrefFor(item.id)}
-            className={section === item.id ? 'subnav__tab subnav__tab--active' : 'subnav__tab'}
-            aria-current={section === item.id ? 'page' : undefined}
-          >
-            {item.label}
-          </a>
-        ))}
-      </nav>
-      {section === 'account' && (
-        <PasswordPage
-          token={auth.token}
+  const { token } = auth;
+  switch (section) {
+    case 'apps':
+      return <AppsPage token={token} onSessionExpired={handleSessionExpired} />;
+    case 'risk':
+      return <RiskPage token={token} onSessionExpired={handleSessionExpired} hrefFor={hrefFor} />;
+    case 'settings':
+      return (
+        <SettingsPage token={token} onSessionExpired={handleSessionExpired} hrefFor={hrefFor} />
+      );
+    case 'images':
+      return <ImagesPage token={token} onSessionExpired={handleSessionExpired} />;
+    case 'account':
+      return (
+        <AccountPage
+          token={token}
           username={auth.username}
+          expiresAt={auth.expiresAt}
           onChanged={handleSession}
           onSessionExpired={handleSessionExpired}
         />
-      )}
-      {section === 'apps' && (
-        <AppsPage token={auth.token} onSessionExpired={handleSessionExpired} />
-      )}
-      {section === 'settings' && (
-        <SettingsPage token={auth.token} onSessionExpired={handleSessionExpired} />
-      )}
-      {section === 'risk' && (
-        <RiskPage token={auth.token} onSessionExpired={handleSessionExpired} />
-      )}
-      {section === 'images' && (
-        <ImagesPage token={auth.token} onSessionExpired={handleSessionExpired} />
-      )}
-    </>
-  );
-}
-
-interface TopbarUserProps {
-  auth: AuthState;
-  onLogout: () => void;
-}
-
-/** 顶栏右侧：当前管理员与退出按钮 */
-export function TopbarUser({ auth, onLogout }: TopbarUserProps) {
-  return (
-    <div className="topbar__user">
-      {auth.status === 'authed' && (
-        <>
-          <span className="topbar__name">{auth.username}</span>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={onLogout}>
-            退出登录
-          </button>
-        </>
-      )}
-    </div>
-  );
+      );
+    default:
+      return (
+        <OverviewPage token={token} onSessionExpired={handleSessionExpired} hrefFor={hrefFor} />
+      );
+  }
 }

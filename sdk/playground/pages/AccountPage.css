@@ -1,0 +1,516 @@
+/* 账号与安全：改密表单、会话状态、忘记密码指引 */
+
+.account__head {
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* ---------- 改密成功横幅 ---------- */
+
+.account-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 14px 20px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--canvas);
+  animation: account-banner-in 0.2s ease;
+}
+
+@keyframes account-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.account-banner__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--good-line);
+  border-radius: 50%;
+  background: var(--good-bg);
+  color: var(--good);
+}
+
+.account-banner__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-banner__title {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.account-banner__desc {
+  margin-top: 2px;
+  color: var(--ink-mute-2);
+  font-size: 12px;
+}
+
+/* ---------- 布局 ---------- */
+
+.account__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.account__col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.account-card {
+  padding: 32px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--canvas);
+}
+
+.account-card--side {
+  padding: 24px 24px 28px;
+}
+
+.account-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.account-card__head--compact {
+  padding-bottom: 16px;
+}
+
+.account-card__title {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.account-card__subtitle {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.account-card__desc {
+  margin-top: 4px;
+  color: var(--ink-mute);
+  font-size: 13px;
+}
+
+.account-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--canvas-soft);
+  color: var(--primary-container);
+}
+
+/* ---------- 改密表单 ---------- */
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.account-form__required {
+  margin-left: 3px;
+  color: var(--danger);
+}
+
+.account-pw {
+  position: relative;
+}
+
+.account-pw .field__input {
+  padding-right: 44px;
+  font-size: 15px;
+}
+
+.account-pw .field__input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.account-pw .field__input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.account-pw__toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-mute);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.account-pw__toggle:hover:not(:disabled) {
+  background: var(--canvas-soft);
+  color: var(--ink);
+}
+
+.account-pw__toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.account-pw__toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.account-rules {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--canvas-soft);
+}
+
+.account-rules__title {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink-mute);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.account-rules__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-rules__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-mute-2);
+  font-size: 12px;
+  transition: color 0.15s ease;
+}
+
+.account-rules__item--ok {
+  color: var(--good);
+}
+
+.account-rules__item--fail {
+  color: var(--danger);
+}
+
+.account-form__inline-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.account-form__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline);
+}
+
+.account-form__actions .btn {
+  padding: 11px 22px;
+}
+
+/* 设计稿里「重置输入」与主按钮同为胶囊形 */
+.account-form__clear.btn {
+  border-radius: 999px;
+  color: var(--ink-mute);
+}
+
+.account-form__clear.btn:hover:not(:disabled) {
+  background: var(--canvas-soft);
+  color: var(--ink);
+}
+
+/* ---------- 会话影响说明 ---------- */
+
+.account-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px 24px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--primary-faint);
+}
+
+.account-note > .icon {
+  margin-top: 1px;
+  color: var(--primary-container);
+}
+
+.account-note__title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.account-note__text {
+  margin-top: 4px;
+  color: var(--ink-mute);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---------- 管理员与会话状态 ---------- */
+
+.account-session {
+  display: flex;
+  flex-direction: column;
+  margin: 16px 0 0;
+}
+
+.account-session__item {
+  padding: 12px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.account-session__item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.account-session__item:last-child {
+  padding-bottom: 0;
+}
+
+.account-session dd {
+  margin: 0;
+}
+
+.account-session__label {
+  color: var(--ink-mute);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.account-session__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 15px;
+  word-break: break-all;
+}
+
+.account-session__user .icon {
+  color: var(--ink-mute-2);
+}
+
+.account-session__time {
+  margin-top: 4px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-session .account-session__remain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  background: var(--primary-faint);
+  color: var(--primary-container);
+  font-size: 12px;
+}
+
+.account-session .account-session__remain--expired {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.account-session__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--ink-mute-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.account-session__facts code {
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* ---------- 忘记密码（深色卡片） ---------- */
+
+.account-recovery {
+  padding: 24px 24px 28px;
+  border: 1px solid var(--ink-secondary);
+  border-radius: var(--r-xl);
+  background: var(--brand-dark);
+  color: #fff;
+}
+
+.account-recovery__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.account-recovery__head .icon {
+  color: var(--primary-tint);
+}
+
+.account-recovery__title {
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.account-recovery__lead,
+.account-recovery__alt {
+  margin-top: 14px;
+  color: var(--hairline);
+  font-size: 13px;
+}
+
+.account-recovery__alt {
+  margin-top: 12px;
+  color: rgba(227, 232, 238, 0.7);
+  font-size: 12px;
+}
+
+.account-recovery__cmd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--r);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.account-recovery__cmd code {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary-tint-dim);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.account-recovery__copy {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--hairline);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.account-recovery__copy:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.account-recovery__copy:focus-visible {
+  outline: 2px solid var(--primary-tint-dim);
+  outline-offset: 1px;
+}
+
+.account-recovery__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  list-style: none;
+  color: rgba(227, 232, 238, 0.85);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.account-recovery__notes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.account-recovery__notes .icon {
+  margin-top: 3px;
+  color: var(--primary-tint-dim);
+}
+
+.account-recovery__notes .account-recovery__ok {
+  color: var(--good-dot);
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 1023px) {
+  .account__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .account-card,
+  .account-card--side,
+  .account-recovery {
+    padding: 20px;
+    border-radius: var(--r-lg);
+  }
+
+  .account-note {
+    padding: 16px 20px;
+    border-radius: var(--r-lg);
+  }
+
+  .account-banner {
+    align-items: flex-start;
+    border-radius: var(--r);
+  }
+}

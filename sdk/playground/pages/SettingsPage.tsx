@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { adminApi, getErrorMessage, isAdminApiError } from '../api';
 import type { RuntimeSettings } from '../api';
+import { Icon } from '../components/Icon';
+import { useToast } from '../components/Toast';
+import type { ConsoleSection } from '../console/ConsoleView';
+import './SettingsPage.css';
 
 type Group = keyof RuntimeSettings;
 
@@ -16,13 +20,15 @@ interface FieldBase {
 }
 
 type Field =
-  | (FieldBase & { kind: 'number'; unit: string; min: number; max: number })
+  /** stepper：取值只有几档的字段用 −/+ 步进器加等级方块代替输入框 */
+  | (FieldBase & { kind: 'number'; unit: string; min: number; max: number; stepper?: boolean })
   | (FieldBase & { kind: 'bool' })
   | (FieldBase & { kind: 'mode' });
 
 interface GroupMeta {
   id: Group;
   title: string;
+  /** 分组标题后括号里的简介 */
   desc: string;
   fields: Field[];
 }
@@ -32,7 +38,7 @@ const GROUPS: GroupMeta[] = [
   {
     id: 'captcha',
     title: '验证码',
-    desc: '出题与校验的基本参数。',
+    desc: '出题与校验的基本参数',
     fields: [
       {
         key: 'defaultDifficulty',
@@ -42,6 +48,7 @@ const GROUPS: GroupMeta[] = [
         unit: '级',
         min: 1,
         max: 5,
+        stepper: true,
       },
       {
         key: 'expireSeconds',
@@ -117,7 +124,7 @@ const GROUPS: GroupMeta[] = [
   {
     id: 'pow',
     title: '工作量证明',
-    desc: '提交前在浏览器里计算的 SHA-256 难题，位数随难度提升。',
+    desc: '提交前在浏览器里计算的 SHA-256 难题，位数随难度提升',
     fields: [
       { key: 'enabled', kind: 'bool', label: '下发 PoW 挑战', desc: '是否下发工作量证明挑战。' },
       {
@@ -149,7 +156,7 @@ const GROUPS: GroupMeta[] = [
   {
     id: 'risk',
     title: '风控评分',
-    desc: '行为轨迹与环境信号评分。调整前先在「风控观察」里对照真人与脚本的原因分布。',
+    desc: '行为轨迹与环境信号评分',
     fields: [
       {
         key: 'enabled',
@@ -239,6 +246,56 @@ const GROUPS: GroupMeta[] = [
   },
 ];
 
+const GROUP_NUMERALS = ['一', '二', '三'];
+
+const MODE_OPTIONS = [
+  { value: 'enforce', hint: '按阈值拦截' },
+  { value: 'log', hint: '只记录分数' },
+] as const;
+
+/** 服务端的两条关联校验（backend/config/runtime.go）：上限一侧不能小于下限一侧 */
+const RELATIONS = [
+  {
+    group: 'pow',
+    title: '工作量证明',
+    upper: { key: 'maxDifficulty', label: '难度上限' },
+    lower: { key: 'difficulty', label: '基础难度' },
+    unit: '位',
+  },
+  {
+    group: 'risk',
+    title: '风控评分',
+    upper: { key: 'blockThreshold', label: '拦截阈值' },
+    lower: { key: 'escalateThreshold', label: '加难阈值' },
+    unit: '分',
+  },
+] as const;
+
+const INTEGER = /^-?\d+$/;
+
+/** 字段在接口里的路径，与服务端校验错误里的字段名一致（如 pow.maxDifficulty） */
+const fieldPath = (group: Group, field: Field) => `${group}.${field.key}`;
+
+/** 字段路径 → 界面名称，用来把服务端错误里的字段名换成「分组 · 名称」 */
+const FIELD_NAMES = new Map(
+  GROUPS.flatMap((group) =>
+    group.fields.map((field) => [fieldPath(group.id, field), `${group.title} · ${field.label}`]),
+  ),
+);
+
+/** 不同分组里重名的字段（两个「基础难度」），变更摘要里带上分组名区分 */
+const DUPLICATE_LABELS = (() => {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const field of GROUPS.flatMap((group) => group.fields)) {
+    if (seen.has(field.label)) {
+      duplicates.add(field.label);
+    }
+    seen.add(field.label);
+  }
+  return duplicates;
+})();
+
 function toForm(settings: RuntimeSettings): FormState {
   const form = {} as FormState;
   for (const group of GROUPS) {
@@ -261,7 +318,7 @@ function fromForm(form: FormState): RuntimeSettings | string {
       const value = form[group.id][field.key];
       if (field.kind === 'number') {
         const text = String(value).trim();
-        if (!/^-?\d+$/.test(text)) {
+        if (!INTEGER.test(text)) {
           return `「${group.title} · ${field.label}」请输入整数`;
         }
         out[group.id][field.key] = Number(text);
@@ -273,29 +330,126 @@ function fromForm(form: FormState): RuntimeSettings | string {
   return out as unknown as RuntimeSettings;
 }
 
-const formatDefault = (field: Field, value: number | boolean | string) => {
+/** 比较用的规范值：数字字段去掉空白与前导零（"03" 与 "3" 视为相同），其余原样 */
+function normalize(field: Field, value: FormValue): string {
+  if (field.kind !== 'number') {
+    return String(value);
+  }
+  const text = String(value).trim();
+  return INTEGER.test(text) ? String(Number(text)) : text;
+}
+
+/** 数字字段不是整数或超出取值范围：只用于标红提示，最终以服务端校验为准 */
+function isOutOfRange(field: Field, value: FormValue): boolean {
+  if (field.kind !== 'number') {
+    return false;
+  }
+  const text = String(value).trim();
+  if (!INTEGER.test(text)) {
+    return true;
+  }
+  const number = Number(text);
+  return number < field.min || number > field.max;
+}
+
+function formatValue(field: Field, value: FormValue): string {
   if (field.kind === 'bool') {
     return value ? '开启' : '关闭';
   }
-  if (field.kind === 'number' && field.unit) {
-    return `${value} ${field.unit}`;
+  const text = String(value).trim();
+  if (!text) {
+    return '（空）';
   }
-  return String(value);
+  return field.kind === 'number' && field.unit ? `${text} ${field.unit}` : text;
+}
+
+function formatRange(field: Field): string {
+  if (field.kind === 'bool') {
+    return '开启 / 关闭';
+  }
+  if (field.kind === 'mode') {
+    return 'enforce / log';
+  }
+  return `${field.min} - ${field.max}${field.unit ? ` ${field.unit}` : ''}`;
+}
+
+interface Change {
+  path: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+/** 逐项比较两份表单，返回有差异的字段（顺序与页面一致） */
+function diffForms(form: FormState, base: FormState): Change[] {
+  const changes: Change[] = [];
+  for (const group of GROUPS) {
+    for (const field of group.fields) {
+      const value = form[group.id][field.key];
+      const before = base[group.id][field.key];
+      if (normalize(field, value) !== normalize(field, before)) {
+        changes.push({
+          path: fieldPath(group.id, field),
+          label: DUPLICATE_LABELS.has(field.label)
+            ? `${group.title} · ${field.label}`
+            : field.label,
+          from: formatValue(field, before),
+          to: formatValue(field, value),
+        });
+      }
+    }
+  }
+  return changes;
+}
+
+/**
+ * 服务端校验错误每行一个字段、以字段路径开头（如「pow.maxDifficulty 不能小于 pow.difficulty（14）」）：
+ * 拆成多行、路径换成界面名称，并取出出错的字段用于标记对应行
+ */
+function parseSaveError(message: string): { lines: string[]; paths: Set<string> } {
+  const paths = new Set<string>();
+  const lines = message
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const head = /^[a-z]+\.[A-Za-z]+/.exec(line)?.[0];
+      if (head && FIELD_NAMES.has(head)) {
+        paths.add(head);
+      }
+      return line.replace(/\s?\b[a-z]+\.[A-Za-z]+\b\s?/g, (match) => {
+        const name = FIELD_NAMES.get(match.trim());
+        return name ? `「${name}」` : match;
+      });
+    });
+  return { lines, paths };
+}
+
+const readInt = (value: FormValue): number | null => {
+  const text = String(value).trim();
+  return INTEGER.test(text) ? Number(text) : null;
+};
+
+const formatRuleValue = (value: FormValue, unit: string) => {
+  const number = readInt(value);
+  return number === null ? '未填写' : `${number} ${unit}`;
 };
 
 interface SettingsPageProps {
   token: string;
   onSessionExpired: () => void;
+  hrefFor: (section: ConsoleSection) => string;
 }
 
-export function SettingsPage({ token, onSessionExpired }: SettingsPageProps) {
+export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageProps) {
+  const toast = useToast();
   const [saved, setSaved] = useState<RuntimeSettings | null>(null);
   const [defaults, setDefaults] = useState<RuntimeSettings | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleApiError = useCallback(
     (err: unknown, fallback: string): string | null => {
@@ -310,7 +464,7 @@ export function SettingsPage({ token, onSessionExpired }: SettingsPageProps) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const data = await adminApi.getSettings(token);
       setSaved(data.settings);
@@ -319,7 +473,7 @@ export function SettingsPage({ token, onSessionExpired }: SettingsPageProps) {
     } catch (err) {
       const message = handleApiError(err, '加载策略配置失败');
       if (message) {
-        setError(message);
+        setLoadError(message);
       }
     } finally {
       setLoading(false);
@@ -330,21 +484,37 @@ export function SettingsPage({ token, onSessionExpired }: SettingsPageProps) {
     void load();
   }, [load]);
 
-  const dirty = useMemo(
-    () => !!form && !!saved && JSON.stringify(form) !== JSON.stringify(toForm(saved)),
-    [form, saved],
+  const savedForm = useMemo(() => (saved ? toForm(saved) : null), [saved]);
+  const defaultForm = useMemo(() => (defaults ? toForm(defaults) : null), [defaults]);
+
+  const changes = useMemo(
+    () => (form && savedForm ? diffForms(form, savedForm) : []),
+    [form, savedForm],
   );
+  const dirty = changes.length > 0;
+  const atDefaults = useMemo(
+    () => !!form && !!defaultForm && diffForms(form, defaultForm).length === 0,
+    [form, defaultForm],
+  );
+  const saveErrorView = useMemo(() => (saveError ? parseSaveError(saveError) : null), [saveError]);
 
   const update = (group: Group, key: string, value: FormValue) => {
-    setNotice(null);
+    setSaveError(null);
     setForm((prev) => (prev ? { ...prev, [group]: { ...prev[group], [key]: value } } : prev));
   };
 
   const handleReset = () => {
-    if (defaults) {
-      setNotice(null);
-      setError(null);
-      setForm(toForm(defaults));
+    if (defaultForm) {
+      setSaveError(null);
+      setForm(defaultForm);
+      toast('已填入默认值，保存后生效', 'info');
+    }
+  };
+
+  const handleDiscard = () => {
+    if (savedForm) {
+      setSaveError(null);
+      setForm(savedForm);
     }
   };
 
@@ -355,149 +525,444 @@ export function SettingsPage({ token, onSessionExpired }: SettingsPageProps) {
     }
     const next = fromForm(form);
     if (typeof next === 'string') {
-      setError(next);
+      setSaveError(next);
       return;
     }
     setSaving(true);
-    setError(null);
-    setNotice(null);
+    setSaveError(null);
     try {
       const result = await adminApi.updateSettings(token, next);
       setSaved(result.settings);
       setForm(toForm(result.settings));
-      setNotice('已保存并生效');
+      toast('已保存并生效');
     } catch (err) {
       const message = handleApiError(err, '保存失败');
       if (message) {
-        setError(message);
+        setSaveError(message);
       }
     } finally {
       setSaving(false);
     }
   };
 
+  if (!form || !savedForm || !defaultForm) {
+    return (
+      <div className="page settings">
+        <SettingsHead />
+        {loading ? (
+          <div className="page-status">
+            <Icon name="spinner" className="spin" /> 正在加载策略配置…
+          </div>
+        ) : (
+          <div className="panel settings__failed">
+            <div className="alert alert--error" role="alert">
+              <Icon name="error" size={16} />
+              <span>{loadError ?? '加载策略配置失败'}</span>
+            </div>
+            <button type="button" className="btn" onClick={() => void load()}>
+              <Icon name="refresh" size={16} />
+              重新加载
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <section className="settings">
-      <div className="images__head">
-        <div>
-          <p className="eyebrow">Strategy</p>
-          <h1>策略配置</h1>
-          <p className="muted">
-            验证码、工作量证明与风控评分的参数。保存后下一次出题即生效，无需重启；只保存当前值，不记录修改历史。
-          </p>
+    <form className="page settings" onSubmit={handleSubmit} noValidate>
+      <SettingsHead dirtyCount={changes.length}>
+        <button
+          type="button"
+          className="btn"
+          onClick={handleReset}
+          disabled={saving || atDefaults}
+          title={atDefaults ? '当前已全部是默认值' : undefined}
+        >
+          <Icon name="refresh" size={16} />
+          恢复全部默认值
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={!dirty || saving}>
+          <Icon name="check" size={16} />
+          保存并生效
+        </button>
+      </SettingsHead>
+
+      <div className="settings__hints">
+        <div className="settings-hint">
+          <span className="settings-hint__icon">
+            <Icon name="shield" size={16} />
+          </span>
+          <div className="settings-hint__body">
+            <p className="settings-hint__title">参数关联校验规则</p>
+            <ul className="settings-hint__list">
+              {RELATIONS.map((rule) => {
+                const values = form[rule.group];
+                const upper = readInt(values[rule.upper.key]);
+                const lower = readInt(values[rule.lower.key]);
+                const broken = upper !== null && lower !== null && upper < lower;
+                return (
+                  <li
+                    key={rule.group}
+                    className={broken ? 'settings-hint__rule--broken' : undefined}
+                  >
+                    {rule.title}：<strong>{rule.upper.label}</strong>（当前{' '}
+                    {formatRuleValue(values[rule.upper.key], rule.unit)}）不能小于{' '}
+                    <strong>{rule.lower.label}</strong>（当前{' '}
+                    {formatRuleValue(values[rule.lower.key], rule.unit)}）
+                    {broken && <span className="settings-hint__flag">· 当前不满足</span>}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="settings-hint__foot">不满足时服务端拒绝保存。</p>
+          </div>
+        </div>
+
+        <div className="settings-hint settings-hint--link">
+          <div className="settings-hint__body">
+            <p className="settings-hint__title">
+              <Icon name="activity" size={16} className="settings-hint__accent" />
+              对照实际风险分布
+            </p>
+            <p className="settings-hint__text">
+              调整前建议先去「风控观察」对照真人与脚本的原因分布。
+            </p>
+          </div>
+          <a className="btn btn--sm settings-hint__go" href={hrefFor('risk')}>
+            去观察
+            <Icon name="arrow-right" size={14} />
+          </a>
         </div>
       </div>
 
-      {loading && !form && <div className="page-status">正在加载…</div>}
-
-      {form && defaults && (
-        <form className="settings__form" onSubmit={handleSubmit} noValidate>
-          {GROUPS.map((group) => (
-            <fieldset key={group.id} className="card settings__group" disabled={saving}>
-              <legend className="settings__legend">{group.title}</legend>
-              <p className="muted settings__group-desc">{group.desc}</p>
-              <div className="settings__rows">
-                {group.fields.map((field) => {
-                  const id = `setting-${group.id}-${field.key}`;
-                  const value = form[group.id][field.key];
-                  const defaultValue = (
-                    defaults[group.id] as unknown as Record<string, number | boolean | string>
-                  )[field.key];
-                  return (
-                    <div key={field.key} className="settings__row">
-                      <div className="settings__text">
-                        <label className="settings__label" htmlFor={id}>
-                          {field.label}
-                        </label>
-                        <p className="settings__desc">{field.desc}</p>
-                      </div>
-                      <div className="settings__control">
-                        {field.kind === 'number' && (
-                          <span className="settings__number">
-                            <input
-                              id={id}
-                              className="field__input settings__input"
-                              type="number"
-                              inputMode="numeric"
-                              min={field.min}
-                              max={field.max}
-                              step={1}
-                              value={String(value)}
-                              onChange={(e) => update(group.id, field.key, e.target.value)}
-                            />
-                            {field.unit && <span className="settings__unit">{field.unit}</span>}
-                          </span>
-                        )}
-                        {field.kind === 'bool' && (
-                          <label className="settings__switch">
-                            <input
-                              id={id}
-                              type="checkbox"
-                              checked={value === true}
-                              onChange={(e) => update(group.id, field.key, e.target.checked)}
-                            />
-                            <span>{value === true ? '开启' : '关闭'}</span>
-                          </label>
-                        )}
-                        {field.kind === 'mode' && (
-                          <select
-                            id={id}
-                            className="field__input settings__input"
-                            value={String(value)}
-                            onChange={(e) => update(group.id, field.key, e.target.value)}
-                          >
-                            <option value="enforce">enforce · 拦截</option>
-                            <option value="log">log · 只记录</option>
-                          </select>
-                        )}
-                        <span className="settings__default">
-                          默认 {formatDefault(field, defaultValue)}
-                          {field.kind === 'number' && ` · 范围 ${field.min}～${field.max}`}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </fieldset>
-          ))}
-
-          <div className="card settings__actions">
-            <div className="settings__status">
-              {error && (
-                <div className="alert alert--error" role="alert">
-                  {error}
-                </div>
-              )}
-              {notice && !error && (
-                <div className="alert alert--success" role="status">
-                  {notice}
-                </div>
-              )}
-              {!error && !notice && (
-                <span className="muted">{dirty ? '有未保存的修改' : '当前没有修改'}</span>
-              )}
+      {/* 保存期间整体禁用，避免提交中途改动 */}
+      <fieldset className="settings__groups" disabled={saving}>
+        {GROUPS.map((group, index) => (
+          <section
+            key={group.id}
+            className="settings-group"
+            aria-labelledby={`settings-${group.id}`}
+          >
+            <header className="settings-group__head">
+              <span className={`settings-group__dot settings-group__dot--${group.id}`} />
+              <h2 className="settings-group__title" id={`settings-${group.id}`}>
+                {GROUP_NUMERALS[index]}、{group.title}（{group.desc}）
+              </h2>
+              <span className="settings-group__count">共 {group.fields.length} 项参数</span>
+            </header>
+            <div className="settings-group__rows">
+              {group.fields.map((field) => {
+                const path = fieldPath(group.id, field);
+                const value = form[group.id][field.key];
+                return (
+                  <SettingRow
+                    key={field.key}
+                    id={`setting-${group.id}-${field.key}`}
+                    field={field}
+                    value={value}
+                    defaultValue={defaultForm[group.id][field.key]}
+                    changed={
+                      normalize(field, value) !== normalize(field, savedForm[group.id][field.key])
+                    }
+                    serverError={!!saveErrorView?.paths.has(path)}
+                    onChange={(next) => update(group.id, field.key, next)}
+                  />
+                );
+              })}
             </div>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={handleReset}
-              disabled={saving}
-            >
-              恢复全部默认值
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={!dirty || saving}>
-              {saving ? '保存中…' : '保存'}
-            </button>
-          </div>
-        </form>
-      )}
+          </section>
+        ))}
+      </fieldset>
 
-      {!form && error && (
-        <div className="alert alert--error" role="alert">
-          {error}
-        </div>
+      {dirty && (
+        <section className="settings-bar" aria-label="未保存的修改">
+          {saveErrorView && (
+            <div className="alert alert--error settings-bar__error" role="alert">
+              <Icon name="error" size={16} />
+              <div>
+                <p className="settings-bar__error-title">保存失败，已保存的配置未改变</p>
+                <ul className="settings-bar__error-list">
+                  {saveErrorView.lines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          <div className="settings-bar__main">
+            <div className="settings-bar__summary">
+              <span className="settings-bar__icon">
+                <Icon name="warning" size={16} />
+              </span>
+              <div className="settings-bar__text">
+                <p className="settings-bar__title">存在 {changes.length} 项未保存修改</p>
+                <ul className="settings-bar__changes">
+                  {changes.map((change) => (
+                    <li key={change.path}>
+                      {change.label}：{change.from} →{' '}
+                      <span className="settings-bar__to">{change.to}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="settings-bar__actions">
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={handleDiscard}
+                disabled={saving}
+              >
+                放弃未保存修改
+              </button>
+              <button type="submit" className="btn btn--primary" disabled={saving}>
+                <Icon
+                  name={saving ? 'spinner' : 'check'}
+                  size={16}
+                  className={saving ? 'spin' : undefined}
+                />
+                {saving ? '保存中…' : '保存并立即生效'}
+              </button>
+            </div>
+          </div>
+        </section>
       )}
-    </section>
+    </form>
+  );
+}
+
+interface SettingsHeadProps {
+  /** 有修改时显示「有未保存的修改」；加载前不传 */
+  dirtyCount?: number;
+  children?: ReactNode;
+}
+
+function SettingsHead({ dirtyCount = 0, children }: SettingsHeadProps) {
+  return (
+    <header className="page-head settings__head">
+      <div>
+        <div className="page-head__title">
+          <h1 className="page-title">策略配置</h1>
+          {dirtyCount > 0 && (
+            <span className="chip chip--warn">
+              <span className="chip__dot settings__pulse" />
+              有未保存的修改（{dirtyCount} 项）
+            </span>
+          )}
+          <span className="settings__note">保存后下一次出题即生效，无需重启</span>
+        </div>
+        <p className="page-desc">
+          配置验证码出题、工作量证明难题与风控评分参数。只保存当前值，不记录修改历史。
+        </p>
+      </div>
+      {children && <div className="page-head__actions">{children}</div>}
+    </header>
+  );
+}
+
+interface SettingRowProps {
+  id: string;
+  field: Field;
+  value: FormValue;
+  defaultValue: FormValue;
+  /** 与已保存的值不同 */
+  changed: boolean;
+  /** 服务端校验错误里点名了该字段 */
+  serverError: boolean;
+  onChange: (value: FormValue) => void;
+}
+
+function SettingRow({
+  id,
+  field,
+  value,
+  defaultValue,
+  changed,
+  serverError,
+  onChange,
+}: SettingRowProps) {
+  const isDefault = normalize(field, value) === normalize(field, defaultValue);
+  const labelId = `${id}-label`;
+  const className = [
+    'settings-row',
+    changed && 'settings-row--dirty',
+    serverError && 'settings-row--error',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <div className={className}>
+      <div className="settings-row__text">
+        <div className="settings-row__title">
+          {/* 运行模式是一组单选，用 aria-labelledby 关联；其余字段用 label 关联到控件 */}
+          {field.kind === 'mode' ? (
+            <span className="settings-row__label" id={labelId}>
+              {field.label}
+            </span>
+          ) : (
+            <label className="settings-row__label" id={labelId} htmlFor={id}>
+              {field.label}
+            </label>
+          )}
+          {changed && <span className="chip chip--warn">已修改未保存</span>}
+          {serverError && <span className="chip chip--danger">未通过校验</span>}
+        </div>
+        <p className="settings-row__desc">{field.desc}</p>
+        <p className="settings-row__meta">
+          <span>
+            默认值：<strong>{formatValue(field, defaultValue)}</strong>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            取值范围：<strong>{formatRange(field)}</strong>
+          </span>
+        </p>
+      </div>
+
+      <div className="settings-row__control">
+        {field.kind === 'number' && field.stepper && (
+          <LevelStepper id={id} field={field} value={value} onChange={onChange} />
+        )}
+        {field.kind === 'number' && !field.stepper && (
+          <span
+            className={`settings-num${isOutOfRange(field, value) ? ' settings-num--invalid' : ''}`}
+          >
+            <input
+              id={id}
+              className="settings-num__input"
+              type="number"
+              inputMode="numeric"
+              min={field.min}
+              max={field.max}
+              step={1}
+              value={String(value)}
+              aria-invalid={isOutOfRange(field, value) || undefined}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            {field.unit && <span className="settings-num__unit">{field.unit}</span>}
+          </span>
+        )}
+        {field.kind === 'bool' && (
+          <label className="settings-switch">
+            <input
+              id={id}
+              className="settings-switch__input"
+              type="checkbox"
+              role="switch"
+              aria-checked={value === true}
+              checked={value === true}
+              onChange={(e) => onChange(e.target.checked)}
+            />
+            <span className="settings-switch__track" aria-hidden="true">
+              <span className="settings-switch__thumb" />
+            </span>
+            <span className="settings-switch__text">{value === true ? '开启' : '关闭'}</span>
+          </label>
+        )}
+        {field.kind === 'mode' && (
+          <div className="settings-seg" role="radiogroup" aria-labelledby={labelId}>
+            {MODE_OPTIONS.map((option) => {
+              const checked = value === option.value;
+              return (
+                <label
+                  key={option.value}
+                  className={`settings-seg__opt${checked ? ' settings-seg__opt--active' : ''}`}
+                >
+                  <input
+                    className="settings-seg__input"
+                    type="radio"
+                    name={id}
+                    value={option.value}
+                    checked={checked}
+                    onChange={() => onChange(option.value)}
+                  />
+                  {option.value}（{option.hint}）
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <span className="settings-row__default">
+          {isDefault && <span className="chip chip--good">默认</span>}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+interface LevelStepperProps {
+  id: string;
+  field: Extract<Field, { kind: 'number' }>;
+  value: FormValue;
+  onChange: (value: FormValue) => void;
+}
+
+/** 等级步进器：−/+ 逐级调整，右侧方块可直接点选等级 */
+function LevelStepper({ id, field, value, onChange }: LevelStepperProps) {
+  const parsed = readInt(value);
+  const level = parsed === null ? field.min : Math.min(field.max, Math.max(field.min, parsed));
+  const levels = Array.from({ length: field.max - field.min + 1 }, (_, i) => field.min + i);
+
+  return (
+    <>
+      <span className="settings-stepper">
+        <button
+          type="button"
+          className="settings-stepper__btn"
+          aria-label="降低一级"
+          disabled={level <= field.min}
+          onClick={() => onChange(String(level - 1))}
+        >
+          <MinusIcon />
+        </button>
+        <output id={id} className="settings-stepper__value" aria-live="polite">
+          <strong>{level}</strong> {field.unit}
+        </output>
+        <button
+          type="button"
+          className="settings-stepper__btn"
+          aria-label="提高一级"
+          disabled={level >= field.max}
+          onClick={() => onChange(String(level + 1))}
+        >
+          <Icon name="plus" size={14} />
+        </button>
+      </span>
+      <span className="settings-levels">
+        {levels.map((n) => (
+          <button
+            key={n}
+            type="button"
+            className={`settings-level${n < level ? ' settings-level--on' : ''}${n === level ? ' settings-level--current' : ''}`}
+            aria-label={`设为 ${n} ${field.unit}`}
+            aria-pressed={n === level}
+            onClick={() => onChange(String(n))}
+          >
+            {n}
+          </button>
+        ))}
+      </span>
+    </>
+  );
+}
+
+/** 共享图标里没有减号，步进器就地画一个，线宽与 Icon 一致 */
+function MinusIcon() {
+  return (
+    <svg
+      className="icon"
+      viewBox="0 0 24 24"
+      width={14}
+      height={14}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12h14" />
+    </svg>
   );
 }

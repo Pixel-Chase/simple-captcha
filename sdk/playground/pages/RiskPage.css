@@ -1,0 +1,1023 @@
+/* 风控观察页：页头 / 筛选面板 / 记录表格与展开字段 / 分页 / 页底说明 */
+
+/* ---------- 页头 ---------- */
+
+.risk__head {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.risk__intro {
+  min-width: 0;
+}
+
+.risk .risk__actions {
+  gap: 12px;
+}
+
+.risk .risk__refresh {
+  padding: 7px 14px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+}
+
+.risk .risk__refresh .icon {
+  color: var(--primary);
+}
+
+.risk__meta {
+  padding-left: 12px;
+  border-left: 1px solid var(--hairline);
+  color: var(--ink-mute-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.risk .risk__alert {
+  align-items: center;
+}
+
+.risk__alert-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- 胶囊分段选择 ---------- */
+
+.risk-seg {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--canvas);
+  font-size: 13px;
+}
+
+.risk-seg__prefix {
+  padding: 0 8px;
+  color: var(--ink-mute-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.risk-seg__btn {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-mute);
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.risk-seg__btn:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.risk-seg__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.risk-seg__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.risk-seg--primary .risk-seg__btn--active,
+.risk-seg--primary .risk-seg__btn--active:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+}
+
+.risk-seg--dark .risk-seg__btn--active,
+.risk-seg--dark .risk-seg__btn--active:hover:not(:disabled) {
+  background: var(--ink);
+  color: #fff;
+}
+
+.risk-seg--soft {
+  background: var(--canvas-soft);
+}
+
+.risk-seg--soft .risk-seg__btn {
+  padding: 4px 10px;
+}
+
+.risk-seg--soft .risk-seg__btn--active {
+  background: var(--canvas);
+  color: var(--primary);
+  font-weight: 500;
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    var(--shadow-sm);
+}
+
+/* ---------- 筛选面板 ---------- */
+
+.risk-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--canvas-soft);
+}
+
+.risk-filter__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.risk-filter__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.risk-filter__hit {
+  color: var(--ink-mute);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.risk-filter__hit strong {
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-select {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.risk-select select {
+  max-width: 260px;
+  padding: 6px 32px 6px 12px;
+  border: 1px solid var(--hairline-input);
+  border-radius: 999px;
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  appearance: none;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.risk-select select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.risk-select--mono select {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.risk-select__icon {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--ink-mute);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.risk-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(227, 232, 238, 0.8);
+}
+
+.risk-summary__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.risk-summary__item--end {
+  margin-left: auto;
+}
+
+.risk-summary__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.risk-summary__dot--issue {
+  background: var(--primary-soft);
+}
+
+.risk-summary__dot--verify {
+  background: var(--brand-dark);
+}
+
+.risk-summary__dot--pass {
+  background: var(--good-dot);
+}
+
+.risk-summary__label {
+  color: var(--ink-mute);
+  font-size: 13px;
+}
+
+.risk-summary__value {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-summary__slash {
+  margin: 0 4px;
+  color: var(--ink-mute);
+  font-weight: 400;
+}
+
+.risk-summary__fail {
+  color: var(--danger);
+}
+
+.risk-rate {
+  padding: 2px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-rate--bad {
+  border-color: transparent;
+  background: var(--danger-line);
+  color: var(--danger-ink);
+}
+
+/* ---------- 记录区 ---------- */
+
+.risk__records {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.risk__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.risk__section-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.risk__section-sub {
+  color: var(--ink-mute);
+  font-size: 13px;
+}
+
+.risk__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+/* 表格容器：圆角卡片，表格在内部横向滚动；同时作为展开字段的尺寸容器 */
+.risk-board {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--canvas);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.risk-board__scroll {
+  overflow-x: auto;
+  container-type: inline-size;
+  transition: opacity 0.15s ease;
+}
+
+.risk-board--loading .risk-board__scroll {
+  opacity: 0.6;
+}
+
+.risk-table {
+  min-width: 1080px;
+}
+
+.risk-row td {
+  white-space: nowrap;
+}
+
+.risk .risk-table td {
+  padding: 14px 16px;
+}
+
+.risk-row td.risk-row__reasons {
+  white-space: normal;
+}
+
+.risk-table__action {
+  text-align: right;
+}
+
+.risk .risk-row--expanded,
+.risk .risk-row--expanded:hover {
+  background: rgba(57, 4, 231, 0.05);
+}
+
+.risk-row--expanded td:first-child {
+  box-shadow: inset 4px 0 0 var(--primary);
+}
+
+.risk-row__time {
+  color: var(--ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk .risk-stage {
+  gap: 4px;
+  padding: 2px 10px;
+  font-weight: 500;
+}
+
+.risk-stage.chip--primary {
+  border-color: var(--primary-tint-dim);
+}
+
+.risk-app {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.risk-app__name {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.risk-app__id {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.risk-app--deleted .risk-app__name {
+  color: var(--ink-mute);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.risk-app--deleted .risk-app__id {
+  color: var(--ink-mute-2);
+}
+
+.risk-type {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  background: var(--primary-faint);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.risk-score {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.risk-score__main {
+  color: var(--ink);
+}
+
+.risk-score__num,
+.risk-score__plain {
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-score__num {
+  font-weight: 500;
+}
+
+.risk-score__num--primary {
+  color: var(--primary);
+}
+
+.risk-score__num--good {
+  color: var(--good);
+}
+
+.risk-score__num--bad {
+  color: var(--danger);
+}
+
+.risk-score__sub {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.risk-score__sep {
+  margin: 0 6px;
+  color: var(--hairline-input);
+}
+
+.risk-score__note {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.risk-score__note .risk-score__plain {
+  color: var(--ink);
+}
+
+.risk-score__result {
+  font-weight: 500;
+}
+
+.risk-score__result--pass {
+  color: var(--good);
+}
+
+.risk-score__result--fail {
+  color: var(--danger);
+}
+
+.risk-reasons,
+.risk-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.risk-reasons {
+  max-width: 300px;
+}
+
+.risk-reason {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.risk-reason--issue {
+  background: var(--primary-tint);
+  color: var(--primary);
+}
+
+.risk-reason--fail {
+  background: rgba(186, 26, 26, 0.1);
+  color: var(--danger);
+}
+
+.risk-reason--neutral {
+  border: 1px solid var(--hairline);
+  background: var(--canvas-soft);
+  color: var(--ink-secondary);
+}
+
+.risk-reasons__more {
+  align-self: center;
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.risk-none {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.risk-none__icon {
+  color: var(--good-dot);
+}
+
+.risk-client {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-client__ua {
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--ink-mute-2);
+  text-overflow: ellipsis;
+}
+
+.risk .risk-toggle {
+  gap: 2px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.risk .risk-toggle--active,
+.risk .risk-toggle--active:hover {
+  border-color: transparent;
+  background: var(--primary);
+  color: #fff;
+}
+
+.risk .risk-toggle--active:active:not(:disabled) {
+  background: var(--primary-press);
+}
+
+.risk .risk-toggle .icon {
+  color: inherit;
+}
+
+/* ---------- 展开行：完整字段 ---------- */
+
+.risk .risk-detail-row > td {
+  padding: 16px;
+  background: rgba(246, 242, 255, 0.6);
+}
+
+.risk .risk-detail-row:hover {
+  background: transparent;
+}
+
+/* 宽度跟随可见的滚动区域并贴住左侧，窄屏横向滚动表格时字段卡片不随之滑出视野 */
+.risk-detail {
+  position: sticky;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: calc(100cqw - 32px);
+  padding: 16px 24px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--canvas);
+  box-shadow: var(--shadow-sm);
+  white-space: normal;
+}
+
+.risk-detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.risk-detail__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.risk-detail__icon {
+  color: var(--primary);
+}
+
+.risk-detail__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.risk .risk-detail__copy,
+.risk .risk-detail__close {
+  border-radius: 999px;
+}
+
+.risk-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.risk-group {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: rgba(246, 249, 252, 0.8);
+  font-size: 13px;
+}
+
+.risk-group__title {
+  margin-bottom: 6px;
+  color: var(--ink-mute-2);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.risk-group__list {
+  margin: 0;
+}
+
+.risk-group__list--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  column-gap: 24px;
+}
+
+.risk-field {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(227, 232, 238, 0.6);
+}
+
+.risk-group__list:not(.risk-group__list--grid) .risk-field:last-child {
+  border-bottom: 0;
+}
+
+.risk-field__label {
+  flex-shrink: 0;
+  max-width: 50%;
+  color: var(--ink-mute);
+}
+
+.risk-field__hint {
+  display: block;
+  color: var(--ink-mute-2);
+  font-size: 11px;
+}
+
+.risk-field__value {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.risk-field__value.mono {
+  font-size: 12px;
+}
+
+.risk-field__empty {
+  color: var(--ink-mute);
+}
+
+.risk-field__aside {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.risk-field--block {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.risk-group__list--grid .risk-field--block {
+  grid-column: 1 / -1;
+}
+
+.risk-field--block .risk-field__label {
+  max-width: none;
+}
+
+.risk-field--block .risk-field__value {
+  width: 100%;
+  text-align: left;
+}
+
+.risk-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-result {
+  padding: 1px 8px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.risk-result--pass {
+  background: var(--good-bg);
+  color: var(--good);
+}
+
+.risk-result--fail {
+  background: var(--danger-line);
+  color: var(--danger-ink);
+}
+
+.risk-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.risk-lines__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--canvas);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.risk-lines__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.risk-lines__name--issue {
+  color: var(--primary);
+}
+
+.risk-lines__name--fail {
+  color: var(--danger);
+}
+
+.risk-lines__name--neutral {
+  color: var(--ink-secondary);
+}
+
+.risk-lines__weight {
+  flex-shrink: 0;
+  color: var(--ink-mute);
+}
+
+.risk-json {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* 对象类额外字段（如轨迹特征）：键值网格 */
+.risk-kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 2px 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.risk-kv__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.risk-kv__key {
+  color: var(--ink-mute);
+  overflow-wrap: anywhere;
+}
+
+.risk-kv__value {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 分页 ---------- */
+
+.risk-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--hairline);
+  background: var(--canvas-soft);
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.risk-pager__pages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.risk-pager__btn {
+  min-width: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.risk-pager__btn:hover:not(:disabled) {
+  background: var(--canvas-soft);
+  color: var(--primary);
+}
+
+.risk-pager__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.risk-pager__btn:disabled {
+  color: var(--ink-mute);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.risk-pager__btn--current,
+.risk-pager__btn--current:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--primary);
+  color: #fff;
+}
+
+.risk-pager__gap {
+  padding: 0 4px;
+}
+
+/* ---------- 空状态 ---------- */
+
+.risk-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.risk-empty__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--primary-tint);
+  color: var(--primary);
+}
+
+.risk-empty__title {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.risk-empty__desc {
+  max-width: 480px;
+  color: var(--ink-mute);
+  font-size: 13px;
+}
+
+.risk-empty__desc a {
+  margin: 0 2px;
+  color: var(--primary);
+}
+
+.risk .risk-empty__action {
+  margin-top: 8px;
+  border-radius: 999px;
+}
+
+/* ---------- 页底说明 ---------- */
+
+.risk-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 24px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--canvas-soft);
+  color: var(--ink-mute);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.risk-notice__icon {
+  margin-top: 2px;
+  color: var(--primary);
+}
+
+.risk-notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.risk-notice__text strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.risk-notice__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.risk-notice__link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- 窄屏 ---------- */
+
+@media (max-width: 720px) {
+  .risk__meta {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .risk-filter,
+  .risk-board,
+  .risk-notice,
+  .risk-detail {
+    border-radius: var(--r-lg);
+  }
+
+  .risk-filter,
+  .risk-notice {
+    padding: 16px;
+  }
+
+  .risk-summary {
+    gap: 8px 20px;
+  }
+
+  .risk-summary__item--end {
+    margin-left: 0;
+  }
+
+  .risk-select select {
+    max-width: 100%;
+  }
+
+  .risk-detail {
+    padding: 16px;
+  }
+
+  .risk-pager {
+    padding: 12px 16px;
+  }
+}

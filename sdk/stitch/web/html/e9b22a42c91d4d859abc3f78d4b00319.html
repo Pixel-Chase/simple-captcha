@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>概览 - simple-captcha 自托管管理后台</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter,+sans-serif:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Configuration -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-secondary-container": "#494b83",
+            "tertiary": "#862a00",
+            "on-background": "#1b1a25",
+            "secondary-container": "#bdbefe",
+            "ink-secondary": "#273951",
+            "tertiary-fixed-dim": "#ffb59b",
+            "on-tertiary-fixed-variant": "#812800",
+            "error": "#ba1a1a",
+            "surface-container": "#f0ecfb",
+            "outline": "#777588",
+            "on-secondary-fixed": "#12144b",
+            "on-error": "#ffffff",
+            "primary-soft": "#665efd",
+            "tertiary-container": "#ae3900",
+            "surface": "#fcf8ff",
+            "background": "#fcf8ff",
+            "on-primary-fixed-variant": "#3600e1",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "surface-container-highest": "#e4e0ef",
+            "primary-fixed-dim": "#c5c0ff",
+            "on-primary-fixed": "#130067",
+            "primary-press": "#2e2b8c",
+            "on-secondary": "#ffffff",
+            "primary-deep": "#4434d4",
+            "on-primary": "#ffffff",
+            "surface-bright": "#fcf8ff",
+            "hairline-input": "#a8c3de",
+            "tertiary-fixed": "#ffdbcf",
+            "brand-dark-900": "#1c1e54",
+            "secondary": "#575992",
+            "on-tertiary-container": "#ffd3c5",
+            "primary-fixed": "#e3dfff",
+            "on-secondary-fixed-variant": "#3f4178",
+            "on-primary-container": "#ddd9ff",
+            "canvas": "#ffffff",
+            "error-container": "#ffdad6",
+            "surface-container-low": "#f6f2ff",
+            "surface-container-lowest": "#ffffff",
+            "outline-variant": "#c8c4da",
+            "secondary-fixed-dim": "#c0c1ff",
+            "secondary-fixed": "#e1e0ff",
+            "primary": "#3904e7",
+            "inverse-primary": "#c5c0ff",
+            "on-error-container": "#93000a",
+            "ink-mute": "#64748d",
+            "inverse-on-surface": "#f3eefe",
+            "canvas-cream": "#f5e9d4",
+            "ink": "#0d253d",
+            "on-surface-variant": "#474556",
+            "surface-variant": "#e4e0ef",
+            "surface-tint": "#5036fa",
+            "on-surface": "#1b1a25",
+            "on-tertiary": "#ffffff",
+            "inverse-surface": "#302f3a",
+            "on-tertiary-fixed": "#380d00",
+            "ink-mute-2": "#61718a",
+            "surface-dim": "#dcd8e7",
+            "primary-container": "#533afd",
+            "surface-container-high": "#eae6f5",
+            "canvas-soft": "#f6f9fc",
+            "hairline": "#e3e8ee"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-huge": "64px",
+            "margin": "24px",
+            "space-xl": "24px",
+            "space-md": "12px",
+            "space-xxs": "2px",
+            "space-xs": "4px",
+            "space-xxl": "32px",
+            "space-sm": "8px",
+            "space-lg": "16px",
+            "gutter": "16px"
+          },
+          "fontFamily": {
+            "micro-cap": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""],
+            "body-md": ["\"Inter, sans-serif\""],
+            "body-lg": ["\"Inter, sans-serif\""],
+            "heading-sm": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""],
+            "button-sm": ["\"Inter, sans-serif\""],
+            "display-xl": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "display-xxl": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "button-md": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }]
+          }
+        },
+      },
+    }
+  </script>
+</head>
+<body class="bg-canvas-soft text-on-surface antialiased min-h-screen flex flex-col font-body-md text-body-md selection:bg-primary-fixed selection:text-primary">
+<!-- TopNavBar (Shared Component) -->
+<header class="bg-canvas dark:bg-brand-dark-900 border-b border-hairline dark:border-ink-secondary docked full-width top-0 z-50">
+<div class="flex justify-between items-center w-full px-space-xl h-16 max-w-7xl mx-auto">
+<!-- Logo + Tag -->
+<div class="flex items-center space-x-space-md">
+<a class="text-heading-md font-heading-md tracking-tight font-normal text-ink dark:text-canvas flex items-center space-x-2" href="#">
+<span>simple-captcha</span>
+</a>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-micro font-micro bg-surface-container text-ink-mute border border-hairline">
+          自托管服务
+        </span>
+</div>
+<!-- Navigation Links -->
+<nav class="hidden md:flex items-center space-x-6 text-body-md font-body-md pt-4">
+<!-- 概览 (Active) -->
+<a class="text-primary dark:text-primary-soft font-normal border-b-2 border-primary dark:border-primary-soft pb-4" href="#">概览</a>
+<!-- 接入应用 (Inactive) -->
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors" href="#">接入应用</a>
+<!-- 风控观察 (Inactive) -->
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors" href="#">风控观察</a>
+<!-- 策略配置 (Inactive) -->
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors" href="#">策略配置</a>
+<!-- 背景图 (Inactive) -->
+<a class="text-ink-mute dark:text-hairline hover:text-ink dark:hover:text-canvas pb-4 transition-colors" href="#">背景图</a>
+</nav>
+<!-- Trailing Identity & Menu -->
+<div class="flex items-center space-x-space-md">
+<div class="flex items-center space-x-2 pl-3 border-l border-hairline">
+<div class="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-caption text-caption">
+<span class="material-symbols-outlined text-[16px]">security</span>
+</div>
+<span class="text-caption font-caption text-ink font-medium">admin</span>
+<span class="material-symbols-outlined text-ink-mute text-body-tabular cursor-pointer hover:text-ink transition-colors">expand_more</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Container -->
+<main class="flex-1 max-w-7xl w-full mx-auto px-space-xl py-space-xl space-y-space-xl">
+<!-- 1. 页面标题区 -->
+<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-space-md bg-canvas rounded-xl p-space-xl border border-hairline">
+<div>
+<div class="flex items-center gap-space-sm">
+<h1 class="text-heading-lg font-heading-lg text-ink font-normal tracking-tight">系统概览</h1>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-micro font-micro bg-surface-container text-ink-secondary border border-hairline">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+            本地节点运行中
+          </span>
+</div>
+<p class="text-caption font-caption text-ink-mute mt-1">
+          自托管行为验证码服务运行状态与近况速览，数据汇总自当前实例本地配置与最新风控流。
+        </p>
+</div>
+<div class="flex items-center gap-space-sm">
+<button class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-hairline bg-canvas hover:bg-surface-container text-ink text-button-sm font-button-sm transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px] text-ink-mute">refresh</span>
+<span>刷新数据</span>
+</button>
+<button class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-deep active:bg-primary-press text-on-primary text-button-sm font-button-sm transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<span>策略配置</span>
+</button>
+</div>
+</div>
+<!-- 2. 接入准备提醒 (配置告警与排查建议) -->
+<section class="space-y-space-sm">
+<!-- Warning 1: Origin Missing -->
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md p-space-md px-space-lg bg-surface-container-low border border-hairline-input rounded-DEFAULT">
+<div class="flex items-start sm:items-center gap-space-md">
+<div class="p-1 rounded bg-tertiary-fixed text-tertiary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">warning</span>
+</div>
+<div>
+<div class="text-caption font-caption text-ink font-medium">有应用未配置允许来源</div>
+<div class="text-micro font-micro text-ink-mute">当前 1 个应用未设置 Origin 白名单，前端出题请求将被直接拒绝。</div>
+</div>
+</div>
+<a class="inline-flex items-center gap-1 text-caption font-caption text-primary hover:text-primary-deep font-medium shrink-0" href="#">
+<span>前往「接入应用」立即配置</span>
+<span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+</a>
+</div>
+<!-- Warning 2: Never Used -->
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md p-space-md px-space-lg bg-canvas border border-hairline rounded-DEFAULT">
+<div class="flex items-start sm:items-center gap-space-md">
+<div class="p-1 rounded bg-surface-container text-ink-secondary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">info</span>
+</div>
+<div>
+<div class="text-caption font-caption text-ink font-medium">有应用从未被使用</div>
+<div class="text-micro font-micro text-ink-mute">应用已创建但尚未收到过出题请求，若已上线请确认 SDK 初始化配置。</div>
+</div>
+</div>
+<a class="inline-flex items-center gap-1 text-caption font-caption text-ink-secondary hover:text-primary font-medium shrink-0" href="#">
+<span>前往「接入应用」查看</span>
+<span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+</a>
+</div>
+</section>
+<!-- 3. 接入步骤指引横幅 (Stepper / Guide) -->
+<section class="bg-canvas border border-hairline rounded-DEFAULT p-space-xl">
+<div class="flex items-center justify-between mb-space-lg">
+<div>
+<h2 class="text-heading-sm font-heading-sm text-ink">轻量接入指引</h2>
+<p class="text-caption font-caption text-ink-mute">标准行为验证生命周期与本地服务端接入路径</p>
+</div>
+<span class="text-micro font-micro text-ink-mute-2 px-2 py-1 bg-surface-container rounded">四步完成部署</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md relative">
+<!-- Step 1 -->
+<div class="p-space-lg bg-surface-container-low rounded-DEFAULT border border-hairline flex flex-col justify-between space-y-space-md">
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-fixed text-primary font-caption text-caption font-medium">1</span>
+<span class="material-symbols-outlined text-ink-mute text-[18px]">apps</span>
+</div>
+<h3 class="text-caption font-caption text-ink font-medium">创建应用</h3>
+<p class="text-micro font-micro text-ink-mute">获取专用 App ID 与通信密钥凭证，用于鉴权。</p>
+</div>
+<span class="text-micro font-micro text-primary-soft">App ID / App Secret</span>
+</div>
+<!-- Step 2 -->
+<div class="p-space-lg bg-surface-container-low rounded-DEFAULT border border-hairline flex flex-col justify-between space-y-space-md">
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-fixed text-primary font-caption text-caption font-medium">2</span>
+<span class="material-symbols-outlined text-ink-mute text-[18px]">link</span>
+</div>
+<h3 class="text-caption font-caption text-ink font-medium">填写允许来源</h3>
+<p class="text-micro font-micro text-ink-mute">绑定前端业务域名 Origin 白名单，拦截伪造跨域调用。</p>
+</div>
+<span class="text-micro font-micro text-primary-soft">Origin 白名单校验</span>
+</div>
+<!-- Step 3 -->
+<div class="p-space-lg bg-surface-container-low rounded-DEFAULT border border-hairline flex flex-col justify-between space-y-space-md">
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-fixed text-primary font-caption text-caption font-medium">3</span>
+<span class="material-symbols-outlined text-ink-mute text-[18px]">javascript</span>
+</div>
+<h3 class="text-caption font-caption text-ink font-medium">前端传入应用 ID</h3>
+<p class="text-micro font-micro text-ink-mute">在客户端页面载入 SDK 并唤起行为拼图验证浮层。</p>
+</div>
+<span class="text-micro font-micro text-primary-soft">SDK 初始化调用</span>
+</div>
+<!-- Step 4 -->
+<div class="p-space-lg bg-surface-container-low rounded-DEFAULT border border-hairline flex flex-col justify-between space-y-space-md">
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-fixed text-primary font-caption text-caption font-medium">4</span>
+<span class="material-symbols-outlined text-ink-mute text-[18px]">verified_user</span>
+</div>
+<h3 class="text-caption font-caption text-ink font-medium">业务后端二次校验</h3>
+<p class="text-micro font-micro text-ink-mute">业务服务收到 Ticket 后回源当前实例校验有效性。</p>
+</div>
+<span class="text-micro font-micro text-primary-soft">POST /api/v1/verify</span>
+</div>
+</div>
+</section>
+<!-- 4. 核心指标卡片与状态矩阵网格 -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-space-lg">
+<!-- 卡片 A：接入应用状态 -->
+<div class="bg-canvas border border-hairline rounded-DEFAULT p-space-xl flex flex-col justify-between space-y-space-lg">
+<div class="space-y-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary text-[20px]">layers</span>
+<h3 class="text-heading-sm font-heading-sm text-ink font-medium">接入应用状态</h3>
+</div>
+<span class="px-2 py-0.5 rounded-full text-micro font-micro bg-surface-container text-ink-mute border border-hairline">独立实例</span>
+</div>
+<!-- 主数值 -->
+<div class="pt-2">
+<div class="flex items-baseline space-x-2">
+<span class="text-display-lg font-display-lg text-ink font-light">3</span>
+<span class="text-caption font-caption text-ink-mute">个自建应用</span>
+</div>
+<p class="text-micro font-micro text-ink-mute mt-1">内置「管理后台」系统应用不计入统计</p>
+</div>
+<!-- 细分指标矩阵 -->
+<div class="space-y-2 pt-2 border-t border-hairline">
+<div class="flex items-center justify-between text-caption font-caption">
+<span class="text-ink-mute">已启用应用</span>
+<span class="text-ink font-medium">2 个</span>
+</div>
+<div class="flex items-center justify-between text-caption font-caption">
+<span class="text-ink-mute">已停用应用</span>
+<span class="text-ink font-medium">1 个</span>
+</div>
+<div class="flex items-center justify-between text-caption font-caption">
+<span class="text-ink-mute">配置警告</span>
+<span class="text-tertiary font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">error</span>
+                1 个缺少允许来源
+              </span>
+</div>
+</div>
+</div>
+<a class="inline-flex items-center justify-between pt-3 border-t border-hairline text-caption font-caption text-primary hover:text-primary-deep font-medium transition-colors" href="#">
+<span>管理接入应用</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+<!-- 卡片 B：当前策略摘要 -->
+<div class="bg-canvas border border-hairline rounded-DEFAULT p-space-xl flex flex-col justify-between space-y-space-lg">
+<div class="space-y-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary text-[20px]">security_update_good</span>
+<h3 class="text-heading-sm font-heading-sm text-ink font-medium">当前策略摘要</h3>
+</div>
+<span class="px-2 py-0.5 rounded-full text-micro font-micro bg-primary-fixed text-primary font-medium">enforce 模式</span>
+</div>
+<!-- 模式说明与策略细则 -->
+<div class="space-y-2.5 pt-2">
+<div class="flex items-center justify-between text-caption font-caption">
+<span class="text-ink-mute">验证码基础难度</span>
+<div class="flex items-center space-x-1.5">
+<div class="flex space-x-1">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="w-2 h-2 rounded-full bg-hairline"></span>
+<span class="w-2 h-2 rounded-full bg-hairline"></span>
+</div>
+<span class="text-ink font-medium text-micro font-micro">3 级 (标准)</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-caption font-caption">
+<span class="text-ink-mute">工作量证明 (PoW)</span>
+<span class="text-ink font-medium">已下发，未强制</span>
+</div>
+<div class="flex items-center justify-between text-caption font-caption">
+<span class="text-ink-mute">风控评分引擎</span>
+<span class="inline-flex items-center text-ink font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary mr-1.5"></span>已启用
+              </span>
+</div>
+<div class="p-2 rounded bg-surface-container text-micro font-micro text-ink-mute">
+              运行模式为 <span class="text-ink font-medium">enforce</span>，异常轨迹直接阻断；对比 log 模式不拦截仅记录，当前为生产防御防护状态。
+            </div>
+</div>
+</div>
+<a class="inline-flex items-center justify-between pt-3 border-t border-hairline text-caption font-caption text-primary hover:text-primary-deep font-medium transition-colors" href="#">
+<span>修改策略配置</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+<!-- 卡片 C：背景图库状态 -->
+<div class="bg-canvas border border-hairline rounded-DEFAULT p-space-xl flex flex-col justify-between space-y-space-lg">
+<div class="space-y-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary text-[20px]">photo_library</span>
+<h3 class="text-heading-sm font-heading-sm text-ink font-medium">背景图库状态</h3>
+</div>
+<span class="px-2 py-0.5 rounded-full text-micro font-micro bg-surface-container text-ink-mute border border-hairline">本地切片</span>
+</div>
+<!-- 主数值 -->
+<div class="pt-2">
+<div class="flex items-baseline space-x-2">
+<span class="text-display-lg font-display-lg text-ink font-light">12</span>
+<span class="text-caption font-caption text-ink-mute">张可用图库资产</span>
+</div>
+<p class="text-micro font-micro text-ink-mute mt-1">支持滑动拼图与文字点选出题素材</p>
+</div>
+<!-- 异常告警提示 -->
+<div class="p-space-md rounded-DEFAULT bg-tertiary-fixed/30 border border-hairline text-caption font-caption space-y-1">
+<div class="flex items-center gap-1.5 text-tertiary font-medium">
+<span class="material-symbols-outlined text-[16px]">warning</span>
+<span>1 张低于清晰度下限</span>
+</div>
+<p class="text-micro font-micro text-ink-mute">
+              检测到部分图片分辨率过低，建议替换或删除以免影响点选识别率。
+            </p>
+</div>
+</div>
+<a class="inline-flex items-center justify-between pt-3 border-t border-hairline text-caption font-caption text-primary hover:text-primary-deep font-medium transition-colors" href="#">
+<span>查看背景图库</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+</section>
+<!-- 5. 【最近验证情况】专题面板 (基于最近 200 条风控记录) -->
+<section class="bg-canvas border border-hairline rounded-DEFAULT p-space-xl space-y-space-lg">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm border-b border-hairline pb-space-md">
+<div class="flex items-center space-x-3">
+<h2 class="text-heading-md font-heading-md text-ink font-normal">最近验证情况</h2>
+<span class="px-2.5 py-0.5 rounded-full text-caption font-caption bg-surface-container text-ink font-medium">
+            最近 200 条验证记录
+          </span>
+</div>
+<a class="inline-flex items-center space-x-1 text-caption font-caption text-primary hover:text-primary-deep font-medium transition-colors" href="#">
+<span>查看完整风控观察日志</span>
+<span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+</a>
+</div>
+<!-- 核心数字指标栏 -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-space-md">
+<!-- 出题次数 -->
+<div class="p-space-lg rounded-DEFAULT bg-surface-container-low border border-hairline">
+<div class="text-caption font-caption text-ink-mute">出题次数</div>
+<div class="text-display-md font-display-md text-ink mt-1 font-light">118</div>
+<div class="text-micro font-micro text-ink-mute mt-1">前端触发唤起总量</div>
+</div>
+<!-- 校验次数 -->
+<div class="p-space-lg rounded-DEFAULT bg-surface-container-low border border-hairline">
+<div class="text-caption font-caption text-ink-mute">校验次数</div>
+<div class="text-display-md font-display-md text-ink mt-1 font-light">82</div>
+<div class="text-micro font-micro text-ink-mute mt-1">提交轨迹计算校验</div>
+</div>
+<!-- 校验通过数 -->
+<div class="p-space-lg rounded-DEFAULT bg-surface-container-low border border-hairline">
+<div class="text-caption font-caption text-ink-mute">校验通过数</div>
+<div class="text-display-md font-display-md text-ink mt-1 font-light">71</div>
+<div class="text-micro font-micro text-primary mt-1">有效签发 Ticket</div>
+</div>
+<!-- 校验失败数 -->
+<div class="p-space-lg rounded-DEFAULT bg-surface-container-low border border-hairline">
+<div class="text-caption font-caption text-ink-mute">校验失败数</div>
+<div class="text-display-md font-display-md text-error mt-1 font-light">11</div>
+<div class="text-micro font-micro text-error mt-1">拦截机器与异常轨迹</div>
+</div>
+<!-- 通过率 -->
+<div class="p-space-lg rounded-DEFAULT bg-surface-container border border-hairline col-span-2 md:col-span-1">
+<div class="text-caption font-caption text-ink-mute">通过率 (通过 / 校验)</div>
+<div class="text-display-md font-display-md text-primary mt-1 font-light">86.6%</div>
+<div class="text-micro font-micro text-ink-mute mt-1">71 / 82 正常交互</div>
+</div>
+</div>
+<!-- 失败原因分布 -->
+<div class="pt-space-md border-t border-hairline">
+<div class="flex items-center justify-between mb-space-md">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-ink-mute text-[18px]">rule</span>
+<h3 class="text-caption font-caption text-ink font-medium">失败原因分布 (出现次数前 5)</h3>
+</div>
+<span class="text-micro font-micro text-ink-mute">按频次排序</span>
+</div>
+<div class="space-y-space-sm">
+<!-- Item 1: webdriver -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-md rounded bg-surface-container-low border border-hairline gap-2">
+<div class="flex items-center space-x-3">
+<span class="w-5 h-5 rounded-full bg-primary-fixed text-primary text-micro font-micro flex items-center justify-center font-medium">1</span>
+<div>
+<span class="font-mono text-body-tabular font-body-tabular text-ink font-medium">webdriver</span>
+<span class="text-micro font-micro text-ink-mute ml-2">— 自动化测试驱动特征拦截</span>
+</div>
+</div>
+<div class="flex items-center space-x-3 self-end sm:self-auto">
+<div class="w-32 bg-hairline h-2 rounded-full overflow-hidden hidden sm:block">
+<div class="bg-primary h-full rounded-full" style="width: 54.5%;"></div>
+</div>
+<span class="text-caption font-caption text-ink font-medium min-w-[48px] text-right">6 次</span>
+</div>
+</div>
+<!-- Item 2: trace_missing -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-md rounded bg-surface-container-low border border-hairline gap-2">
+<div class="flex items-center space-x-3">
+<span class="w-5 h-5 rounded-full bg-surface-container text-ink-secondary text-micro font-micro flex items-center justify-center font-medium">2</span>
+<div>
+<span class="font-mono text-body-tabular font-body-tabular text-ink font-medium">trace_missing</span>
+<span class="text-micro font-micro text-ink-mute ml-2">— 缺少行为时序滑动轨迹</span>
+</div>
+</div>
+<div class="flex items-center space-x-3 self-end sm:self-auto">
+<div class="w-32 bg-hairline h-2 rounded-full overflow-hidden hidden sm:block">
+<div class="bg-primary-soft h-full rounded-full" style="width: 27.2%;"></div>
+</div>
+<span class="text-caption font-caption text-ink font-medium min-w-[48px] text-right">3 次</span>
+</div>
+</div>
+<!-- Item 3: sec_fetch_missing -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-md rounded bg-surface-container-low border border-hairline gap-2">
+<div class="flex items-center space-x-3">
+<span class="w-5 h-5 rounded-full bg-surface-container text-ink-secondary text-micro font-micro flex items-center justify-center font-medium">3</span>
+<div>
+<span class="font-mono text-body-tabular font-body-tabular text-ink font-medium">sec_fetch_missing</span>
+<span class="text-micro font-micro text-ink-mute ml-2">— 缺少浏览器标准安全头</span>
+</div>
+</div>
+<div class="flex items-center space-x-3 self-end sm:self-auto">
+<div class="w-32 bg-hairline h-2 rounded-full overflow-hidden hidden sm:block">
+<div class="bg-secondary h-full rounded-full" style="width: 9.1%;"></div>
+</div>
+<span class="text-caption font-caption text-ink font-medium min-w-[48px] text-right">1 次</span>
+</div>
+</div>
+<!-- Item 4: client_timeout -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-md rounded bg-surface-container-low border border-hairline gap-2">
+<div class="flex items-center space-x-3">
+<span class="w-5 h-5 rounded-full bg-surface-container text-ink-secondary text-micro font-micro flex items-center justify-center font-medium">4</span>
+<div>
+<span class="font-mono text-body-tabular font-body-tabular text-ink font-medium">client_timeout</span>
+<span class="text-micro font-micro text-ink-mute ml-2">— 超出单次出题最大有效时间</span>
+</div>
+</div>
+<div class="flex items-center space-x-3 self-end sm:self-auto">
+<div class="w-32 bg-hairline h-2 rounded-full overflow-hidden hidden sm:block">
+<div class="bg-secondary h-full rounded-full" style="width: 9.1%;"></div>
+</div>
+<span class="text-caption font-caption text-ink font-medium min-w-[48px] text-right">1 次</span>
+</div>
+</div>
+<!-- Item 5: pow_invalid -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-md rounded bg-surface-container-low border border-hairline gap-2">
+<div class="flex items-center space-x-3">
+<span class="w-5 h-5 rounded-full bg-surface-container text-ink-mute text-micro font-micro flex items-center justify-center font-medium">5</span>
+<div>
+<span class="font-mono text-body-tabular font-body-tabular text-ink-mute font-medium">pow_invalid</span>
+<span class="text-micro font-micro text-ink-mute ml-2">— 工作量证明计算有误</span>
+</div>
+</div>
+<div class="flex items-center space-x-3 self-end sm:self-auto">
+<div class="w-32 bg-hairline h-2 rounded-full overflow-hidden hidden sm:block">
+<div class="bg-hairline h-full rounded-full" style="width: 0%;"></div>
+</div>
+<span class="text-caption font-caption text-ink-mute min-w-[48px] text-right">0 次</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer (Shared Component) -->
+<footer class="bg-canvas-soft dark:bg-brand-dark-900 border-t border-hairline dark:border-ink-secondary docked full-width bottom-0 mt-space-xl">
+<div class="flex justify-between items-center w-full px-space-xl py-space-md max-w-7xl mx-auto text-caption font-caption">
+<div class="text-micro font-micro text-ink-mute dark:text-hairline">
+        simple-captcha v1.2.0 • 社区开源独立部署
+      </div>
+<div class="flex items-center space-x-space-lg">
+<a class="text-ink-mute-2 dark:text-hairline hover:text-ink dark:hover:text-canvas transition-colors duration-150" href="#">账号与安全</a>
+<a class="text-ink-mute-2 dark:text-hairline hover:text-ink dark:hover:text-canvas transition-colors duration-150" href="#">退出登录</a>
+</div>
+</div>
+</footer>
+</body></html>

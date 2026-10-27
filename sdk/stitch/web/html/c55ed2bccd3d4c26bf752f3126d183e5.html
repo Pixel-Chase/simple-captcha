@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>背景图管理 - simple-captcha 控制台</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-secondary": "#ffffff",
+            "on-primary-fixed-variant": "#3600e1",
+            "tertiary-fixed-dim": "#ffb59b",
+            "on-error-container": "#93000a",
+            "on-secondary-fixed": "#12144b",
+            "on-tertiary": "#ffffff",
+            "on-primary-container": "#ddd9ff",
+            "on-tertiary-fixed-variant": "#812800",
+            "primary": "#3904e7",
+            "outline-variant": "#c8c4da",
+            "hairline-input": "#a8c3de",
+            "primary-fixed": "#e3dfff",
+            "surface-bright": "#fcf8ff",
+            "hairline": "#e3e8ee",
+            "on-secondary-fixed-variant": "#3f4178",
+            "on-surface": "#1b1a25",
+            "outline": "#777588",
+            "ink-mute-2": "#61718a",
+            "on-tertiary-container": "#ffd3c5",
+            "surface": "#fcf8ff",
+            "on-surface-variant": "#474556",
+            "surface-container-low": "#f6f2ff",
+            "surface-container": "#f0ecfb",
+            "on-primary": "#ffffff",
+            "primary-soft": "#665efd",
+            "background": "#fcf8ff",
+            "primary-container": "#533afd",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "canvas": "#ffffff",
+            "error": "#ba1a1a",
+            "secondary-fixed-dim": "#c0c1ff",
+            "surface-tint": "#5036fa",
+            "inverse-primary": "#c5c0ff",
+            "inverse-on-surface": "#f3eefe",
+            "canvas-cream": "#f5e9d4",
+            "on-primary-fixed": "#130067",
+            "surface-container-lowest": "#ffffff",
+            "tertiary-container": "#ae3900",
+            "surface-container-high": "#eae6f5",
+            "tertiary-fixed": "#ffdbcf",
+            "brand-dark-900": "#1c1e54",
+            "inverse-surface": "#302f3a",
+            "ink-mute": "#64748d",
+            "canvas-soft": "#f6f9fc",
+            "primary-deep": "#4434d4",
+            "on-tertiary-fixed": "#380d00",
+            "secondary": "#575992",
+            "ink-secondary": "#273951",
+            "error-container": "#ffdad6",
+            "surface-variant": "#e4e0ef",
+            "on-secondary-container": "#494b83",
+            "primary-press": "#2e2b8c",
+            "ink": "#0d253d",
+            "tertiary": "#862a00",
+            "surface-container-highest": "#e4e0ef",
+            "primary-fixed-dim": "#c5c0ff",
+            "secondary-container": "#bdbefe",
+            "secondary-fixed": "#e1e0ff",
+            "on-error": "#ffffff",
+            "surface-dim": "#dcd8e7",
+            "on-background": "#1b1a25"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-lg": "16px",
+            "space-xl": "24px",
+            "space-huge": "64px",
+            "space-xxs": "2px",
+            "gutter": "16px",
+            "space-xxl": "32px",
+            "margin": "24px",
+            "space-xs": "4px",
+            "space-sm": "8px",
+            "space-md": "12px"
+          },
+          "fontFamily": {
+            "body-lg": ["\"Inter, sans-serif\""],
+            "button-md": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""],
+            "button-sm": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""],
+            "micro-cap": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "body-md": ["\"Inter, sans-serif\""],
+            "display-xl": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "display-xxl": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""],
+            "heading-sm": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }],
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }],
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }]
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-canvas-soft text-ink min-h-screen flex flex-col font-body-md text-body-md antialiased selection:bg-primary-fixed selection:text-ink">
+<!-- TopNavBar (Shared Component) -->
+<header class="bg-canvas border-b border-hairline sticky top-0 z-50">
+<div class="flex justify-between items-center w-full px-space-xl h-16 max-w-7xl mx-auto">
+<!-- Left Brand & Navigation cluster -->
+<div class="flex items-center space-x-space-xl">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+</div>
+<span class="text-heading-md font-heading-md tracking-tight font-normal text-ink">simple-captcha</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-micro font-micro bg-surface-container text-ink-mute-2 ml-1">独立部署</span>
+</div>
+<!-- Links from Shared Components JSON with '背景图' active -->
+<nav class="hidden md:flex items-center space-x-space-lg text-body-md font-body-md pt-4">
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors" href="#">概览</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors" href="#">接入应用</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors" href="#">风控观察</a>
+<a class="text-ink-mute hover:text-ink pb-4 transition-colors" href="#">策略配置</a>
+<!-- Active tab -->
+<a class="text-primary font-normal border-b-2 border-primary pb-4" href="#">背景图</a>
+</nav>
+</div>
+<!-- Right cluster -->
+<div class="flex items-center space-x-space-md">
+<a class="hidden sm:inline-flex items-center text-caption font-caption text-ink-mute hover:text-primary transition-colors gap-1" href="#">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+          接口文档
+        </a>
+<div class="h-4 w-[1px] bg-hairline hidden sm:block"></div>
+<div class="flex items-center gap-1.5 cursor-pointer hover:bg-canvas-soft px-2.5 py-1.5 rounded transition-all">
+<div class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-primary text-micro font-micro">
+<span class="material-symbols-outlined text-[14px]">shield_person</span>
+</div>
+<span class="text-caption font-caption font-medium text-ink">admin</span>
+<span class="material-symbols-outlined text-ink-mute text-[18px]">expand_more</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-space-xl py-space-xl">
+<!-- Title & Status Header -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-lg mb-space-xl pb-space-lg border-b border-hairline">
+<div>
+<div class="flex items-center gap-space-sm mb-1">
+<h1 class="text-display-lg font-display-lg text-ink font-normal">背景图素材管理</h1>
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-micro-cap font-micro-cap bg-primary-fixed text-primary font-medium">全题型通用缓存池</span>
+</div>
+<p class="text-caption font-caption text-ink-mute max-w-3xl">
+          上传或删除后立即生效，所有题型下一次出题即使用新素材，无需重启服务。
+        </p>
+</div>
+<!-- Top Metric Counter & Primary Action -->
+<div class="flex flex-wrap items-center gap-space-md">
+<div class="flex items-center gap-space-md bg-canvas px-space-lg py-2 rounded border border-hairline shadow-sm">
+<div class="text-left">
+<div class="text-micro font-micro text-ink-mute">素材库总览</div>
+<div class="text-body-tabular font-body-tabular text-ink font-medium">
+              共 12 张可用
+            </div>
+</div>
+<div class="h-6 w-[1px] bg-hairline"></div>
+<div class="flex items-center gap-2 text-micro-cap font-micro-cap">
+<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">9 张高清</span>
+<span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-medium">2 张达标</span>
+<span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-medium">1 张需扩图</span>
+</div>
+</div>
+<button class="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-deep active:bg-primary-press text-on-primary px-5 py-2.5 rounded-full text-button-sm font-button-sm transition-all duration-150 shadow-sm cursor-pointer" onclick="document.getElementById('file-upload-input').click()">
+<span class="material-symbols-outlined text-[18px]">cloud_upload</span>
+          一键上传素材
+        </button>
+</div>
+</div>
+<!-- Safety Banner Notice -->
+<div class="mb-space-xl p-space-md bg-canvas rounded border border-hairline flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm text-caption font-caption text-ink-secondary">
+<span class="material-symbols-outlined text-primary text-[20px]">lock_reset</span>
+<span><strong>出题高可用防护：</strong>系统已启用保底策略，至少保留 1 张背景图。当素材仅存 1 张时锁定删除操作，避免验证码接口因缺少底图报错。</span>
+</div>
+<button class="text-caption font-caption text-primary hover:underline flex items-center gap-0.5 shrink-0">
+        查看底图渲染逻辑
+        <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+<!-- Upload Section & Technical Specs -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-xl mb-space-xxl">
+<!-- Upload Drag & Drop Canvas -->
+<div class="lg:col-span-8 flex flex-col">
+<div class="bg-canvas border border-dashed border-hairline-input rounded hover:border-primary transition-all p-space-xl flex-1 flex flex-col justify-center items-center text-center cursor-pointer group relative bg-gradient-to-b from-canvas to-canvas-soft/30">
+<input accept=".jpg,.jpeg,.png" class="hidden" id="file-upload-input" multiple="" type="file"/>
+<div class="w-14 h-14 rounded-full bg-primary-fixed/60 flex items-center justify-center text-primary mb-space-md group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[28px]">add_photo_alternate</span>
+</div>
+<h2 class="text-heading-sm font-heading-sm text-ink mb-1">拖拽背景图至此处，或点击浏览本地文件</h2>
+<p class="text-caption font-caption text-ink-mute mb-space-md">支持批量多选同时上传，上传后自动完成校验并同步至分发出题池</p>
+<div class="flex items-center gap-space-sm text-micro-cap font-micro-cap text-ink-mute-2">
+<span class="px-2 py-0.5 bg-canvas-soft rounded border border-hairline">单张 ≤ 5 MB</span>
+<span class="px-2 py-0.5 bg-canvas-soft rounded border border-hairline">JPEG / PNG</span>
+<span class="px-2 py-0.5 bg-canvas-soft rounded border border-hairline">建议 3:2 比例</span>
+</div>
+</div>
+<!-- Task Status Feedback Queue -->
+<div class="mt-space-md bg-canvas rounded border border-hairline p-space-md space-y-space-sm">
+<div class="flex items-center justify-between text-micro-cap font-micro-cap text-ink-mute border-b border-hairline pb-2">
+<span>最近传输任务（模拟）</span>
+<span class="text-ink-mute-2">实时处理管道已连接</span>
+</div>
+<!-- Success Item -->
+<div class="flex items-center justify-between py-1.5 text-caption font-caption">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-emerald-600 text-[18px]">check_circle</span>
+<span class="text-ink font-medium">city_skyline_financial.jpg</span>
+<span class="text-micro font-micro text-ink-mute">→ bg_20250218_0912.jpg</span>
+</div>
+<div class="flex items-center gap-space-md">
+<span class="text-micro-cap font-micro-cap px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">已就绪</span>
+<span class="text-micro font-micro text-ink-mute">刚刚</span>
+</div>
+</div>
+<!-- Error Item -->
+<div class="flex items-center justify-between py-1.5 text-caption font-caption bg-red-50/40 px-2 rounded">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-error text-[18px]">error</span>
+<span class="text-ink font-medium">lowres_sample_bad.png</span>
+<span class="text-micro font-micro text-error font-normal">校验失败：尺寸低于 900×600（实际 640×480）</span>
+</div>
+<div class="flex items-center gap-space-md">
+<span class="text-micro-cap font-micro-cap px-2 py-0.5 rounded bg-error-container text-on-error-container">已拦截</span>
+<button class="text-micro font-micro text-ink-mute hover:text-ink">重试</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Specification Info Card -->
+<div class="lg:col-span-4 bg-brand-dark-900 text-canvas rounded p-space-xl flex flex-col justify-between shadow-sm">
+<div>
+<div class="flex items-center justify-between mb-space-md">
+<span class="text-caption font-caption text-inverse-primary uppercase tracking-wider font-semibold">素材工程规范</span>
+<span class="material-symbols-outlined text-primary-soft text-[20px]">tune</span>
+</div>
+<h2 class="text-heading-md font-heading-md text-canvas mb-space-sm">为什么底图分辨率至关重要？</h2>
+<p class="text-caption font-caption text-outline-variant mb-space-lg leading-relaxed">
+            验证码滑块、点选文字及空间轨迹识别均在客户端视口动态缩放。高清素材能够保证前端高 DPI 屏幕不出现马赛克，同时提升人机对抗时特征描边清晰度。
+          </p>
+<ul class="space-y-space-md text-caption font-caption border-t border-hairline/20 pt-space-md">
+<li class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-emerald-400 text-[18px] shrink-0 mt-0.5">verified</span>
+<div>
+<span class="text-canvas font-medium">推荐分辨率 (高清)：</span>
+<span class="text-outline-variant">≥ 1800×1200，宽高比 3:2，支持视网膜屏无损缩放。</span>
+</div>
+</li>
+<li class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-blue-300 text-[18px] shrink-0 mt-0.5">check</span>
+<div>
+<span class="text-canvas font-medium">准入底限 (达标)：</span>
+<span class="text-outline-variant">最小 900×600，单张体积建议控制在 5 MB 内以确保毫秒级拉取。</span>
+</div>
+</li>
+<li class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">warning</span>
+<div>
+<span class="text-canvas font-medium">低于下限警示：</span>
+<span class="text-outline-variant">出题引擎将使用 Bicubic 算法强制放大，轻微模糊。</span>
+</div>
+</li>
+</ul>
+</div>
+<div class="mt-space-lg pt-space-md border-t border-hairline/20 flex items-center justify-between text-micro font-micro text-outline-variant">
+<span>存储引擎: Local FS (持久卷挂载)</span>
+<span class="text-primary-soft">版本一致性校验通过</span>
+</div>
+</div>
+</div>
+<!-- Assets Gallery / Grid Section -->
+<div class="space-y-space-lg">
+<!-- Gallery Toolbar -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-md bg-canvas p-space-md rounded border border-hairline">
+<div class="flex items-center gap-space-md">
+<span class="text-heading-sm font-heading-sm text-ink">当前素材库 (12)</span>
+<div class="h-4 w-[1px] bg-hairline"></div>
+<!-- Filters -->
+<div class="flex items-center gap-1 bg-canvas-soft p-1 rounded border border-hairline text-caption font-caption">
+<button class="px-2.5 py-1 rounded bg-canvas text-primary font-medium shadow-xs">全部 (12)</button>
+<button class="px-2.5 py-1 rounded text-ink-mute hover:text-ink transition-colors">高清 (9)</button>
+<button class="px-2.5 py-1 rounded text-ink-mute hover:text-ink transition-colors">达标 (2)</button>
+<button class="px-2.5 py-1 rounded text-ink-mute hover:text-ink transition-colors">低于下限 (1)</button>
+</div>
+</div>
+<div class="flex items-center gap-space-sm">
+<button class="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-hairline hover:bg-canvas-soft text-caption font-caption text-ink-secondary transition-colors">
+<span class="material-symbols-outlined text-[16px]">sync</span>
+            刷新列表
+          </button>
+<div class="flex items-center gap-1 px-3 py-1.5 rounded border border-hairline bg-canvas text-caption font-caption text-ink-mute">
+<span>排序: 最新修改</span>
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Grid Cards (12 items) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-space-lg">
+<!-- Card 1: Featured Cityscape (Reference Match) -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A modern financial district cityscape with soaring architectural skyscrapers under a bright clear blue afternoon sky. Broad pedestrian avenues flanked by glass towers and modern buildings, capturing crisp structural urban detail in light-mode palette of cool blues, steel, and clean whites." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxJIQA6-1QSe6HDNiF3mfBRODYioLQvXRBBerf_CiF4QTDIh3nuad5k9OO3cfgD6G8dyhkKtILjL2--OA0GGb7Jc7Q7ROI-y7qy_BGlPBlFYneEZs5Pq_FeIX78ATsigpYTjx1Vlbv_BKTGLoqnWoA7kyvFdeCv7c19KGyHfp7eh0Rvm2HPoNb0eRdWgEdiyZgLyG90zVBHHFDD1Wrb-F6zP7_pHQnfBT8ymw4limuMYQ0M9QL-KY7bK4lTcUItIl7b3nfT0YWn-Y"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+<div class="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-7 h-7 rounded-full bg-canvas/90 hover:bg-canvas text-ink flex items-center justify-center shadow-sm" title="查看原图">
+<span class="material-symbols-outlined text-[16px]">zoom_in</span>
+</button>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_financial_skyline.jpg">bg_financial_skyline.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 2400 × 1600</span>
+<span>大小: 2.8 MB</span>
+<span class="col-span-2">更新: 2025-02-18 09:30</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_financial_skyline.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A clean geometric bridge spanning across calm bay waters in morning daylight with pale blue skies and minimal clouds. The composition has sleek architectural lines, high dynamic range, and soft oceanic lighting aligned with clean financial UI standards." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDY-PxfnWXhqFbxzYVL4ga8v4o7P8qf-Kud6MZjjepYRBAnwPt5I5xGp6kL6xwdYnRJC_7ikgZsQMnyJU4s1rd8hNsGdEtrPe1YC9r9uBI2wq2-3xl9y-UeG5ku61RY8XG9ztnlPNC0hjSR2FxJh8mz01lytCGsCrAq6zssU964xus9T7NWS7oDdB6w2p09RwmfbaC_QXMN8fp7HDV0pSP8UjpuxSMl3xFjV8WaLtI3zSCeWPdmRbXXoLaFEoZLU3lEO0IWktxCc7o"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_harbor_crossing.jpg">bg_harbor_crossing.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 2100 × 1400</span>
+<span>大小: 3.1 MB</span>
+<span class="col-span-2">更新: 2025-02-18 08:15</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_harbor_crossing.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A modern glass airport terminal interior flooded with natural high-key morning light, showcasing vast polished marble floors and structural steel beams with soft blue and ivory tones in high resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD94Jb29EHferyn0q6ewmFW_qFG-Zbi5ZCWLshTjwWF_PmwSiNvjy70twG55u27aFe8FI5xFB3_Y8XhOBepBsRu_NSk250eBiVPf1moTkM-SRVtm65079W7KrCI334zUhZTa4AUDPWSnB29GoUchVLWl-P4tTkdSBODWBETUhCGqn96qJso8v5noJsMnwioUJ4OsMgY4rl4GRMdHavkbN1rTvWwRO5WMfUPl8puaBvCigjtfxAx7cvjy6t4FjSuLmGjNMZNeuM3K5k"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_terminal_concourse.png">bg_terminal_concourse.png</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">PNG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 1920 × 1280</span>
+<span>大小: 4.2 MB</span>
+<span class="col-span-2">更新: 2025-02-17 19:40</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_terminal_concourse.png')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 4 (达标 Status) -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A lush green mountain valley under bright alpine midday sunlight with crystal clear river rocks and pine trees, rendered in natural tones with clear contrast suited for visual captcha background recognition." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB50BeTjNRrN3GBTxJzhupIYOoASlscvI6ESo1mVSstpVZ_BZPVBMU20IXYRNV-gJqAikZhXyzV5ebjDt_R63bbwwMJTogVwgKpfX4Q7NQWjGOOs7tH-bxjEIpmuJ_0I4cjMry-6odZrmfkfqW2SGEoDqRpp_P5cH-dUgq0EU-RubUfRbzbq4kx3VkdtgoCOEazSUJ1G5dH5htKDyuFGUkZsrU2DISNagentHOQOXTBOhZ2_nkknkCe6UYsWlZHv05hz0Tc944GseI"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-blue-700 border border-blue-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>达标
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_mountain_stream.jpg">bg_mountain_stream.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 1280 × 854</span>
+<span>大小: 1.4 MB</span>
+<span class="col-span-2">更新: 2025-02-17 14:12</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_mountain_stream.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 5 (低于下限 Status Warning) -->
+<div class="bg-canvas border border-amber-300 rounded overflow-hidden flex flex-col group hover:border-amber-500 transition-all duration-200 shadow-sm relative">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A historic cobblestone European street during soft daylight with pastel townhouses, captured at a moderate resolution with warm stone textures and architectural facades." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLViEcKG44xBg_Y7w2k1pGNbZBefKNCYc-2anpK5Thrg3yj7cHiOL8hj6gspQvI_MMAFWFK315YvOI-y6CZcHRJAUPLk2murPxSWl4KOMCMJEL9hQJENWeaANEQ5yiDQ46EyoANYOWs2xHM_Q4MMZ163YdeOV6cVBoaFoNjA6kwe4Kf3Zmey4xz_laXnedyKIwwYTH2C-bBJMk0IWDReL-ZpJBzlhUKbu9nZpqDnPqTsf0Rp78ccadtg5mUE4sru9UHq2ECtux3es"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-amber-800 border border-amber-300 font-medium">
+<span class="material-symbols-outlined text-[14px] text-amber-600">warning</span>低于下限 · 出图会放大
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_old_town_walk.jpg">bg_old_town_walk.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span class="text-amber-700 font-medium">尺寸: 800 × 533</span>
+<span>大小: 640 KB</span>
+<span class="col-span-2">更新: 2025-02-16 22:05</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_old_town_walk.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 6 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A clean modern library building with tall curved wooden bookshelves, glass atrium windows, and abundant gentle white daylight spreading across open study desks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGdubYS4j_ubcfURLXivX1rwGxylVWtIt_SFE2yMtEaSTo2QqdJ3eE34yNwSrF8k5zQ0kqdD5AS4QRoss6PYR9g6zrBVm3C44J6ihy5M7_4df5WPFM66GC1hJOiQq__8fN_Edxr_2CroK0uklFQ90EAu36c8I6C2blAXGdOQhZwmvbAwf5z6WTo-6ftCPPxbJLUmeipsmEzyhtLROnco9VHHOFAkeOyBTiDHuWUSvCGPHY47WWbmA9iwFk2OiTXgec6dNwzDUArzw"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_modern_library.jpg">bg_modern_library.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 2000 × 1333</span>
+<span>大小: 2.1 MB</span>
+<span class="col-span-2">更新: 2025-02-16 16:30</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_modern_library.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 7 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="An expansive desert landscape with undulating sand dunes and soft geometric shadows under clear crisp azure morning skies, minimalist and high contrast." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6n8u8qo57uvZ83w2vgFudqYo53kKR8TLdCoQnre5nY7wuKGX3-mzL_W3OkSGCosYN6E5qiii8Ubk-I-Ckb1mbIBkQ5PTK0f5qlixFjL8x4kWPYwzk-5TYECPc6vIAqEOmBeos45iczLMpKO-7FXNTPcUgNH1wC8yry0b0u1KO_VbNxt_v224cLv-oHXSEGqwKsBWwBu4IO5rvAoc5T1VzhKwPnw7BwnKE6J194A8z2Lox09qeptnPQl4OGRkITNUMYnZUJm19e3g"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_dune_geometry.jpg">bg_dune_geometry.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 2560 × 1707</span>
+<span>大小: 3.4 MB</span>
+<span class="col-span-2">更新: 2025-02-15 11:20</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_dune_geometry.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 8 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A clean modern botanic greenhouse dome with structural white framework, lush tropical indoor greenery, and soft overhead diffuse daylight." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmMf0oK6mWqu0jCR8Z82-KTwrEso7GUOPeKWQtxXiCwhRfIg1lUBk7axx71ffKb1c7OPP03LZGRwS-_HefEspQnhnl180Xbq8d0mSBMDceBHC0F3MYK-IUQ4K9S3jm3wmD9qoT7ED-J8_NSi7fIzeJAQsHG_3w6GnUx_oA4rgsjgS5cM4CW7LhyGwWf-Dvh-GT9GEb18qNU6Siops-1PI7k0ymWLmQOIjNVNHzQJMEiGibchwu9mD7aKIsTafz1JH4yJ37AVlMZtk"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_glass_greenhouse.png">bg_glass_greenhouse.png</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">PNG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 1800 × 1200</span>
+<span>大小: 3.9 MB</span>
+<span class="col-span-2">更新: 2025-02-15 09:10</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_glass_greenhouse.png')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 9 (达标 Status) -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A tranquil pebble shore coastline during daylight, clear turquoise water meeting round gray shoreline stones with clean coastal horizon." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUlHb-COJVHGeqQE9oGF3sS7reBIz0ZJOqZBN7UQc2_jXSK-bWrBoI1QJk6uZdvLnddLI64Mje2-j7jIpHD3gBr52JW5M8z08QFrKjfOLrkn8kjC8n5feabynmqxNY3ExW8qGI_G64WWHMlCypDKp47sVQe4KFKjRRPjvBYv37d3C5WAcwsOXHay19zvKOn_QHrRHSUm3IQFFexg4PyRpDziJMAobLHhqxb_fi_9Gq1thMNrJJ6e12gjXN0XQ9ku7DNdnAupBmq84"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-blue-700 border border-blue-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>达标
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_pebble_beach.jpg">bg_pebble_beach.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 960 × 640</span>
+<span>大小: 890 KB</span>
+<span class="col-span-2">更新: 2025-02-14 18:00</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_pebble_beach.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 10 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="An expansive clean industrial solar array field under vivid blue afternoon sky with silver panels reflecting sunlight symmetrically." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbq8JcRItkgtvwBKGRq9wQocJhAQXlUsv4oFU-o9phoVegy7r80inROpojRO834YlHty_FYLhGKOQBu7auH435iUoENTJiDyroxr8Kuy70DbR9hVDegblYqgjtwGEYRJhwyxZvi8_4YgjqizJUT2HxJmcr5hDz_brgNvMpBNwF2aFC9jDtl-rajlOM-4GKkr_T2dRPSQRtWOxx7dv3fwo8fZ_B6R3UA8fkPAvBSp3Oz2U5f6bn6Yt0Iym_vZuUTtUPxrnavS8oUt8"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_solar_energy_field.jpg">bg_solar_energy_field.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 2400 × 1600</span>
+<span>大小: 2.7 MB</span>
+<span class="col-span-2">更新: 2025-02-14 11:35</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_solar_energy_field.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 11 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A minimalist architectural white spiral staircase in an art gallery atrium with soft natural shadows and high architectural elegance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuANz8KXJzzWiw3sM3yeMi6Y0wG5ia60E0coVr4SzPbg2IeX4-Lo9svCqb8F8AArQ8PKoF9f6vG-D0hMMEiqai1pugeYm0IlSxo0s1Zrn0lsgJiCBA4u4F6TJMlb2Jop2TYRCiWElkTuHUWF3BCVjNFg9PnCb7rW8xqYCvyZ48bwyiB5mLAppdDby8nwkQkD2IdcYY2HBZac8T2-Ui_CZf9rPHaFxDjvIzky2oRGYYjzPJp7O-2SGwY5Y4GT4r4Phfoh36NMWcohmCQ"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_minimal_spiral.png">bg_minimal_spiral.png</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">PNG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 1800 × 1200</span>
+<span>大小: 3.3 MB</span>
+<span class="col-span-2">更新: 2025-02-13 15:45</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_minimal_spiral.png')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+<!-- Card 12 -->
+<div class="bg-canvas border border-hairline rounded overflow-hidden flex flex-col group hover:border-primary transition-all duration-200 shadow-sm">
+<div class="relative aspect-[3/2] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A tranquil calm lake in autumn surrounded by colorful red and amber maple forests reflected symmetrically on still water with crisp clear atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZ5F2-izyH0_7rB9kjKQzzggmETWCZcPGa28QPOhUZ2xLjlBpsXM5SK_qOysGd_ztlzo0dygJxDhMM3uh6WydDD_UGCSYruNsx4Zf3AvVfdi2Kf48KaPJBQY89Fyf7OtW6HCG9AnXYap6hKDLXuhNsdljHIzTPCzbooP5BR6cKfPDX6a1V7_QYBuRe3ogyaH1GTBWOG03nqT9iNLT43PTp0MDM_tgKnNYdJx4tNfuc70Qf39TuNECA1tFQrL1IbaWXJg0kX6YxVDk"/>
+<div class="absolute top-2.5 left-2.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro-cap font-micro-cap bg-canvas/90 backdrop-blur-sm text-emerald-700 border border-emerald-200 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>高清素材
+              </span>
+</div>
+</div>
+<div class="p-space-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between text-caption font-caption text-ink font-medium mb-1">
+<span class="truncate" title="bg_autumn_reflection.jpg">bg_autumn_reflection.jpg</span>
+<span class="text-micro font-micro text-ink-mute shrink-0 ml-1">JPEG</span>
+</div>
+<div class="grid grid-cols-2 gap-y-1 text-micro font-micro text-ink-mute mb-space-md">
+<span>尺寸: 2200 × 1467</span>
+<span>大小: 2.9 MB</span>
+<span class="col-span-2">更新: 2025-02-12 10:05</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-hairline text-caption font-caption">
+<button class="text-ink-mute hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">visibility</span>预览
+              </button>
+<button class="text-ink-mute hover:text-error transition-colors flex items-center gap-1" onclick="openDeleteModal('bg_autumn_reflection.jpg')">
+<span class="material-symbols-outlined text-[16px]">delete</span>删除
+              </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- 二次确认删除提示弹窗 (Modal) -->
+<div class="fixed inset-0 z-50 bg-brand-dark-900/40 backdrop-blur-xs flex items-center justify-center hidden p-4" id="delete-modal">
+<div class="bg-canvas border border-hairline rounded max-w-md w-full p-space-xl shadow-xl transform transition-all">
+<div class="flex items-start gap-space-md mb-space-md">
+<div class="w-10 h-10 rounded-full bg-error-container text-error flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[22px]">delete_forever</span>
+</div>
+<div>
+<h3 class="text-heading-md font-heading-md text-ink mb-1">确认删除此素材？</h3>
+<p class="text-caption font-caption text-ink-mute">
+            素材删除后不可恢复。所有题型下次出题将不再使用此图片：
+          </p>
+<p class="text-caption font-caption text-ink font-semibold mt-2 bg-canvas-soft p-2 rounded border border-hairline font-mono break-all" id="delete-target-filename">
+            bg_filename.jpg
+          </p>
+</div>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded text-micro font-micro text-ink-mute mb-space-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-ink-secondary">security</span>
+<span>安全规则校验中：当前库拥有 12 张图，允许删除操作。</span>
+</div>
+<div class="flex items-center justify-end gap-space-sm">
+<button class="px-4 py-2 rounded-full border border-hairline hover:bg-canvas-soft text-caption font-caption text-ink transition-colors cursor-pointer" onclick="closeDeleteModal()">
+          取消
+        </button>
+<button class="px-5 py-2 rounded-full bg-error hover:bg-red-700 text-on-error text-caption font-caption transition-colors cursor-pointer shadow-xs" onclick="confirmDeleteAction()">
+          确认删除
+        </button>
+</div>
+</div>
+</div>
+<!-- Minimal Dashboard Footer (Shared Component) -->
+<footer class="bg-canvas-soft border-t border-hairline mt-auto">
+<div class="flex justify-between items-center w-full px-space-xl py-space-md max-w-7xl mx-auto text-caption font-caption">
+<div class="text-micro font-micro text-ink-mute">
+        simple-captcha v1.2.0 • 社区开源独立部署
+      </div>
+<div class="flex items-center space-x-space-md">
+<a class="text-ink-mute-2 hover:text-ink transition-colors" href="#">账号与安全</a>
+<span class="text-hairline">•</span>
+<a class="text-ink-mute-2 hover:text-ink transition-colors" href="#">退出登录</a>
+</div>
+</div>
+</footer>
+<!-- Light Vanilla Script for Modal Interactions -->
+<script>
+    function openDeleteModal(filename) {
+      document.getElementById('delete-target-filename').innerText = filename;
+      document.getElementById('delete-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('delete-modal').classList.add('hidden');
+    }
+
+    function confirmDeleteAction() {
+      const target = document.getElementById('delete-target-filename').innerText;
+      closeDeleteModal();
+      // Show light feedback
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-8 right-8 bg-ink text-canvas text-caption font-caption px-4 py-3 rounded shadow-lg flex items-center gap-2 z-50 animate-bounce';
+      toast.innerHTML = `<span class="material-symbols-outlined text-[18px] text-emerald-400">check_circle</span>已成功从缓存池移出素材 ${target}`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3200);
+    }
+
+    // Close modal on click outside
+    document.getElementById('delete-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeDeleteModal();
+      }
+    });
+  </script>
+</body></html>

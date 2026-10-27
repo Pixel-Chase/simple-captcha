@@ -163,7 +163,6 @@ export interface RiskTelemetryItem {
   score?: number;
   success?: boolean;
   consistent?: boolean;
-  viaPost?: boolean;
   reasons?: string[];
   anomalies?: string[] | null;
   tls?: string;

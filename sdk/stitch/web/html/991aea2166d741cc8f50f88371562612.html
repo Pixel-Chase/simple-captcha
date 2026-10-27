@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>策略配置 - simple-captcha 控制台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#533afd',
+              hover: '#4329e4',
+              soft: '#eeebff',
+              light: '#f5f3ff'
+            },
+            ink: {
+              DEFAULT: '#0d253d',
+              secondary: '#425466',
+              mute: '#64748d',
+              border: '#e3e8ee',
+              light: '#f8fafc'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .tab-active {
+      color: #533afd;
+      border-bottom: 2px solid #533afd;
+      font-weight: 600;
+    }
+    .diff-highlight {
+      background-color: #fefce8;
+      border-color: #fef08a;
+    }
+  </style>
+</head>
+<body class="bg-[#f8fafc] text-ink min-h-screen flex flex-col antialiased">
+
+  <!-- 顶部系统导航栏 (与 simple-captcha 控制台保持严格统一) -->
+  <header class="bg-white border-b border-ink-border sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-8">
+        <!-- Logo 与自托管部署标签 -->
+        <div class="flex items-center space-x-3">
+          <span class="text-xl font-bold tracking-tight text-ink">simple-captcha</span>
+          <span class="text-xs bg-brand-soft text-brand px-2 py-0.5 rounded-full font-medium border border-brand/20">自托管服务</span>
+        </div>
+        <!-- 主导航项 -->
+        <nav class="flex items-center space-x-6 text-sm">
+          <a href="#" class="text-ink-mute hover:text-ink transition-colors pb-4.5 pt-5">概览</a>
+          <a href="#" class="text-ink-mute hover:text-ink transition-colors pb-4.5 pt-5">接入应用</a>
+          <a href="#" class="text-ink-mute hover:text-ink transition-colors pb-4.5 pt-5">风控观察</a>
+          <a href="#" class="text-brand font-semibold border-b-2 border-brand pb-4.5 pt-5">策略配置</a>
+          <a href="#" class="text-ink-mute hover:text-ink transition-colors pb-4.5 pt-5">背景图</a>
+        </nav>
+      </div>
+
+      <!-- 右侧操作与管理员账号 -->
+      <div class="flex items-center space-x-6">
+        <a href="#" class="text-xs text-ink-mute hover:text-ink flex items-center gap-1.5 transition-colors">
+          <i class="fa-regular fa-file-lines"></i>
+          <span>接口文档</span>
+        </a>
+        <div class="h-4 w-px bg-ink-border"></div>
+        <div class="flex items-center space-x-3 text-sm">
+          <div class="w-7 h-7 rounded-full bg-brand-soft text-brand flex items-center justify-center font-bold text-xs">
+            A
+          </div>
+          <span class="font-medium text-ink">admin</span>
+          <i class="fa-solid fa-angle-down text-xs text-ink-mute"></i>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体工作区 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-7">
+
+    <!-- 顶部状态栏与操作面板 -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-ink-border/80 mb-7">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold text-ink">策略配置</h1>
+          <!-- 状态指示胶囊 (示例两项修改未保存) -->
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            有未保存的修改 (2 项)
+          </span>
+          <span class="text-xs text-ink-mute">保存后下一次出题即生效，无需重启</span>
+        </div>
+        <p class="text-sm text-ink-mute mt-1.5">
+          配置验证码出题、前端工作量证明难题与风控评分参数。只保存当前值，不记录修改历史。
+        </p>
+      </div>
+
+      <!-- 右侧全局操作区 -->
+      <div class="flex items-center gap-3">
+        <button type="button" class="px-4 py-2 text-sm font-medium text-ink-secondary bg-white border border-ink-border rounded-lg hover:bg-slate-50 hover:text-ink transition-colors flex items-center gap-2 shadow-xs">
+          <i class="fa-solid fa-rotate-left text-xs text-ink-mute"></i>
+          恢复全部默认值
+        </button>
+
+        <button type="button" class="px-5 py-2 text-sm font-medium text-white bg-brand hover:bg-brand-hover rounded-lg transition-all flex items-center gap-2 shadow-sm shadow-brand/30 active:scale-98">
+          <i class="fa-solid fa-floppy-disk text-xs"></i>
+          保存并生效
+        </button>
+      </div>
+    </div>
+
+    <!-- 校验提示与关联导航横幅 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-7">
+      <!-- 校验规则警示条 (满足：服务端校验失败时展示含字段名的错误提示，或实时边界规范) -->
+      <div class="md:col-span-2 bg-blue-50/70 border border-blue-200/80 rounded-xl p-4 flex items-start gap-3.5">
+        <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+          <i class="fa-solid fa-shield-halved text-sm"></i>
+        </div>
+        <div class="text-xs space-y-1">
+          <div class="font-semibold text-blue-900 text-sm">参数关联校验规则</div>
+          <div class="text-blue-800 leading-relaxed">
+            • 工作量证明：<span class="font-medium">难度上限 (当前 20)</span> 不能小于 <span class="font-medium">基础难度 (当前 14)</span>。<br>
+            • 风控评分引擎：<span class="font-medium">拦截阈值 (当前 85 分)</span> 不能小于 <span class="font-medium">加难阈值 (当前 55 分)</span>。校验失败将拒绝保存。
+          </div>
+        </div>
+      </div>
+
+      <!-- 前往风控观察对照看板快捷通道 -->
+      <div class="bg-indigo-50/50 border border-indigo-200/70 rounded-xl p-4 flex items-center justify-between">
+        <div class="space-y-1">
+          <div class="text-xs font-semibold text-indigo-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-chart-line text-brand"></i>
+            对照实际风险分布
+          </div>
+          <div class="text-xs text-indigo-700">调整前建议先前往风控观察分析封禁原因</div>
+        </div>
+        <a href="#" class="text-xs font-medium text-brand hover:text-brand-hover bg-white px-3 py-1.5 rounded-lg border border-brand/20 shadow-xs flex items-center gap-1">
+          去观察 <i class="fa-solid fa-arrow-right text-[10px]"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- 策略参数三大板块主体 -->
+    <div class="space-y-8">
+
+      <!-- 一、验证码 (出题与校验的基本参数) -->
+      <section class="bg-white rounded-2xl border border-ink-border shadow-xs overflow-hidden">
+        <div class="px-6 py-4.5 bg-slate-50/80 border-b border-ink-border flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-brand"></span>
+            <h2 class="text-base font-bold text-ink">一、验证码（出题与校验的基本参数）</h2>
+            <span class="text-xs text-ink-mute">共 9 项参数</span>
+          </div>
+          <span class="text-xs text-ink-mute bg-white px-2.5 py-1 rounded border border-ink-border">底层出题与二次签发校验</span>
+        </div>
+
+        <div class="divide-y divide-ink-border/60">
+          
+          <!-- 1. 基础难度 (修改未保存示例: 默认 3 -> 修改为 4) -->
+          <div class="p-6 bg-amber-50/40 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-sm font-semibold text-ink">基础难度</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                    已修改未保存
+                  </span>
+                </div>
+                <p class="text-xs text-ink-secondary">客户端风控状态与环境信号在此基础上加难</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">3 级</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">1 - 5 级</strong></span>
+                </div>
+              </div>
+
+              <!-- 右侧交互控件 -->
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="flex items-center border border-amber-300 bg-white rounded-lg p-1 shadow-xs">
+                  <button type="button" class="w-8 h-8 rounded flex items-center justify-center text-ink-secondary hover:bg-slate-100">
+                    <i class="fa-solid fa-minus text-xs"></i>
+                  </button>
+                  <div class="px-4 text-center">
+                    <span class="text-base font-bold text-brand">4</span>
+                    <span class="text-xs text-ink-mute ml-0.5">级</span>
+                  </div>
+                  <button type="button" class="w-8 h-8 rounded flex items-center justify-center text-ink-secondary hover:bg-slate-100">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                  </button>
+                </div>
+                <!-- 快捷星级/级别指示 -->
+                <div class="flex gap-1 text-xs">
+                  <span class="w-5 h-5 rounded bg-brand text-white flex items-center justify-center font-bold text-[10px]">1</span>
+                  <span class="w-5 h-5 rounded bg-brand text-white flex items-center justify-center font-bold text-[10px]">2</span>
+                  <span class="w-5 h-5 rounded bg-brand text-white flex items-center justify-center font-bold text-[10px]">3</span>
+                  <span class="w-5 h-5 rounded bg-amber-500 text-white flex items-center justify-center font-bold text-[10px] ring-2 ring-amber-300">4</span>
+                  <span class="w-5 h-5 rounded bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-[10px]">5</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 题目有效期 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">题目有效期</div>
+                <p class="text-xs text-ink-secondary">题目下发后允许完成验证的有效窗口时长</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">300 秒</strong> (5分钟)</span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">30 - 3600 秒</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="300" min="30" max="3600" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">秒</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 二次验证有效期 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">二次验证有效期</div>
+                <p class="text-xs text-ink-secondary">通过后签发的 second_key 的有效期，业务后端需在此时间内完成 S2S 查询</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">120 秒</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">10 - 3600 秒</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="120" min="10" max="3600" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">秒</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. 最大尝试次数 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">最大尝试次数</div>
+                <p class="text-xs text-ink-secondary">同一题目允许用户或客户端提交错误的最大次数，用尽后该题直接作废</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">5 次</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">1 - 20 次</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="5" min="1" max="20" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">次</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. 最短作答时间 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">最短作答时间</div>
+                <p class="text-xs text-ink-secondary">从题目呈现到提交的最少耗时，低于则判定为无生物延迟的自动化脚本</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">500 毫秒</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 10000 毫秒</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="500" step="50" min="0" max="10000" class="w-full pl-3 pr-10 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">毫秒</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. 单 IP 加难阈值 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">单 IP 加难阈值</div>
+                <p class="text-xs text-ink-secondary">超过后续题目加 1 级，超过 2 倍加 2 级，0 关闭；验证码请求不会因 IP 被拒绝</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">30 次/分钟</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 100000 次/分钟</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-44">
+                  <input type="number" value="30" min="0" max="100000" class="w-full pl-3 pr-16 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">次/分钟</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. 绑定客户端 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">绑定客户端</div>
+                <p class="text-xs text-ink-secondary">题目绑定到客户端（IP + UA 哈希），换客户端提交直接作废，抵御题目搬运与代答</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">已开启</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">开启 / 关闭</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <!-- 切换开关 -->
+                <button type="button" class="w-12 h-6 bg-brand rounded-full p-1 transition-colors relative flex items-center">
+                  <span class="w-4 h-4 bg-white rounded-full transition-transform translate-x-6 shadow-sm"></span>
+                </button>
+                <span class="text-xs font-semibold text-brand">开启</span>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 ml-2">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 8. 主图质量 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">主图质量</div>
+                <p class="text-xs text-ink-secondary">拼图与点选验证码背景图压缩质量，控制带宽消耗与视觉清晰度的平衡</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">80 (JPEG)</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">55 - 100</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="80" min="55" max="100" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">%</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 9. 最大出图倍率 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">最大出图倍率</div>
+                <p class="text-xs text-ink-secondary">根据前端 devicePixelRatio 渲染清晰度（1x、2x、3x Retina 高清屏渲染）</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">3 倍</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">1 - 3 倍</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="3" min="1" max="3" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">倍</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 二、工作量证明（提交前在浏览器里计算的 SHA-256 难题） -->
+      <section class="bg-white rounded-2xl border border-ink-border shadow-xs overflow-hidden">
+        <div class="px-6 py-4.5 bg-slate-50/80 border-b border-ink-border flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+            <h2 class="text-base font-bold text-ink">二、工作量证明（提交前在浏览器里计算的 SHA-256 难题）</h2>
+            <span class="text-xs text-ink-mute">共 4 项参数</span>
+          </div>
+          <span class="text-xs text-ink-mute bg-white px-2.5 py-1 rounded border border-ink-border">PoW 算力耗尽防御机制</span>
+        </div>
+
+        <div class="divide-y divide-ink-border/60">
+
+          <!-- 1. 下发 PoW 挑战 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">下发 PoW 挑战</div>
+                <p class="text-xs text-ink-secondary">在下发题目元数据时附带前导零哈希难题种子，要求浏览器端后台并行计算</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">已开启</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">开启 / 关闭</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <button type="button" class="w-12 h-6 bg-brand rounded-full p-1 transition-colors relative flex items-center">
+                  <span class="w-4 h-4 bg-white rounded-full transition-transform translate-x-6 shadow-sm"></span>
+                </button>
+                <span class="text-xs font-semibold text-brand">开启</span>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 ml-2">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 强制要求 PoW -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">强制要求 PoW</div>
+                <p class="text-xs text-ink-secondary">关闭时未提交 PoW 仍可通过，但计入风险分；开启后未通过 PoW 校验一律拒绝</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">已关闭</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">开启 / 关闭</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <button type="button" class="w-12 h-6 bg-slate-300 rounded-full p-1 transition-colors relative flex items-center">
+                  <span class="w-4 h-4 bg-white rounded-full transition-transform translate-x-0 shadow-sm"></span>
+                </button>
+                <span class="text-xs font-semibold text-ink-mute">关闭</span>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 ml-2">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 基础难度 (PoW) -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">基础难度</div>
+                <p class="text-xs text-ink-secondary">SHA-256 哈希计算所需前导零位数（14 位普通移动端约耗时 15-40ms）</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">14 位前导零</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">1 - 26 位前导零</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-44">
+                  <input type="number" value="14" min="1" max="26" class="w-full pl-3 pr-14 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">位前导零</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. 难度上限 (PoW) -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">难度上限</div>
+                <p class="text-xs text-ink-secondary">动态加难时的最大位数值限制，不能小于基础难度（防止过度消耗低端设备算力）</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">20 位</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">1 - 26 位</strong> (≥ 基础难度)</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="20" min="14" max="26" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">位</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 三、风控评分（行为轨迹与环境信号评分；调整前建议先去「风控观察」对照原因分布） -->
+      <section class="bg-white rounded-2xl border border-ink-border shadow-xs overflow-hidden">
+        <div class="px-6 py-4.5 bg-slate-50/80 border-b border-ink-border flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <h2 class="text-base font-bold text-ink">三、风控评分（行为轨迹与环境信号评分）</h2>
+            <span class="text-xs text-ink-mute">共 10 项参数</span>
+          </div>
+          <span class="text-xs text-ink-mute bg-white px-2.5 py-1 rounded border border-ink-border">微动力学生物特征与环境指纹</span>
+        </div>
+
+        <div class="divide-y divide-ink-border/60">
+
+          <!-- 1. 启用风控评分 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">启用风控评分</div>
+                <p class="text-xs text-ink-secondary">开启行为轨迹时序分析与客户端环境特征加权评分引擎</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">已开启</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">开启 / 关闭</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <button type="button" class="w-12 h-6 bg-brand rounded-full p-1 transition-colors relative flex items-center">
+                  <span class="w-4 h-4 bg-white rounded-full transition-transform translate-x-6 shadow-sm"></span>
+                </button>
+                <span class="text-xs font-semibold text-brand">开启</span>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 ml-2">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 运行模式 (修改未保存示例: 默认 enforce -> 改为 log) -->
+          <div class="p-6 bg-amber-50/40 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-sm font-semibold text-ink">运行模式</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                    已修改未保存
+                  </span>
+                </div>
+                <p class="text-xs text-ink-secondary">enforce（按阈值拦截）/ log（只记录分数，用于灰度观察，不实际阻断）</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">enforce</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">enforce / log</strong></span>
+                </div>
+              </div>
+              <!-- 交互单选组 -->
+              <div class="flex items-center gap-2 self-end lg:self-center bg-white p-1 rounded-lg border border-amber-300 shadow-xs">
+                <button type="button" class="px-3.5 py-1.5 rounded-md text-xs font-medium text-ink-mute hover:text-ink transition-colors">
+                  enforce（严格拦截）
+                </button>
+                <button type="button" class="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-amber-500 text-white shadow-xs">
+                  <i class="fa-solid fa-eye text-[11px] mr-1"></i> log（仅记录观察）
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 加难阈值 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">加难阈值</div>
+                <p class="text-xs text-ink-secondary">达到后提升该客户端后续出题难度与 PoW 位数，进行递进防御</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">55 分</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 100 分</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="55" min="0" max="100" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">分</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. 拦截阈值 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">拦截阈值</div>
+                <p class="text-xs text-ink-secondary">风险评分达到或超过该阈值时判定校验失败（不能小于加难阈值）</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">85 分</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 100 分</strong> (≥ 加难阈值)</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="85" min="55" max="100" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">分</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. 拦截所需最低行为分 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">拦截所需最低行为分</div>
+                <p class="text-xs text-ink-secondary">行为轨迹异常分需达标才触发拦截；但命中 webdriver 等硬性自动化标记时不要求此限制</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">20 分</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 100 分</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="20" min="0" max="100" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">分</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. 环境分上限 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">环境分上限</div>
+                <p class="text-xs text-ink-secondary">网络/指纹等纯环境信号贡献的最大分值，0 不限制；确保仅凭环境信号达不到拦截阈值造成误杀</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">60 分</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 100 分</strong> (0 为不限制)</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="60" min="0" max="100" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">分</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. 指纹重放阈值 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">指纹重放阈值</div>
+                <p class="text-xs text-ink-secondary">同一时间窗内同一设备指纹关联的最大客户端实例数量，超过判定为群控模拟器，0 关闭</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">5 个客户端</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 1000 个客户端</strong> (0 为关闭)</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-44">
+                  <input type="number" value="5" min="0" max="1000" class="w-full pl-3 pr-16 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">个客户端</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 8. 指纹重放时间窗 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">指纹重放时间窗</div>
+                <p class="text-xs text-ink-secondary">统计指纹碰撞与重放攻击的滑动时间窗口</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">600 秒</strong> (10分钟)</span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">10 - 86400 秒</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="600" min="10" max="86400" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">秒</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 9. 客户端状态保留时长 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">客户端状态保留时长</div>
+                <p class="text-xs text-ink-secondary">内存及本地存储中保持该客户端信誉评级、连续失败计数的 TTL 时长</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">1800 秒</strong> (30分钟)</span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">60 - 86400 秒</strong></span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-36">
+                  <input type="number" value="1800" min="60" max="86400" class="w-full pl-3 pr-8 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">秒</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 10. 风控观察保留条数 -->
+          <div class="p-6 hover:bg-slate-50/50 transition-colors">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="space-y-1 max-w-xl">
+                <div class="text-sm font-semibold text-ink">风控观察保留条数</div>
+                <p class="text-xs text-ink-secondary">「风控观察」环形缓冲区保留的最近评估与校验审计记录最大数量，0 表示不记录</p>
+                <div class="flex items-center gap-4 text-xs text-ink-mute pt-1">
+                  <span>默认值：<strong class="text-ink font-medium">10000 条</strong></span>
+                  <span>•</span>
+                  <span>取值范围：<strong class="text-ink font-medium">0 - 1000000 条</strong> (0 为不记录)</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end lg:self-center">
+                <div class="relative w-44">
+                  <input type="number" value="10000" step="1000" min="0" max="1000000" class="w-full pl-3 pr-10 py-1.5 text-sm font-semibold text-ink border border-ink-border rounded-lg text-right focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                  <span class="absolute right-3 top-2 text-xs text-ink-mute font-normal">条</span>
+                </div>
+                <span class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">默认</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+
+    <!-- 页面底部浮动状态与提交栏 (增强操作便利度与实时反馈) -->
+    <div class="sticky bottom-6 z-20 mt-10">
+      <div class="bg-white/95 backdrop-blur-md border border-ink-border shadow-lg rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-4xl mx-auto">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center text-sm font-bold shrink-0">
+            !
+          </div>
+          <div>
+            <div class="text-sm font-semibold text-ink">存在 2 项未保存修改</div>
+            <div class="text-xs text-ink-mute">
+              基础难度：3 级 → <span class="text-amber-600 font-medium">4 级</span> ； 运行模式：enforce → <span class="text-amber-600 font-medium">log</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0">
+          <button type="button" class="px-3.5 py-1.5 text-xs font-medium text-ink-secondary hover:text-ink border border-ink-border rounded-lg hover:bg-slate-50 transition-colors">
+            放弃未保存修改
+          </button>
+          <button type="button" class="px-5 py-2 text-sm font-medium text-white bg-brand hover:bg-brand-hover rounded-lg transition-all shadow-sm shadow-brand/20 flex items-center gap-2">
+            <i class="fa-solid fa-check text-xs"></i>
+            保存并立即生效
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 底部页脚 (与系统概览、风控观察等页面一致) -->
+  <footer class="bg-white border-t border-ink-border mt-12 py-5 text-xs text-ink-mute">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div>simple-captcha v1.2.0 • 社区开源独立部署</div>
+      <div class="flex items-center space-x-6">
+        <a href="#" class="hover:text-ink transition-colors">账号与安全</a>
+        <a href="#" class="hover:text-ink transition-colors">退出登录</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

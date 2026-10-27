@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>风控观察 - simple-captcha</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-primary": "#ffffff",
+            "secondary-fixed": "#e1e0ff",
+            "on-tertiary-container": "#ffd3c5",
+            "on-primary-fixed-variant": "#3600e1",
+            "primary-soft": "#665efd",
+            "on-tertiary-fixed": "#380d00",
+            "hairline": "#e3e8ee",
+            "ink-mute-2": "#61718a",
+            "secondary": "#575992",
+            "outline": "#777588",
+            "on-tertiary-fixed-variant": "#812800",
+            "surface-tint": "#5036fa",
+            "on-background": "#1b1a25",
+            "canvas": "#ffffff",
+            "error-container": "#ffdad6",
+            "background": "#fcf8ff",
+            "inverse-on-surface": "#f3eefe",
+            "surface-container-high": "#eae6f5",
+            "outline-variant": "#c8c4da",
+            "inverse-surface": "#302f3a",
+            "hairline-input": "#a8c3de",
+            "on-error-container": "#93000a",
+            "primary-press": "#2e2b8c",
+            "on-secondary-fixed": "#12144b",
+            "surface": "#fcf8ff",
+            "primary-container": "#533afd",
+            "primary-fixed-dim": "#c5c0ff",
+            "on-primary-container": "#ddd9ff",
+            "on-secondary-container": "#494b83",
+            "surface-container-low": "#f6f2ff",
+            "surface-variant": "#e4e0ef",
+            "surface-container-highest": "#e4e0ef",
+            "on-error": "#ffffff",
+            "tertiary": "#862a00",
+            "secondary-container": "#bdbefe",
+            "on-surface": "#1b1a25",
+            "surface-container": "#f0ecfb",
+            "on-tertiary": "#ffffff",
+            "on-primary-fixed": "#130067",
+            "secondary-fixed-dim": "#c0c1ff",
+            "canvas-soft": "#f6f9fc",
+            "on-surface-variant": "#474556",
+            "ink-secondary": "#273951",
+            "surface-dim": "#dcd8e7",
+            "primary": "#3904e7",
+            "ink": "#0d253d",
+            "primary-deep": "#4434d4",
+            "on-secondary-fixed-variant": "#3f4178",
+            "surface-container-lowest": "#ffffff",
+            "ink-mute": "#64748d",
+            "error": "#ba1a1a",
+            "primary-bg-subdued-hover": "#b9b9f9",
+            "surface-bright": "#fcf8ff",
+            "brand-dark-900": "#1c1e54",
+            "canvas-cream": "#f5e9d4",
+            "tertiary-fixed": "#ffdbcf",
+            "primary-fixed": "#e3dfff",
+            "tertiary-container": "#ae3900",
+            "tertiary-fixed-dim": "#ffb59b",
+            "on-secondary": "#ffffff",
+            "inverse-primary": "#c5c0ff"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "margin": "24px",
+            "space-lg": "16px",
+            "space-xxs": "2px",
+            "space-huge": "64px",
+            "gutter": "16px",
+            "space-xl": "24px",
+            "space-md": "12px",
+            "space-xs": "4px",
+            "space-sm": "8px",
+            "space-xxl": "32px"
+          },
+          "fontFamily": {
+            "button-sm": ["\"Inter, sans-serif\""],
+            "body-tabular": ["\"Inter, sans-serif\""],
+            "micro-cap": ["\"Inter, sans-serif\""],
+            "display-md": ["\"Inter, sans-serif\""],
+            "caption": ["\"Inter, sans-serif\""],
+            "micro": ["\"Inter, sans-serif\""],
+            "heading-lg": ["\"Inter, sans-serif\""],
+            "heading-sm": ["\"Inter, sans-serif\""],
+            "heading-md": ["\"Inter, sans-serif\""],
+            "button-md": ["\"Inter, sans-serif\""],
+            "body-md": ["\"Inter, sans-serif\""],
+            "body-lg": ["\"Inter, sans-serif\""],
+            "display-xl": ["\"Inter, sans-serif\""],
+            "display-lg": ["\"Inter, sans-serif\""],
+            "display-xxl": ["\"Inter, sans-serif\""]
+          },
+          "fontSize": {
+            "button-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "body-tabular": ["14px", { "lineHeight": "1.4", "letterSpacing": "-0.42px", "fontWeight": "300" }],
+            "micro-cap": ["10px", { "lineHeight": "1.15", "letterSpacing": "0.1px", "fontWeight": "400" }],
+            "display-md": ["26px", { "lineHeight": "1.12", "letterSpacing": "-0.26px", "fontWeight": "300" }],
+            "caption": ["13px", { "lineHeight": "1.4", "letterSpacing": "-0.39px", "fontWeight": "400" }],
+            "micro": ["11px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "heading-lg": ["22px", { "lineHeight": "1.1", "letterSpacing": "-0.22px", "fontWeight": "300" }],
+            "heading-sm": ["18px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "heading-md": ["20px", { "lineHeight": "1.4", "letterSpacing": "-0.2px", "fontWeight": "300" }],
+            "button-md": ["16px", { "lineHeight": "1", "letterSpacing": "0", "fontWeight": "400" }],
+            "body-md": ["15px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "body-lg": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "300" }],
+            "display-xl": ["48px", { "lineHeight": "1.15", "letterSpacing": "-0.96px", "fontWeight": "300" }],
+            "display-lg": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.64px", "fontWeight": "300" }],
+            "display-xxl": ["56px", { "lineHeight": "1.03", "letterSpacing": "-1.4px", "fontWeight": "300" }]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-canvas text-ink font-body-md text-body-md antialiased min-h-full flex flex-col selection:bg-primary selection:text-on-primary">
+<!-- TopNavBar (Shared Component) -->
+<header class="bg-canvas border-b border-hairline w-full docked full-width top-0 z-50">
+<div class="flex justify-between items-center w-full px-space-xl h-16 max-w-7xl mx-auto">
+<div class="flex items-center gap-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="text-heading-md font-heading-md tracking-tight font-normal text-ink">simple-captcha</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-primary font-micro-cap text-micro-cap tracking-wide border border-primary-fixed-dim">自托管服务</span>
+</div>
+<nav class="hidden md:flex items-center space-x-6 ml-6 h-16">
+<a class="text-ink-mute hover:text-ink pb-4 pt-4 transition-colors font-body-md text-body-md" href="#">概览</a>
+<a class="text-ink-mute hover:text-ink pb-4 pt-4 transition-colors font-body-md text-body-md" href="#">接入应用</a>
+<!-- Active Nav Item -->
+<a class="text-primary font-normal border-b-2 border-primary pb-4 pt-4 font-body-md text-body-md flex items-center gap-1" href="#">
+            风控观察
+          </a>
+<a class="text-ink-mute hover:text-ink pb-4 pt-4 transition-colors font-body-md text-body-md" href="#">策略配置</a>
+<a class="text-ink-mute hover:text-ink pb-4 pt-4 transition-colors font-body-md text-body-md" href="#">背景图</a>
+</nav>
+</div>
+<div class="flex items-center gap-space-md">
+<a class="hidden sm:flex items-center gap-1 text-caption font-caption text-ink-mute hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-base">description</span>
+<span>接口文档</span>
+</a>
+<div class="h-4 w-px bg-hairline hidden sm:block"></div>
+<div class="relative group">
+<button class="flex items-center gap-1 px-3 py-1.5 rounded-full hover:bg-canvas-soft border border-hairline text-ink transition-colors cursor-pointer text-button-sm font-button-sm" type="button">
+<span class="w-5 h-5 rounded-full bg-primary-fixed text-primary flex items-center justify-center font-micro text-micro font-medium">A</span>
+<span class="font-normal">admin</span>
+<span class="material-symbols-outlined text-base text-ink-mute">expand_more</span>
+</button>
+<!-- Admin Dropdown Menu -->
+<div class="absolute right-0 mt-1 w-44 bg-canvas rounded-lg border border-hairline shadow-sm py-1 hidden group-hover:block hover:block z-50">
+<a class="flex items-center gap-2 px-3 py-2 text-caption font-caption text-ink hover:bg-canvas-soft" href="#">
+<span class="material-symbols-outlined text-base text-ink-mute">manage_accounts</span>
+<span>账号与安全</span>
+</a>
+<div class="h-px bg-hairline my-1"></div>
+<a class="flex items-center gap-2 px-3 py-2 text-caption font-caption text-error hover:bg-error-container/20" href="#">
+<span class="material-symbols-outlined text-base text-error">logout</span>
+<span>退出登录</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Workspace -->
+<main class="flex-1 max-w-7xl w-full mx-auto px-space-xl py-space-xl space-y-space-xl">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-lg pb-space-lg border-b border-hairline">
+<div class="space-y-1">
+<div class="flex items-center gap-3">
+<h1 class="text-display-md font-display-md text-ink tracking-tight">风控观察</h1>
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-canvas-soft border border-hairline text-ink-mute text-micro font-micro">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            环形缓冲区就绪
+          </span>
+</div>
+<p class="text-caption font-caption text-ink-mute max-w-3xl">
+          只读查看最近的出题评估与校验评分，用于调整风控策略前对照真人与脚本的原因分布。IP 与 UA 已由服务端脱敏。
+        </p>
+</div>
+<!-- Header Actions -->
+<div class="flex flex-wrap items-center gap-3 shrink-0">
+<!-- Segmented Control for Load Limit -->
+<div class="flex items-center p-0.5 rounded-full bg-canvas-soft border border-hairline text-caption font-caption text-ink-mute">
+<span class="text-micro font-micro px-2 text-ink-mute-2">采样条数</span>
+<button class="px-2.5 py-1 rounded-full hover:text-ink transition-colors" type="button">50</button>
+<button class="px-2.5 py-1 rounded-full bg-canvas text-primary font-medium shadow-xs border border-hairline" type="button">100</button>
+<button class="px-2.5 py-1 rounded-full hover:text-ink transition-colors" type="button">200</button>
+</div>
+<!-- Refresh Button -->
+<button class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-canvas hover:bg-canvas-soft border border-hairline text-ink text-button-sm font-button-sm transition-all shadow-xs active:scale-95" type="button">
+<span class="material-symbols-outlined text-base text-primary animate-spin" style="animation-duration: 3s;">refresh</span>
+<span>刷新</span>
+</button>
+<!-- Status Meta -->
+<div class="text-micro font-micro text-ink-mute-2 pl-1 border-l border-hairline hidden xl:block">
+          共 100 条 · 更新于 14:38:22
+        </div>
+</div>
+</div>
+<!-- Filter Bar & Quick Metrics Bento Row -->
+<div class="space-y-space-md">
+<div class="p-space-lg rounded-xl bg-canvas-soft border border-hairline space-y-space-md">
+<div class="flex flex-wrap items-center gap-3 justify-between">
+<!-- Filters Left -->
+<div class="flex flex-wrap items-center gap-2">
+<!-- Stage Filter Pills -->
+<div class="inline-flex p-0.5 rounded-full bg-canvas border border-hairline text-caption font-caption">
+<button class="px-3 py-1 rounded-full bg-primary text-on-primary font-normal">全部阶段</button>
+<button class="px-3 py-1 rounded-full text-ink-mute hover:text-ink transition-colors">出题评估</button>
+<button class="px-3 py-1 rounded-full text-ink-mute hover:text-ink transition-colors">校验评分</button>
+</div>
+<!-- Result Filter -->
+<div class="inline-flex p-0.5 rounded-full bg-canvas border border-hairline text-caption font-caption">
+<button class="px-3 py-1 rounded-full bg-ink text-on-primary">全部结果</button>
+<button class="px-3 py-1 rounded-full text-ink-mute hover:text-ink transition-colors">通过</button>
+<button class="px-3 py-1 rounded-full text-ink-mute hover:text-ink transition-colors">失败</button>
+</div>
+<!-- App Select -->
+<div class="relative">
+<select class="appearance-none bg-canvas border border-hairline-input text-ink text-caption font-caption rounded-full pl-3 pr-8 py-1.5 focus:border-primary focus:ring-0">
+<option>全部应用 (3个生效)</option>
+<option>订单系统 (app_order_prod)</option>
+<option>会员中心 (app_member_auth)</option>
+<option>app_del_83f2 (已删除应用)</option>
+</select>
+<span class="material-symbols-outlined text-sm text-ink-mute absolute right-2.5 top-2 pointer-events-none">expand_more</span>
+</div>
+<!-- Challenge Type Select -->
+<div class="relative">
+<select class="appearance-none bg-canvas border border-hairline-input text-ink text-caption font-caption rounded-full pl-3 pr-8 py-1.5 focus:border-primary focus:ring-0 font-mono">
+<option class="font-sans">全部题型 (Type)</option>
+<option>click-text</option>
+<option>click-shape</option>
+<option>slide-text</option>
+<option>slide-region</option>
+<option>rotate</option>
+</select>
+<span class="material-symbols-outlined text-sm text-ink-mute absolute right-2.5 top-2 pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="text-micro font-micro text-ink-mute">
+            过滤后命中 <span class="text-ink font-medium">100 / 100</span> 条
+          </div>
+</div>
+<!-- Quick Summary Bar (极简指标小条) -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-space-sm border-t border-hairline/80">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-soft"></span>
+<span class="text-caption font-caption text-ink-mute">出题评估：</span>
+<span class="text-body-tabular font-body-tabular text-ink font-medium">42 条</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="text-caption font-caption text-ink-mute">校验评分：</span>
+<span class="text-body-tabular font-body-tabular text-ink font-medium">58 条</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="text-caption font-caption text-ink-mute">通过/失败：</span>
+<span class="text-body-tabular font-body-tabular text-ink font-medium">51 <span class="text-ink-mute">/</span> <span class="text-error font-medium">7</span></span>
+</div>
+<div class="flex items-center gap-2 sm:justify-end">
+<span class="text-caption font-caption text-ink-mute">异常拦截率：</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-error-container text-on-error-container text-caption font-body-tabular font-medium">12.1%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Master-Detail Work Area: Log Streams & Interactive Expanded Row Drawer -->
+<div class="space-y-space-md">
+<div class="flex items-center justify-between">
+<h2 class="text-heading-sm font-heading-sm text-ink flex items-center gap-2">
+<span>事件流追踪</span>
+<span class="text-caption font-caption text-ink-mute font-normal">(最近100条评估判定)</span>
+</h2>
+<span class="text-micro font-micro text-ink-mute flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">info</span>
+          点击「查看全部字段」呼出单条完整调试指纹
+        </span>
+</div>
+<!-- Records Table Container -->
+<div class="bg-canvas border border-hairline rounded-xl overflow-hidden shadow-xs">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-canvas-soft border-b border-hairline text-ink-mute text-micro font-micro uppercase tracking-wider">
+<th class="py-3 px-4 font-normal">阶段 / 判定</th>
+<th class="py-3 px-4 font-normal">时分秒</th>
+<th class="py-3 px-4 font-normal">所属应用</th>
+<th class="py-3 px-4 font-normal">题型</th>
+<th class="py-3 px-4 font-normal">核心打分与评级</th>
+<th class="py-3 px-4 font-normal">原因分布与异常标签</th>
+<th class="py-3 px-4 font-normal">客户端摘要</th>
+<th class="py-3 px-4 font-normal text-right">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-hairline text-caption font-caption">
+<!-- ROW 1: 校验评分 (失败) - ACTIVE / EXPANDED DEMO -->
+<tr class="bg-primary/5 hover:bg-canvas-soft transition-colors border-l-4 border-l-primary">
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container text-micro font-micro font-medium border border-error/20">
+<span class="material-symbols-outlined text-xs">cancel</span>
+                    校验失败
+                  </span>
+</td>
+<td class="py-3.5 px-4 font-body-tabular text-body-tabular text-ink whitespace-nowrap">14:38:19</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="text-ink font-medium">订单系统</span>
+<div class="text-micro font-micro text-ink-mute">app_order_prod</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<code class="px-2 py-0.5 rounded bg-surface-container text-ink font-mono text-micro border border-hairline">slide-region</code>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<div class="text-ink">风险分: <span class="text-error font-medium font-body-tabular">88</span> <span class="text-hairline-input">/</span> 行为分: <span class="font-body-tabular">22</span></div>
+<div class="text-micro font-micro text-error font-medium">判定结果: 拒绝 (REJECT)</div>
+</td>
+<td class="py-3.5 px-4">
+<div class="flex flex-wrap gap-1 max-w-xs">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-error/10 text-error font-mono text-micro">webdriver (+60)</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-error/10 text-error font-mono text-micro">trace_missing (+30)</span>
+</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-ink-mute font-body-tabular text-micro">
+<div>203.0.113.x · POST</div>
+<div class="text-ink-mute-2 truncate max-w-[120px]" title="Chrome 130 · macOS">Chrome 130 · macOS</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-right">
+<button class="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-primary text-on-primary text-micro font-micro hover:bg-primary-press transition-colors" type="button">
+<span>收起字段</span>
+<span class="material-symbols-outlined text-xs">expand_less</span>
+</button>
+</td>
+</tr>
+<!-- EXPANDED DETAIL VIEW ACCORDION FOR ROW 1 -->
+<tr class="bg-surface-container-low/60 border-b border-hairline">
+<td class="p-space-lg" colspan="8">
+<div class="bg-canvas border border-hairline rounded-xl p-space-lg shadow-xs space-y-space-md">
+<div class="flex flex-wrap items-center justify-between gap-3 pb-space-sm border-b border-hairline">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg">data_object</span>
+<span class="text-heading-sm font-heading-sm text-ink">完整字段视图 (Raw Audit Context)</span>
+<code class="px-2 py-0.5 rounded bg-canvas-soft border border-hairline text-ink-mute text-micro font-mono">rec_evt_01JDJ59AK8742M</code>
+</div>
+<div class="flex items-center gap-2">
+<button class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-canvas hover:bg-canvas-soft border border-hairline text-caption font-caption text-ink transition-colors" type="button">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+<span>复制整条 JSON</span>
+</button>
+<button class="p-1 rounded-full text-ink-mute hover:text-ink transition-colors" type="button">
+<span class="material-symbols-outlined text-base">close</span>
+</button>
+</div>
+</div>
+<!-- Structured Key-Value Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-lg text-caption font-caption">
+<!-- Base Attributes -->
+<div class="space-y-2 p-3 rounded-lg bg-canvas-soft/80 border border-hairline">
+<div class="text-micro font-micro text-ink-mute-2 uppercase font-medium">基础字段 (Base Event)</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">记录 ID:</span>
+<span class="font-mono text-ink text-micro select-all">rec_evt_01JDJ59AK8742M</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">阶段:</span>
+<span class="font-medium text-error">校验评分 (Verification)</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">时间戳:</span>
+<span class="font-body-tabular text-ink">1731652699314 (14:38:19.314)</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">所属应用 / ID:</span>
+<span class="text-ink">订单系统 <code class="text-micro font-mono text-ink-mute">(app_order_prod)</code></span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">题目 Key:</span>
+<span class="font-mono text-micro text-ink truncate max-w-[140px]" title="ch_7f81a9c1809fd2a1e8">ch_7f81a9c1809fd...</span>
+</div>
+<div class="flex justify-between py-0.5">
+<span class="text-ink-mute">题型类别:</span>
+<span class="font-mono text-ink text-micro">slide-region (滑块选区)</span>
+</div>
+</div>
+<!-- Network and Fingerprint -->
+<div class="space-y-2 p-3 rounded-lg bg-canvas-soft/80 border border-hairline">
+<div class="text-micro font-micro text-ink-mute-2 uppercase font-medium">网络与环境指纹 (Network &amp; Fingerprint)</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">脱敏客户端 IP:</span>
+<span class="font-body-tabular text-ink">198.51.100.x <span class="text-micro text-ink-mute">(AS15169)</span></span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">脱敏客户端 UA:</span>
+<span class="text-ink truncate max-w-[150px]" title="Chrome 130.0.0.0 · macOS 15.1">Chrome 130.0.0.0 · macOS 15.1</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">客户端标识哈希:</span>
+<span class="font-mono text-micro text-ink">c_hash_9f4e2801...</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">TLS 指纹 (JA3):</span>
+<span class="font-mono text-micro text-ink truncate max-w-[150px]" title="ja3: 771,4865-4866-4867-49195-49199...">ja3: 771,4865-4866...</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">HTTP/2 指纹:</span>
+<span class="font-mono text-micro text-ink truncate max-w-[150px]" title="h2: 1:65536,2:0,4:6291456,6:262144">h2: 1:65536,2:0...</span>
+</div>
+<div class="flex justify-between py-0.5">
+<span class="text-ink-mute">提交通道:</span>
+<span class="text-ink">POST 提交 / 经业务服务端二次回源</span>
+</div>
+</div>
+<!-- Scoring Details & Rule Breakdown -->
+<div class="space-y-2 p-3 rounded-lg bg-canvas-soft/80 border border-hairline">
+<div class="text-micro font-micro text-ink-mute-2 uppercase font-medium">评分细节与规则 (Risk Engine Metrics)</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">风控判定风险分:</span>
+<span class="font-body-tabular text-error font-medium">88 / 100 (高危截断)</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">行为轨迹分:</span>
+<span class="font-body-tabular text-ink">22 / 100 (轨迹平直机械)</span>
+</div>
+<div class="flex justify-between py-0.5 border-b border-hairline/60">
+<span class="text-ink-mute">校验最终结果:</span>
+<span class="px-2 py-0.2 rounded bg-error-container text-on-error-container text-micro font-medium">失败 (REJECTED)</span>
+</div>
+<div class="pt-1">
+<span class="text-ink-mute text-micro">触发的风控原因清单与权重:</span>
+<div class="space-y-1 mt-1">
+<div class="flex justify-between text-micro font-mono bg-canvas p-1 rounded border border-hairline">
+<span class="text-error">webdriver</span>
+<span class="text-ink-mute">+60 分 (navigator.webdriver 检测)</span>
+</div>
+<div class="flex justify-between text-micro font-mono bg-canvas p-1 rounded border border-hairline">
+<span class="text-error">trace_missing</span>
+<span class="text-ink-mute">+30 分 (鼠标物理移动包缺失)</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</td>
+</tr>
+<!-- ROW 2: 出题评估 -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-fixed text-primary text-micro font-micro font-medium border border-primary-fixed-dim">
+<span class="material-symbols-outlined text-xs">psychology</span>
+                    出题评估
+                  </span>
+</td>
+<td class="py-3.5 px-4 font-body-tabular text-body-tabular text-ink whitespace-nowrap">14:38:15</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="text-ink font-medium">会员中心</span>
+<div class="text-micro font-micro text-ink-mute">app_member_auth</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<code class="px-2 py-0.5 rounded bg-surface-container text-ink font-mono text-micro border border-hairline">click-text</code>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<div class="text-ink">
+                    最终难度: <span class="font-medium text-primary">4 级</span>
+<span class="text-micro text-ink-mute">(默认3 + 环境加难+1)</span>
+</div>
+<div class="text-micro font-micro text-ink-mute">环境分: <span class="font-body-tabular text-ink">82</span> · 请求头一致</div>
+</td>
+<td class="py-3.5 px-4">
+<div class="flex flex-wrap gap-1 max-w-xs">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-primary-fixed text-primary font-mono text-micro">ip_pressure (+1)</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-primary-fixed text-primary font-mono text-micro">env_boost (+1)</span>
+</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-ink-mute font-body-tabular text-micro">
+<div>203.0.113.x · GET</div>
+<div class="text-ink-mute-2 truncate max-w-[120px]">Chrome 130 · Windows</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-right">
+<button class="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-canvas hover:bg-canvas-soft border border-hairline text-ink text-micro font-micro transition-colors" type="button">
+<span>查看全部字段</span>
+<span class="material-symbols-outlined text-xs">expand_more</span>
+</button>
+</td>
+</tr>
+<!-- ROW 3: 校验评分 (通过) -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-micro font-micro font-medium border border-emerald-200">
+<span class="material-symbols-outlined text-xs">check_circle</span>
+                    校验通过
+                  </span>
+</td>
+<td class="py-3.5 px-4 font-body-tabular text-body-tabular text-ink whitespace-nowrap">14:38:09</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="text-ink font-medium">订单系统</span>
+<div class="text-micro font-micro text-ink-mute">app_order_prod</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<code class="px-2 py-0.5 rounded bg-surface-container text-ink font-mono text-micro border border-hairline">rotate</code>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<div class="text-ink">风险分: <span class="font-body-tabular text-emerald-700 font-medium">12</span> <span class="text-hairline-input">/</span> 行为分: <span class="font-body-tabular text-emerald-700 font-medium">94</span></div>
+<div class="text-micro font-micro text-emerald-700 font-medium">判定结果: 放行 (ACCEPT)</div>
+</td>
+<td class="py-3.5 px-4">
+<span class="text-micro font-micro text-ink-mute flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-emerald-600">verified</span>
+                    无异常原因 · 行为特征自然
+                  </span>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-ink-mute font-body-tabular text-micro">
+<div>198.51.100.x · POST</div>
+<div class="text-ink-mute-2 truncate max-w-[120px]">Safari 18.0 · iOS</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-right">
+<button class="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-canvas hover:bg-canvas-soft border border-hairline text-ink text-micro font-micro transition-colors" type="button">
+<span>查看全部字段</span>
+<span class="material-symbols-outlined text-xs">expand_more</span>
+</button>
+</td>
+</tr>
+<!-- ROW 4: 校验评分 (失败 - 异常标签多项) -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container text-micro font-micro font-medium border border-error/20">
+<span class="material-symbols-outlined text-xs">cancel</span>
+                    校验失败
+                  </span>
+</td>
+<td class="py-3.5 px-4 font-body-tabular text-body-tabular text-ink whitespace-nowrap">14:37:58</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="text-ink-mute italic">app_8a39c0 (已删除)</span>
+<div class="text-micro font-micro text-ink-mute-2">历史归档数据</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<code class="px-2 py-0.5 rounded bg-surface-container text-ink font-mono text-micro border border-hairline">click-shape</code>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<div class="text-ink">风险分: <span class="text-error font-medium font-body-tabular">95</span> <span class="text-hairline-input">/</span> 行为分: <span class="font-body-tabular">14</span></div>
+<div class="text-micro font-micro text-error font-medium">判定结果: 拒绝 (REJECT)</div>
+</td>
+<td class="py-3.5 px-4">
+<div class="flex flex-wrap gap-1 max-w-xs">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-error/10 text-error font-mono text-micro">uniform_click_intervals (+15)</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-error/10 text-error font-mono text-micro">sec_fetch_missing (+10)</span>
+</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-ink-mute font-body-tabular text-micro">
+<div>203.0.113.x · POST</div>
+<div class="text-ink-mute-2 truncate max-w-[120px]">Python-Requests 2.31</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-right">
+<button class="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-canvas hover:bg-canvas-soft border border-hairline text-ink text-micro font-micro transition-colors" type="button">
+<span>查看全部字段</span>
+<span class="material-symbols-outlined text-xs">expand_more</span>
+</button>
+</td>
+</tr>
+<!-- ROW 5: 出题评估 -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-fixed text-primary text-micro font-micro font-medium border border-primary-fixed-dim">
+<span class="material-symbols-outlined text-xs">psychology</span>
+                    出题评估
+                  </span>
+</td>
+<td class="py-3.5 px-4 font-body-tabular text-body-tabular text-ink whitespace-nowrap">14:37:44</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="text-ink font-medium">订单系统</span>
+<div class="text-micro font-micro text-ink-mute">app_order_prod</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<code class="px-2 py-0.5 rounded bg-surface-container text-ink font-mono text-micro border border-hairline">slide-text</code>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<div class="text-ink">
+                    最终难度: <span class="font-medium text-ink">3 级</span>
+<span class="text-micro text-ink-mute">(基准难度3 + 0)</span>
+</div>
+<div class="text-micro font-micro text-ink-mute">环境分: <span class="font-body-tabular text-ink">95</span> · 指纹可信</div>
+</td>
+<td class="py-3.5 px-4">
+<span class="text-micro font-micro text-ink-mute flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-ink-mute-2">tune</span>
+                    标准出题策略 · 无加难因数
+                  </span>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-ink-mute font-body-tabular text-micro">
+<div>198.51.100.x · GET</div>
+<div class="text-ink-mute-2 truncate max-w-[120px]">Edge 131 · Windows</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-right">
+<button class="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-canvas hover:bg-canvas-soft border border-hairline text-ink text-micro font-micro transition-colors" type="button">
+<span>查看全部字段</span>
+<span class="material-symbols-outlined text-xs">expand_more</span>
+</button>
+</td>
+</tr>
+<!-- ROW 6: 出题评估 (带 client_history) -->
+<tr class="hover:bg-canvas-soft transition-colors">
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-fixed text-primary text-micro font-micro font-medium border border-primary-fixed-dim">
+<span class="material-symbols-outlined text-xs">psychology</span>
+                    出题评估
+                  </span>
+</td>
+<td class="py-3.5 px-4 font-body-tabular text-body-tabular text-ink whitespace-nowrap">14:37:32</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<span class="text-ink font-medium">会员中心</span>
+<div class="text-micro font-micro text-ink-mute">app_member_auth</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<code class="px-2 py-0.5 rounded bg-surface-container text-ink font-mono text-micro border border-hairline">click-text</code>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap">
+<div class="text-ink">
+                    最终难度: <span class="font-medium text-primary">4 级</span>
+<span class="text-micro text-ink-mute">(默认3 + 环境加难+1)</span>
+</div>
+<div class="text-micro font-micro text-ink-mute">环境分: <span class="font-body-tabular text-ink">79</span> · 频次轻微偏高</div>
+</td>
+<td class="py-3.5 px-4">
+<div class="flex flex-wrap gap-1 max-w-xs">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-primary-fixed text-primary font-mono text-micro">client_history (+1)</span>
+</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-ink-mute font-body-tabular text-micro">
+<div>203.0.113.x · GET</div>
+<div class="text-ink-mute-2 truncate max-w-[120px]">Firefox 132 · Linux</div>
+</td>
+<td class="py-3.5 px-4 whitespace-nowrap text-right">
+<button class="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-canvas hover:bg-canvas-soft border border-hairline text-ink text-micro font-micro transition-colors" type="button">
+<span>查看全部字段</span>
+<span class="material-symbols-outlined text-xs">expand_more</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Pagination Footer Meta -->
+<div class="px-space-lg py-3 bg-canvas-soft border-t border-hairline flex flex-wrap items-center justify-between gap-2 text-micro font-micro text-ink-mute">
+<div class="flex items-center gap-2">
+<span>显示 1 至 6 条，共 100 条</span>
+<span class="text-hairline-input">|</span>
+<span class="text-ink-mute-2">滑动/触控板可水平滚动浏览宽字段</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="px-2 py-1 rounded bg-canvas border border-hairline text-ink-mute hover:text-ink disabled:opacity-40" disabled="">上一页</button>
+<button class="px-2.5 py-1 rounded bg-primary text-on-primary">1</button>
+<button class="px-2.5 py-1 rounded bg-canvas border border-hairline hover:bg-canvas-soft text-ink">2</button>
+<button class="px-2.5 py-1 rounded bg-canvas border border-hairline hover:bg-canvas-soft text-ink">3</button>
+<span class="px-1 text-ink-mute">...</span>
+<button class="px-2.5 py-1 rounded bg-canvas border border-hairline hover:bg-canvas-soft text-ink">17</button>
+<button class="px-2 py-1 rounded bg-canvas border border-hairline text-ink hover:text-primary">下一页</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Auxiliary Notice Strip (底栏次要辅助区域) -->
+<div class="rounded-xl border border-hairline bg-canvas-soft p-space-lg flex items-start sm:items-center gap-3 text-caption font-caption text-ink-mute">
+<span class="material-symbols-outlined text-primary text-lg shrink-0 mt-0.5 sm:mt-0">info</span>
+<div class="flex-1 leading-relaxed">
+<span class="font-medium text-ink">说明：</span>
+        风控观察数据实时写入内存环形缓冲区，最多保留当前实例配置条数。若风控评分关闭或保留条数设为 0 时将不写入记录。可在
+        <a class="text-primary hover:underline font-normal inline-flex items-center gap-0.5" href="#">
+<span>「策略配置」</span>
+<span class="material-symbols-outlined text-xs">arrow_forward</span>
+</a>
+        中调整保留条数与抽样率。
+      </div>
+</div>
+</main>
+<!-- Footer (Shared Component) -->
+<footer class="bg-canvas-soft border-t border-hairline docked full-width bottom-0 mt-auto">
+<div class="flex justify-between items-center w-full px-space-xl py-space-md max-w-7xl mx-auto text-caption font-caption">
+<div class="text-micro font-micro text-ink-mute">
+        simple-captcha v1.2.0 • 社区开源独立部署
+      </div>
+<div class="flex items-center space-x-6 text-caption font-caption">
+<a class="text-ink-mute-2 hover:text-ink transition-colors" href="#">账号与安全</a>
+<a class="text-ink-mute-2 hover:text-ink transition-colors" href="#">退出登录</a>
+</div>
+</div>
+</footer>
+</body></html>
