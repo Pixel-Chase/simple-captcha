@@ -197,7 +197,7 @@ const Rotate = forwardRef<RotateRef, RotateProps>((props, ref) => {
                 />
               </div>
             </div>
-            <ResultOverlay status={status} elapsed={props.elapsed} />
+            <ResultOverlay status={status} elapsed={props.elapsed} compact />
           </div>
           <i className="gc-dial-cross" />
         </div>

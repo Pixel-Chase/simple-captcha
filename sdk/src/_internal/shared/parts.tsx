@@ -99,25 +99,39 @@ export const CardHeader = ({
 export interface ResultOverlayProps {
   status?: CaptchaStatus;
   elapsed?: number;
+  /**
+   * 区域过小（如旋转题的圆盘）时精简：成功只显示耗时，失败只显示叉号，
+   * 结果文案由副标题与下方轨道表达
+   */
+  compact?: boolean;
 }
 
 /** 覆盖在图片区域上的校验结果：成功为绿色遮罩 + 对勾，失败为底部红色提示条 */
-export const ResultOverlay = ({ status = 'idle', elapsed }: ResultOverlayProps) => {
+export const ResultOverlay = ({ status = 'idle', elapsed, compact }: ResultOverlayProps) => {
   const { locale } = useCaptchaConfig();
 
   if (status === 'success') {
     const elapsedText =
       typeof elapsed === 'number'
-        ? ` · ${(locale.elapsedText || '').replace('{s}', elapsed.toFixed(1))}`
+        ? (locale.elapsedText || '').replace('{s}', elapsed.toFixed(1))
         : '';
+    let text = locale.successText;
+    if (elapsedText) text = compact ? elapsedText : `${locale.successText} · ${elapsedText}`;
     return (
       <div className="gc-result gc-result-success">
         <span className="gc-result-badge">
           <UiCheckIcon width={24} height={24} />
         </span>
-        <span className="gc-result-text">
-          {locale.successText}
-          {elapsedText}
+        <span className="gc-result-text">{text}</span>
+      </div>
+    );
+  }
+
+  if (status === 'fail' && compact) {
+    return (
+      <div className="gc-result gc-result-fail-compact">
+        <span className="gc-result-badge">
+          <UiCloseIcon width={24} height={24} />
         </span>
       </div>
     );

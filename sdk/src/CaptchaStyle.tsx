@@ -622,6 +622,11 @@ export const CaptchaStyle = () => {
     }
     .gc-result-text { font-size: 13px; font-weight: 500; color: #fff; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6); }
     .gc-result-fail { justify-content: flex-end; }
+    .gc-result-fail-compact { background: rgba(127, 29, 29, 0.5); }
+    .gc-result-fail-compact .gc-result-badge {
+      background: var(--gc-fail);
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.45), 0 0 0 4px rgba(255, 255, 255, 0.25);
+    }
     .gc-result-banner {
       width: 100%;
       display: flex;
@@ -755,7 +760,6 @@ export const CaptchaStyle = () => {
       pointer-events: none;
     }
     .gc-angle-badge strong { font-weight: 700; color: #f43f5e; }
-    .gc-type-rotate .gc-result-banner { width: 76%; margin-bottom: 18%; border-radius: 999px; }
 
     /* ---------- 动效 ---------- */
     @keyframes gc-card-in {
