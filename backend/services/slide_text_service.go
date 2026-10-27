@@ -2,6 +2,7 @@ package services
 
 import (
 	"log"
+	"simple-captcha/config"
 	"simple-captcha/helper"
 
 	"github.com/wenlng/go-captcha-assets/resources/tiles"
@@ -92,7 +93,7 @@ func generateSlideCaptcha(bs *BaseService, captcha slide.Captcha, req *Challenge
 	// 主图与拼图块共用一组颜色扰动，对齐后颜色一致
 	jitter := newImageJitter()
 	masterImageBase64, err := imagedata.NewJPEGImageData(jitter.apply(captData.GetMasterImage().Get())).
-		ToBase64WithQuality(bs.config.Captcha.ImageQuality)
+		ToBase64WithQuality(config.Runtime().Captcha.ImageQuality)
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
 	}

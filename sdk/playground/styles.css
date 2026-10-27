@@ -853,6 +853,130 @@ p {
   margin-bottom: 20px;
 }
 
+/* ---------- 策略配置 ---------- */
+
+.settings__form {
+  display: grid;
+  gap: 20px;
+}
+
+.settings__group {
+  margin: 0;
+  padding: 22px 24px 8px;
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+
+.settings__legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.settings__group-desc {
+  clear: both;
+  font-size: 13px;
+}
+
+.settings__rows {
+  display: grid;
+}
+
+.settings__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 24px;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.settings__label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.settings__desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.settings__control {
+  display: grid;
+  gap: 6px;
+}
+
+.settings__number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings__input {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings__unit {
+  flex: none;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.settings__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.settings__switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.settings__default {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.settings__actions {
+  position: sticky;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.settings__status {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings__status .alert {
+  margin: 0;
+  white-space: pre-line;
+}
+
+@media (max-width: 720px) {
+  .settings__row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .settings__actions {
+    flex-wrap: wrap;
+  }
+}
+
 /* ---------- 接入应用 ---------- */
 
 .apps__refresh {
@@ -860,9 +984,26 @@ p {
 }
 
 .apps__create {
-  display: flex;
+  display: grid;
   gap: 12px;
   padding: 16px;
+}
+
+.apps__create-row {
+  display: flex;
+  gap: 12px;
+}
+
+.apps__origins-field {
+  margin: 0;
+}
+
+.apps__origins-input {
+  width: 100%;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .apps__create-input {
@@ -1005,6 +1146,50 @@ p {
   color: var(--danger);
 }
 
+.app-card__origins {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.app-card__origin {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+}
+
+.app-card__origin--muted {
+  background: #f1f5f9;
+  color: var(--muted);
+}
+
+.app-card__origin--warn {
+  background: #fff7ed;
+  color: #b45309;
+}
+
+.app-card__origins-edit {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  max-width: 560px;
+}
+
+.app-card__origins-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-card--system {
+  border-style: dashed;
+}
+
 @media (max-width: 860px) {
   .password {
     grid-template-columns: 1fr;
@@ -1020,7 +1205,7 @@ p {
     justify-content: flex-start;
   }
 
-  .apps__create {
+  .apps__create-row {
     flex-direction: column;
   }
 
@@ -1192,6 +1377,24 @@ p {
   background: var(--home-primary-light);
 }
 
+/* 初始化页面的步骤：用序号代替圆点 */
+
+.home__facts--steps {
+  counter-reset: home-step;
+}
+
+.home__facts--steps .home__fact::before {
+  counter-increment: home-step;
+  content: counter(home-step);
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
 /* 登录卡片：与 SDK 弹窗同一套白底大圆角 */
 
 .login-card {
@@ -1267,6 +1470,11 @@ p {
 
 .login-card__submit:hover:not(:disabled) {
   box-shadow: 0 6px 26px rgba(83, 58, 253, 0.55);
+}
+
+.field__input--code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.12em;
 }
 
 .login-card__hint {
@@ -1873,6 +2081,13 @@ p {
   font-size: 11px;
   margin-top: 4px;
   word-break: break-all;
+}
+
+.risk-table__app {
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .risk-table__client {

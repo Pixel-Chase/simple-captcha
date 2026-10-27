@@ -23,7 +23,11 @@ func NewAppController(apps *services.AppService) *AppController {
 
 // ListHandler 列出全部接入应用（不含密钥）
 func (ctrl *AppController) ListHandler(c *gin.Context) {
-	items := ctrl.apps.List()
+	items, err := ctrl.apps.List()
+	if err != nil {
+		helper.ErrorResponse(c, err)
+		return
+	}
 	helper.SuccessResponse(c, models.AppListResponse{Items: items, Total: len(items)})
 }
 
@@ -35,7 +39,7 @@ func (ctrl *AppController) CreateHandler(c *gin.Context) {
 		return
 	}
 
-	app, secret, err := ctrl.apps.Create(req.Name)
+	app, secret, err := ctrl.apps.Create(req.Name, req.Origins)
 	if err != nil {
 		helper.ErrorResponse(c, err)
 		return
@@ -57,7 +61,7 @@ func (ctrl *AppController) UpdateHandler(c *gin.Context) {
 		return
 	}
 
-	app, err := ctrl.apps.Update(id, req.Name, *req.Enabled)
+	app, err := ctrl.apps.Update(id, req.Name, *req.Enabled, req.Origins)
 	if err != nil {
 		helper.ErrorResponse(c, err)
 		return

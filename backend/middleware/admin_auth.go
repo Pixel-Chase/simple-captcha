@@ -25,25 +25,6 @@ func AdminAuthMiddleware(admin *services.AdminService) gin.HandlerFunc {
 	}
 }
 
-// RequirePasswordChanged 尚未修改初始密码的会话只能查询会话、注销与改密，其余管理接口一律 403。
-// 必须挂在 AdminAuthMiddleware 之后
-func RequirePasswordChanged() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		session := GetAdminSession(c)
-		if session == nil {
-			helper.ErrorResponse(c, helper.ErrUnauthorized)
-			c.Abort()
-			return
-		}
-		if session.MustChangePassword {
-			helper.ErrorResponse(c, helper.ErrPasswordChangeRequired)
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
-}
-
 // GetAdminSession 读取鉴权中间件写入的会话；未经过鉴权时返回 nil
 func GetAdminSession(c *gin.Context) *services.AdminSession {
 	value, ok := c.Get(adminSessionContextKey)

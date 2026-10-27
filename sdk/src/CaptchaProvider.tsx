@@ -61,7 +61,8 @@ const defaultTheme: ThemeTokens = {
 const defaultConfig: InternalConfig = {
   locale: defaultLocale,
   theme: defaultTheme,
-  api: { prefix: '/api/v1' },
+  // 同源、未指定应用：根 Provider 必须传入 appId，否则出题直接失败
+  api: { baseURL: '', appId: '' },
   zIndex: 9999,
   telemetry: 'full',
 };

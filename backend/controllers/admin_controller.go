@@ -54,6 +54,36 @@ func (ctrl *AdminController) RiskTelemetryHandler(c *gin.Context) {
 	helper.SuccessResponse(c, models.RiskTelemetryResponse{Items: masked, Limit: limit})
 }
 
+// SetupStatusHandler 是否已完成首次初始化，控制台据此决定显示初始化页还是登录页
+func (ctrl *AdminController) SetupStatusHandler(c *gin.Context) {
+	initialized, err := ctrl.admin.Initialized()
+	if err != nil {
+		helper.ErrorResponse(c, err)
+		return
+	}
+	helper.SuccessResponse(c, models.AdminSetupStatusResponse{Initialized: initialized})
+}
+
+// SetupHandler 首次初始化：校验一次性口令，写入管理员账号后直接签发会话
+func (ctrl *AdminController) SetupHandler(c *gin.Context) {
+	var req models.AdminSetupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		helper.ErrorResponse(c, helper.NewCaptchaError(helper.ErrCodeInvalidParam, "参数格式错误", err.Error()))
+		return
+	}
+
+	ip := helper.GetRealClientIP(c)
+	token, session, err := ctrl.admin.Setup(req.SetupCode, req.Username, req.Password)
+	if err != nil {
+		log.Printf("管理后台初始化失败: ip=%s, code=%d", ip, err.Code)
+		helper.ErrorResponse(c, err)
+		return
+	}
+
+	log.Printf("管理后台初始化完成: username=%q, ip=%s", session.Username, ip)
+	helper.SuccessResponse(c, loginResponse(token, session))
+}
+
 // LoginHandler 管理员登录：先消费行为验证 second_key，再比对账号密码
 func (ctrl *AdminController) LoginHandler(c *gin.Context) {
 	var req models.AdminLoginRequest
@@ -71,7 +101,7 @@ func (ctrl *AdminController) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("管理员登录成功: username=%s, ip=%s, mustChangePassword=%t", session.Username, ip, session.MustChangePassword)
+	log.Printf("管理员登录成功: username=%q, ip=%s", session.Username, ip)
 	helper.SuccessResponse(c, loginResponse(token, session))
 }
 
@@ -85,14 +115,14 @@ func (ctrl *AdminController) ChangePasswordHandler(c *gin.Context) {
 
 	ip := helper.GetRealClientIP(c)
 	session := middleware.GetAdminSession(c)
-	token, next, err := ctrl.admin.ChangePassword(middleware.BearerToken(c), req.CurrentPassword, req.NewPassword)
+	token, next, err := ctrl.admin.ChangePassword(req.CurrentPassword, req.NewPassword)
 	if err != nil {
 		log.Printf("修改管理员密码失败: admin=%s, ip=%s, code=%d", sessionName(session), ip, err.Code)
 		helper.ErrorResponse(c, err)
 		return
 	}
 
-	log.Printf("修改管理员密码成功，旧会话已全部失效: admin=%s, ip=%s", next.Username, ip)
+	log.Printf("修改管理员密码成功，旧会话已全部失效: admin=%q, ip=%s", next.Username, ip)
 	helper.SuccessResponse(c, loginResponse(token, next))
 }
 
@@ -104,9 +134,8 @@ func (ctrl *AdminController) SessionHandler(c *gin.Context) {
 		return
 	}
 	helper.SuccessResponse(c, models.AdminSessionResponse{
-		Username:           session.Username,
-		ExpiresAt:          session.ExpiresAt.Unix(),
-		MustChangePassword: session.MustChangePassword,
+		Username:  session.Username,
+		ExpiresAt: session.ExpiresAt.Unix(),
 	})
 }
 
@@ -214,10 +243,9 @@ func (ctrl *AdminController) DeleteBackgroundHandler(c *gin.Context) {
 
 func loginResponse(token string, session *services.AdminSession) models.AdminLoginResponse {
 	return models.AdminLoginResponse{
-		Token:              token,
-		Username:           session.Username,
-		ExpiresAt:          session.ExpiresAt.Unix(),
-		MustChangePassword: session.MustChangePassword,
+		Token:     token,
+		Username:  session.Username,
+		ExpiresAt: session.ExpiresAt.Unix(),
 	}
 }
 

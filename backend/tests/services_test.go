@@ -27,8 +27,7 @@ func TestServiceManager_Initialization(t *testing.T) {
 	riskControl := manager.GetRiskControlService()
 	assert.NotNil(t, riskControl)
 
-	cacheService := manager.GetCacheService()
-	assert.NotNil(t, cacheService)
+	assert.NotNil(t, manager.GetClientRiskStore())
 }
 
 func TestServiceManager_GetAllServices(t *testing.T) {
@@ -89,14 +88,15 @@ func TestServiceManager_Statistics(t *testing.T) {
 }
 
 func TestRiskControlService_IPLimit(t *testing.T) {
+	rt := config.Runtime()
 	manager := services.NewServiceManager()
 	riskControl := manager.GetRiskControlService()
 
-	// 限流计数存放在 Redis 中会跨测试运行保留，使用唯一 IP 避免互相干扰
+	// 限流计数存放在进程共用的内存存储中，使用唯一 IP 避免与其他用例互相干扰
 	testIP := fmt.Sprintf("198.51.100.%d-%d", time.Now().UnixNano()%250, time.Now().UnixNano())
 
 	// 验证码请求只计数不拒绝：计数逐次累加，直到加难封顶
-	saturation := services.IPPressureSaturation(config.LoadConfig().Captcha.IPEscalatePerMin)
+	saturation := services.IPPressureSaturation(rt.Captcha.IPEscalatePerMinute)
 	for i := 1; i <= saturation; i++ {
 		if !assert.Equal(t, i, riskControl.TrackCaptchaIP(testIP)) {
 			return
@@ -114,69 +114,45 @@ func TestRiskControlService_SecondVerifyToken(t *testing.T) {
 	riskControl := manager.GetRiskControlService()
 
 	// 测试无效token
-	result := riskControl.ValidateSecondVerifyToken("invalid-token")
+	result := riskControl.ConsumeSecondVerifyToken("invalid-token", "app_aaaaaaaaaaaa")
 	assert.False(t, result, "无效token应该返回false")
 
 	// 如果是具体实现，测试token生成
 	if riskImpl, ok := riskControl.(*services.RiskControlServiceImpl); ok {
-		token, err := riskImpl.GenerateSecondVerifyToken("test-key")
+		token, err := riskImpl.GenerateSecondVerifyToken("app_aaaaaaaaaaaa")
 		assert.Nil(t, err)
 		assert.NotEmpty(t, token)
 
-		// 验证生成的token
-		result := riskControl.ValidateSecondVerifyToken(token)
+		// 属于其他应用：无效且不消费
+		assert.False(t, riskControl.ConsumeSecondVerifyToken(token, "app_bbbbbbbbbbbb"))
+		assert.False(t, riskControl.ConsumeSecondVerifyToken(token, ""))
+
+		// 本应用：首次有效，之后无效
+		result := riskControl.ConsumeSecondVerifyToken(token, "app_aaaaaaaaaaaa")
 		assert.True(t, result, "有效token应该返回true")
 
-		result = riskControl.ValidateSecondVerifyToken(token)
+		result = riskControl.ConsumeSecondVerifyToken(token, "app_aaaaaaaaaaaa")
 		assert.False(t, result, "已消费的token不应该再次通过验证")
 	}
 }
 
-func TestRiskControlService_SecondVerifyDataConsumedFromRedis(t *testing.T) {
+func TestRiskControlService_SecondVerifyDataConsumedOnce(t *testing.T) {
 	baseService := services.NewBaseService()
 	riskControl := services.NewRiskControlService()
 	token := "test-second-verify-token"
 
 	err := baseService.SaveSecondVerifyData(token, map[string]interface{}{
 		"verified": true,
+		"appId":    "app_aaaaaaaaaaaa",
 	})
 	assert.Nil(t, err)
 	defer baseService.DeleteCaptchaData(token)
 
-	result := riskControl.ValidateSecondVerifyToken(token)
-	assert.True(t, result, "Redis中的二次验证数据首次应验证通过")
+	result := riskControl.ConsumeSecondVerifyToken(token, "app_aaaaaaaaaaaa")
+	assert.True(t, result, "二次验证令牌首次应验证通过")
 
-	result = riskControl.ValidateSecondVerifyToken(token)
-	assert.False(t, result, "Redis中的二次验证数据消费后不应该再次通过")
-}
-
-func TestCacheService_Operations(t *testing.T) {
-	manager := services.NewServiceManager()
-	cacheService := manager.GetCacheService()
-
-	testKey := "test-cache-key"
-	testValue := "test-cache-value"
-
-	// 测试设置缓存
-	err := cacheService.Set(testKey, testValue, 60) // 60秒过期
-	assert.NoError(t, err)
-
-	// 测试检查存在
-	exists := cacheService.Exists(testKey)
-	assert.True(t, exists)
-
-	// 测试获取缓存
-	data, err := cacheService.Get(testKey)
-	assert.NoError(t, err)
-	assert.NotNil(t, data)
-
-	// 测试删除缓存
-	err = cacheService.Delete(testKey)
-	assert.NoError(t, err)
-
-	// 验证删除后不存在
-	exists = cacheService.Exists(testKey)
-	assert.False(t, exists)
+	result = riskControl.ConsumeSecondVerifyToken(token, "app_aaaaaaaaaaaa")
+	assert.False(t, result, "二次验证令牌消费后不应该再次通过")
 }
 
 func TestBaseService_CaptchaDataOperations(t *testing.T) {

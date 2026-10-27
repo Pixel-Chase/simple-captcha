@@ -3,7 +3,6 @@ package services
 import (
 	"encoding/json"
 	"log"
-	"simple-captcha/config"
 	"simple-captcha/risk"
 	"time"
 )
@@ -18,27 +17,33 @@ type EvaluationContext struct {
 	Env        *risk.Env
 	Request    *risk.RequestSignals
 	Pow        *risk.PowSolution
+	// AppID 提交请求的应用，写入风控观察
+	AppID string
 }
 
-// RiskEngine 风控评分引擎：把 risk 包的纯计算与 Redis 状态存储、日志串起来
+// RiskEngine 风控评分引擎：把 risk 包的纯计算与客户端状态存储、风控观察记录串起来
 type RiskEngine struct {
-	cfg   *config.Config
-	store *ClientRiskStore
+	settings settingsSource
+	store    *ClientRiskStore
 }
 
-// NewRiskEngine 创建风控评分引擎
+// NewRiskEngine 创建风控评分引擎；策略值每次使用时从 config.Runtime() 读取
 func NewRiskEngine(store *ClientRiskStore) *RiskEngine {
-	return &RiskEngine{cfg: config.LoadConfig(), store: store}
+	return &RiskEngine{store: store}
 }
 
 // Enabled 是否启用评分
 func (e *RiskEngine) Enabled() bool {
-	return e != nil && e.cfg.Risk.Enabled
+	return e != nil && e.settings.get().Risk.Enabled
 }
 
 // Evaluate 对本次提交打分，未启用时返回 nil
 func (e *RiskEngine) Evaluate(ctx *EvaluationContext) *risk.Result {
-	if !e.Enabled() || ctx == nil {
+	if e == nil || ctx == nil {
+		return nil
+	}
+	rt := e.settings.get()
+	if !rt.Risk.Enabled {
 		return nil
 	}
 
@@ -47,24 +52,25 @@ func (e *RiskEngine) Evaluate(ctx *EvaluationContext) *risk.Result {
 		Trace:       ctx.Trace,
 		Env:         ctx.Env,
 		Request:     ctx.Request,
-		PowExpected: e.cfg.Captcha.PowEnabled,
+		PowExpected: rt.Pow.Enabled,
 		PowProvided: ctx.Pow != nil && ctx.Pow.Solution != "",
-		EnvScoreCap: e.cfg.Risk.EnvScoreCap,
+		EnvScoreCap: rt.Risk.EnvScoreCap,
 	})
 	return &result
 }
 
 // ShouldBlock 是否应直接拒绝本次校验：enforce 模式、总分达到拦截阈值，
-// 且行为分不低于 RISK_BLOCK_MIN_BEHAVIOR 或命中硬性自动化标记。
+// 且行为分不低于策略 risk.blockMinBehavior 或命中硬性自动化标记。
 // 环境信号可被伪造也可能因 VDI、隐私浏览器等正常原因命中，单靠环境信号不拦截
 func (e *RiskEngine) ShouldBlock(result *risk.Result) bool {
-	if !e.Enabled() || result == nil {
+	if e == nil || result == nil {
 		return false
 	}
-	if e.cfg.Risk.Mode != "enforce" || result.Score < e.cfg.Risk.BlockThreshold {
+	rt := e.settings.get()
+	if !rt.Risk.Enabled || rt.Risk.Mode != "enforce" || result.Score < rt.Risk.BlockThreshold {
 		return false
 	}
-	return result.HardMarker || result.BehaviorScore >= e.cfg.Risk.BlockMinBehavior
+	return result.HardMarker || result.BehaviorScore >= rt.Risk.BlockMinBehavior
 }
 
 // IssueContext 一次出题的遥测上下文
@@ -76,8 +82,8 @@ type IssueContext struct {
 	Key        string
 	Env        *risk.Env
 	Request    *risk.RequestSignals
-	// ViaPost 是否通过携带环境信号的 POST 接口出题
-	ViaPost bool
+	// AppID 出题请求的应用，写入风控观察
+	AppID string
 }
 
 // recordFingerprints 可信代理注入的 TLS / HTTP2 指纹原值写入遥测，供运维整理指纹列表
@@ -99,10 +105,11 @@ func (e *RiskEngine) RecordIssue(ctx *IssueContext, decision IssueDecision) {
 		return
 	}
 
-	// 遥测只保存脱敏后的 IP（前两段）与 UA 摘要，原始值不落 Redis
+	// 遥测只保存脱敏后的 IP（前两段）与 UA 摘要，原始值不落库
 	entry := map[string]interface{}{
 		"kind":       "issue",
 		"time":       time.Now().Format(time.RFC3339),
+		"app":        ctx.AppID,
 		"type":       ctx.Type,
 		"client":     ctx.ClientHash,
 		"ip":         MaskIP(ctx.IP),
@@ -113,7 +120,6 @@ func (e *RiskEngine) RecordIssue(ctx *IssueContext, decision IssueDecision) {
 		"envScore":   decision.EnvScore,
 		"consistent": decision.Consistent,
 		"reasons":    decision.Reasons,
-		"viaPost":    ctx.ViaPost,
 	}
 	if ctx.Env != nil {
 		entry["fp"] = ctx.Env.Fingerprint
@@ -154,17 +160,18 @@ func (e *RiskEngine) Record(ctx *EvaluationContext, result *risk.Result, success
 		return
 	}
 
-	// 遥测只保存脱敏后的 IP（前两段）与 UA 摘要，原始值不落 Redis
+	// 遥测只保存脱敏后的 IP（前两段）与 UA 摘要，原始值不落库
 	entry := map[string]interface{}{
 		"kind":    "verify",
 		"time":    time.Now().Format(time.RFC3339),
+		"app":     ctx.AppID,
 		"type":    ctx.Type,
 		"client":  ctx.ClientHash,
 		"ip":      MaskIP(ctx.IP),
 		"key":     ctx.Key,
 		"success": success,
 		"score":   score,
-		"mode":    e.cfg.Risk.Mode,
+		"mode":    e.settings.get().Risk.Mode,
 	}
 	if result != nil {
 		entry["reasons"] = result.Reasons

@@ -4,56 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestLoadFromEnv_RiskCapDefaults(t *testing.T) {
-	cfg := loadFromEnv()
-	assert.Equal(t, 60, cfg.Risk.EnvScoreCap)
-	assert.Equal(t, 20, cfg.Risk.BlockMinBehavior)
-	assert.NoError(t, validateConfig(cfg))
-
-	t.Setenv("RISK_ENV_SCORE_CAP", "0")
-	t.Setenv("RISK_BLOCK_MIN_BEHAVIOR", "0")
-	cfg = loadFromEnv()
-	assert.Equal(t, 0, cfg.Risk.EnvScoreCap, "0 关闭环境分上限")
-	assert.Equal(t, 0, cfg.Risk.BlockMinBehavior)
-	assert.NoError(t, validateConfig(cfg))
-}
-
-func TestValidateConfig_RiskCapRange(t *testing.T) {
-	cfg := loadFromEnv()
-	cfg.Risk.EnvScoreCap = 101
-	assert.ErrorContains(t, validateConfig(cfg), "RISK_ENV_SCORE_CAP")
-
-	cfg = loadFromEnv()
-	cfg.Risk.BlockMinBehavior = -1
-	assert.ErrorContains(t, validateConfig(cfg), "RISK_BLOCK_MIN_BEHAVIOR")
-}
-
-func TestLoadFromEnv_FingerprintReplayDefaults(t *testing.T) {
-	cfg := loadFromEnv()
-	assert.Equal(t, 5, cfg.Risk.FPReplayThreshold)
-	assert.Equal(t, 10*time.Minute, cfg.Risk.FPReplayWindow)
-	assert.NoError(t, validateConfig(cfg))
-
-	t.Setenv("RISK_FP_REPLAY_THRESHOLD", "0")
-	cfg = loadFromEnv()
-	assert.Equal(t, 0, cfg.Risk.FPReplayThreshold, "0 关闭指纹重放计数")
-	assert.NoError(t, validateConfig(cfg))
-
-	cfg = loadFromEnv()
-	cfg.Risk.FPReplayThreshold = -1
-	assert.ErrorContains(t, validateConfig(cfg), "RISK_FP_REPLAY_THRESHOLD")
-
-	cfg = loadFromEnv()
-	cfg.Risk.FPReplayThreshold = 5
-	cfg.Risk.FPReplayWindow = 0
-	assert.ErrorContains(t, validateConfig(cfg), "RISK_FP_REPLAY_WINDOW")
-}
 
 func TestLoadFromEnv_TLSFingerprintDefaultsAndValidation(t *testing.T) {
 	cfg := loadFromEnv()

@@ -5,9 +5,7 @@
 package console
 
 import (
-	"bytes"
 	"embed"
-	"html"
 	"io"
 	"io/fs"
 	"net/http"
@@ -22,9 +20,6 @@ var embedded embed.FS
 
 // BasePath 管理后台页面的挂载路径
 const BasePath = "/console"
-
-// apiPrefixPlaceholder 与前端约定的占位符（见 sdk/playground/console/index.html 与 api.ts）
-const apiPrefixPlaceholder = "__CAPTCHA_API_PREFIX__"
 
 // contentSecurityPolicy 控制台只加载同源脚本与样式：SDK 以 <style> 注入主题样式，需要放行内联样式；
 // 验证码题图是 data: URI，背景图预览是 blob: URL
@@ -53,16 +48,15 @@ func Assets() fs.FS {
 // Handler 管理后台的静态资源处理器
 type Handler struct {
 	assets fs.FS
-	index  []byte // 已注入 API 前缀的 index.html；nil 表示未构建
+	index  []byte // index.html；nil 表示未构建
 }
 
-// NewHandler 读取构建产物并把 API 前缀写入 index.html
-func NewHandler(assets fs.FS, apiPrefix string) *Handler {
+// NewHandler 读取构建产物。API 路径固定为同源的 /api/v1，页面里无需注入任何配置
+func NewHandler(assets fs.FS) *Handler {
 	index, err := fs.ReadFile(assets, "index.html")
 	if err != nil {
 		return &Handler{assets: assets}
 	}
-	index = bytes.ReplaceAll(index, []byte(apiPrefixPlaceholder), []byte(html.EscapeString(apiPrefix)))
 	return &Handler{assets: assets, index: index}
 }
 

@@ -34,13 +34,19 @@ export function RiskPage({ token, onSessionExpired }: RiskPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  /** 应用 ID → 名称，用于"应用"列；应用已删除时显示 ID */
+  const [appNames, setAppNames] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await adminApi.riskTelemetry(token, limit);
+      const [data, apps] = await Promise.all([
+        adminApi.riskTelemetry(token, limit),
+        adminApi.listApps(token),
+      ]);
       setItems(data.items);
+      setAppNames(Object.fromEntries(apps.items.map((app) => [app.id, app.name])));
       setLoadedAt(new Date());
     } catch (err) {
       if (isAdminApiError(err) && err.status === 401) {
@@ -127,6 +133,7 @@ export function RiskPage({ token, onSessionExpired }: RiskPageProps) {
               <tr>
                 <th className="risk-table__cell risk-table__head">时间</th>
                 <th className="risk-table__cell risk-table__head">阶段</th>
+                <th className="risk-table__cell risk-table__head">应用</th>
                 <th className="risk-table__cell risk-table__head">题型</th>
                 <th className="risk-table__cell risk-table__head">难度</th>
                 <th className="risk-table__cell risk-table__head">分数</th>
@@ -146,6 +153,9 @@ export function RiskPage({ token, onSessionExpired }: RiskPageProps) {
                       <span className={kind === 'issue' ? 'badge badge--ok' : 'badge'}>
                         {kind === 'issue' ? '出题' : '校验'}
                       </span>
+                    </td>
+                    <td className="risk-table__cell risk-table__app" title={item.app}>
+                      {item.app ? (appNames[item.app] ?? item.app) : '—'}
                     </td>
                     <td className="risk-table__cell">{item.type ?? '—'}</td>
                     <td className="risk-table__cell">

@@ -12,32 +12,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAdmin_RiskTelemetryRequiresReadySession(t *testing.T) {
+func TestAdmin_RiskTelemetryRequiresSession(t *testing.T) {
 	h := newAdminHarness(t, 1)
 
 	// 未登录
 	w := h.do(http.MethodGet, "/risk/telemetry", nil, "", "")
 	assert.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
 
-	// 仍在使用初始密码：只开放会话与改密，其余接口 403 / 2008
-	w = h.doJSON(http.MethodPost, "/login", map[string]string{
-		"username":   adminTestUser,
-		"password":   h.password,
-		"captchaKey": h.freshCaptchaKey(t),
-	}, "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	body := decodeBody(t, w)
-	require.Equal(t, true, body["mustChangePassword"])
-	initialToken, _ := body["token"].(string)
-
-	w = h.do(http.MethodGet, "/risk/telemetry", nil, initialToken, "")
-	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
-	assert.EqualValues(t, 2008, decodeBody(t, w)["code"])
+	// 初始化后签发的会话即可访问
+	token := h.initialize(t)
+	w = h.do(http.MethodGet, "/risk/telemetry", nil, token, "")
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
 
 func TestAdmin_RiskTelemetryReturnsMaskedEntries(t *testing.T) {
-	cfg := config.LoadConfig()
-	if !cfg.Risk.Enabled || cfg.Risk.TelemetryLogSize <= 0 {
+	rt := config.Runtime()
+	if !rt.Risk.Enabled || rt.Risk.TelemetryRetention <= 0 {
 		t.Skip("风控评分或遥测日志已关闭")
 	}
 	h := newAdminHarness(t, 1)
@@ -50,7 +40,7 @@ func TestAdmin_RiskTelemetryReturnsMaskedEntries(t *testing.T) {
 		"kind": "issue", "time": time.Now().Format(time.RFC3339), "type": "slide-text", "key": key,
 		"client": "8d42bc159691be7d5dd15580ed6e0f99", "ip": "198.51.100.23",
 		"ua":    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-		"level": 4, "base": 3, "boost": 1, "envScore": 45, "reasons": []string{"webdriver(+45)", "env_boost(+1)"}, "viaPost": true,
+		"level": 4, "base": 3, "boost": 1, "envScore": 45, "reasons": []string{"webdriver(+45)", "env_boost(+1)"},
 	})
 	store.LogTelemetry(map[string]interface{}{
 		"kind": "verify", "time": time.Now().Format(time.RFC3339), "type": "slide-text", "key": key,

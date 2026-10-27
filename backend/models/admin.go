@@ -1,6 +1,9 @@
 package models
 
-import "simple-captcha/services"
+import (
+	"simple-captcha/config"
+	"simple-captcha/services"
+)
 
 // AdminLoginRequest 管理员登录请求
 type AdminLoginRequest struct {
@@ -10,20 +13,29 @@ type AdminLoginRequest struct {
 	CaptchaKey string `json:"captchaKey" binding:"required,max=100"`
 }
 
-// AdminLoginResponse 登录成功响应；修改密码成功后也以此结构返回新签发的会话
+// AdminSetupStatusResponse 是否已完成首次初始化
+type AdminSetupStatusResponse struct {
+	Initialized bool `json:"initialized"`
+}
+
+// AdminSetupRequest 首次初始化：启动日志中的一次性口令 + 管理员用户名与密码；长度与字符规则在服务层校验
+type AdminSetupRequest struct {
+	SetupCode string `json:"setupCode" binding:"required,max=64"`
+	Username  string `json:"username" binding:"required,max=256"`
+	Password  string `json:"password" binding:"required,max=128"`
+}
+
+// AdminLoginResponse 登录成功响应；初始化与修改密码成功后也以此结构返回新签发的会话
 type AdminLoginResponse struct {
 	Token     string `json:"token"`
 	Username  string `json:"username"`
 	ExpiresAt int64  `json:"expiresAt"` // Unix 秒
-	// MustChangePassword 为 true 时只能调用会话查询、注销与改密接口
-	MustChangePassword bool `json:"mustChangePassword"`
 }
 
 // AdminSessionResponse 当前会话信息
 type AdminSessionResponse struct {
-	Username           string `json:"username"`
-	ExpiresAt          int64  `json:"expiresAt"` // Unix 秒
-	MustChangePassword bool   `json:"mustChangePassword"`
+	Username  string `json:"username"`
+	ExpiresAt int64  `json:"expiresAt"` // Unix 秒
 }
 
 // AdminChangePasswordRequest 修改管理员密码；新密码规则在服务层校验
@@ -44,15 +56,18 @@ type BackgroundNameRequest struct {
 	Name string `uri:"name" binding:"required,min=1,max=160"`
 }
 
-// AppCreateRequest 新建接入应用；名称长度与字符在服务层校验
+// AppCreateRequest 新建接入应用；名称长度与字符、来源格式在服务层校验
 type AppCreateRequest struct {
 	Name string `json:"name" binding:"required,max=200"`
+	// Origins 允许发起出题与提交的来源，例如 https://www.example.com；可以为空，之后再配置
+	Origins []string `json:"origins" binding:"max=100,dive,max=300"`
 }
 
-// AppUpdateRequest 修改接入应用（整体替换名称与启用状态）
+// AppUpdateRequest 修改接入应用：整体替换名称与启用状态；origins 缺省时保持不变，提供时整体替换
 type AppUpdateRequest struct {
-	Name    string `json:"name" binding:"required,max=200"`
-	Enabled *bool  `json:"enabled" binding:"required"`
+	Name    string    `json:"name" binding:"required,max=200"`
+	Enabled *bool     `json:"enabled" binding:"required"`
+	Origins *[]string `json:"origins" binding:"omitempty,max=100,dive,max=300"`
 }
 
 // AppIDRequest 路径参数：应用 ID
@@ -70,6 +85,12 @@ type AppListResponse struct {
 type AppSecretResponse struct {
 	App    services.AppInfo `json:"app"`
 	Secret string           `json:"secret"`
+}
+
+// SettingsResponse 策略配置：当前值与默认值（控制台据此显示每项的默认值并支持恢复默认）
+type SettingsResponse struct {
+	Settings config.RuntimeSettings `json:"settings"`
+	Defaults config.RuntimeSettings `json:"defaults"`
 }
 
 // RiskTelemetryRequest 风控观察：最近 N 条遥测记录，超过上限的 limit 在服务层裁剪

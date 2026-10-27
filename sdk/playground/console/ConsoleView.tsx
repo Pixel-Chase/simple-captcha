@@ -3,21 +3,24 @@ import { ImagesPage } from '../pages/ImagesPage';
 import { LoginPage } from '../pages/LoginPage';
 import { PasswordPage } from '../pages/PasswordPage';
 import { RiskPage } from '../pages/RiskPage';
+import { SettingsPage } from '../pages/SettingsPage';
+import { SetupPage } from '../pages/SetupPage';
 import type { AuthState, useConsoleAuth } from './useConsoleAuth';
 
-/** 控制台分区：背景图（默认）、接入应用、风控观察、修改密码 */
-export type ConsoleSection = 'images' | 'apps' | 'risk' | 'account';
+/** 控制台分区：背景图（默认）、接入应用、策略配置、风控观察、修改密码 */
+export type ConsoleSection = 'images' | 'apps' | 'settings' | 'risk' | 'account';
 
 const SECTIONS: ReadonlyArray<{ id: ConsoleSection; label: string }> = [
   { id: 'images', label: '背景图' },
   { id: 'apps', label: '接入应用' },
+  { id: 'settings', label: '策略配置' },
   { id: 'risk', label: '风控观察' },
   { id: 'account', label: '修改密码' },
 ];
 
-/** 从去掉入口前缀后的路径解析分区：'' → 背景图，'/apps'、'/risk'、'/account' → 对应分区 */
+/** 从去掉入口前缀后的路径解析分区：'' → 背景图，'/apps'、'/settings'、'/risk'、'/account' → 对应分区 */
 export function parseConsoleSection(rest: string): ConsoleSection {
-  const match = /^\/(apps|risk|account)$/.exec(rest);
+  const match = /^\/(apps|settings|risk|account)$/.exec(rest);
   return (match?.[1] as ConsoleSection | undefined) ?? 'images';
 }
 
@@ -30,32 +33,24 @@ interface ConsoleViewProps extends ConsoleHandlers {
   hrefFor: (section: ConsoleSection) => string;
 }
 
-/** 控制台主体：登录、强制改密、分区导航与各分区页面 */
+/** 控制台主体：初始化、登录、分区导航与各分区页面 */
 export function ConsoleView({
   auth,
   section,
   hrefFor,
   handleSession,
   handleSessionExpired,
+  handleNotInitialized,
+  handleAlreadyInitialized,
 }: ConsoleViewProps) {
   if (auth.status === 'checking') {
     return <div className="page-status">正在恢复登录状态…</div>;
   }
-  if (auth.status === 'anonymous') {
-    return <LoginPage onLogin={handleSession} />;
+  if (auth.status === 'setup') {
+    return <SetupPage onSetup={handleSession} onAlreadyInitialized={handleAlreadyInitialized} />;
   }
-
-  // 仍在使用随机初始密码：服务端只开放改密，其他分区一律先改密，也不显示分区导航
-  if (auth.mustChangePassword) {
-    return (
-      <PasswordPage
-        token={auth.token}
-        username={auth.username}
-        forced
-        onChanged={handleSession}
-        onSessionExpired={handleSessionExpired}
-      />
-    );
+  if (auth.status === 'anonymous') {
+    return <LoginPage onLogin={handleSession} onNotInitialized={handleNotInitialized} />;
   }
 
   return (
@@ -76,13 +71,15 @@ export function ConsoleView({
         <PasswordPage
           token={auth.token}
           username={auth.username}
-          forced={false}
           onChanged={handleSession}
           onSessionExpired={handleSessionExpired}
         />
       )}
       {section === 'apps' && (
         <AppsPage token={auth.token} onSessionExpired={handleSessionExpired} />
+      )}
+      {section === 'settings' && (
+        <SettingsPage token={auth.token} onSessionExpired={handleSessionExpired} />
       )}
       {section === 'risk' && (
         <RiskPage token={auth.token} onSessionExpired={handleSessionExpired} />

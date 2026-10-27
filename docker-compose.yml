@@ -7,12 +7,12 @@ services:
     container_name: simple-captcha-backend
     ports:
       - "3321:3321"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    # 全部业务配置来自 backend/.env（不入库）：cp backend/.env.example backend/.env 后按需修改。
-    # 含 $ 的值要用单引号包裹。
+    # 不需要任何配置即可启动：管理员账号在控制台初始化页面设置，接入应用与验证码 / 风控策略也都在控制台里配置。
+    # 端口、证书、可信代理网段等部署参数可选写在 backend/.env（不入库，模板见 backend/.env.example），
+    # 没有这个文件也能启动；含 $ 的值要用单引号包裹。required: false 需要 Docker Compose 2.24+
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       # 与上方端口映射和健康检查绑定，固定写在这里，不放进 .env
       - PORT=3321
@@ -23,8 +23,8 @@ services:
       # 背景图目录以读写方式挂载：管理后台的上传 / 删除直接落到宿主机目录
       # 需对容器内 uid 1001 可写：chown -R 1001:1001 backend/images
       - ./backend/images:/app/images
-      # 管理员凭据与接入应用（只存哈希）。具名卷自动继承镜像内 /app/data 的属主；
-      # 删除该卷会重新生成管理员密码，且全部应用密钥失效，down 时不要带 -v
+      # 持久数据 captcha.db：管理员账号、接入应用（密钥只存哈希）、策略配置、风控观察记录。具名卷自动继承镜像内 /app/data 的属主；
+      # 删除该卷会回到未初始化状态，且全部应用密钥失效，down 时不要带 -v
       - captcha-data:/app/data
     restart: unless-stopped
     healthcheck:

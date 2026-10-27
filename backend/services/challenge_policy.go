@@ -3,12 +3,11 @@ package services
 import (
 	"fmt"
 	"math/rand"
-	"simple-captcha/config"
 	"simple-captcha/risk"
 )
 
 // 出题前按环境分加难的阈值与分值。
-// 这里的阈值作用于出题前的环境 / 请求侧得分，与 RISK_ESCALATE_THRESHOLD（作用于上一次校验的总分）语义不同：
+// 这里的阈值作用于出题前的环境 / 请求侧得分，与策略 risk.escalateThreshold（作用于上一次校验的总分）语义不同：
 // 单个明显痕迹（webdriver 45、automation 35、指纹重放 30）即可加 1 级，两个以上叠加加 2 级。
 const (
 	issueBoostOneAt = 30
@@ -26,7 +25,7 @@ type IssueInput struct {
 	Env *risk.Env
 	// Request 服务端从请求头提取的信号，可为 nil
 	Request *risk.RequestSignals
-	// FPReplays 该指纹在时间窗内对应的不同客户端数，0 表示未统计；超过 RISK_FP_REPLAY_THRESHOLD 视为重放
+	// FPReplays 该指纹在时间窗内对应的不同客户端数，0 表示未统计；超过策略 risk.fpReplayThreshold 视为重放
 	FPReplays int
 	// State 客户端历史状态；nil 时由策略按 ClientHash 从存储读取
 	State *ClientRisk
@@ -50,21 +49,21 @@ type IssueDecision struct {
 
 // ChallengePolicy 出题策略：根据客户端风控状态与环境信号决定难度等级，并为 auto 类型挑选具体题型
 type ChallengePolicy struct {
-	cfg   *config.Config
-	store *ClientRiskStore
-	pick  func(n int) int
+	settings settingsSource
+	store    *ClientRiskStore
+	pick     func(n int) int
 }
 
-// NewChallengePolicy 创建出题策略
+// NewChallengePolicy 创建出题策略；策略值每次出题时从 config.Runtime() 读取
 func NewChallengePolicy(store *ClientRiskStore) *ChallengePolicy {
-	return newChallengePolicyWithConfig(config.LoadConfig(), store)
+	return newChallengePolicyWithSettings(nil, store)
 }
 
-func newChallengePolicyWithConfig(cfg *config.Config, store *ClientRiskStore) *ChallengePolicy {
+func newChallengePolicyWithSettings(settings settingsSource, store *ClientRiskStore) *ChallengePolicy {
 	return &ChallengePolicy{
-		cfg:   cfg,
-		store: store,
-		pick:  rand.Intn,
+		settings: settings,
+		store:    store,
+		pick:     rand.Intn,
 	}
 }
 
@@ -75,10 +74,11 @@ func newChallengePolicyWithConfig(cfg *config.Config, store *ClientRiskStore) *C
 //
 // 没有任何降级分支：真人不需要证明自己就拿默认难度，脚本因为忘了藏的痕迹逐级变难。
 func (p *ChallengePolicy) Decide(in IssueInput) IssueDecision {
-	if p == nil || p.cfg == nil {
+	if p == nil {
 		return IssueDecision{Level: ClampDifficulty(0), Base: ClampDifficulty(0)}
 	}
-	base := ClampDifficulty(p.cfg.Captcha.DefaultDifficulty)
+	rt := p.settings.get()
+	base := ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	decision := IssueDecision{Base: base}
 	reasons := make([]string, 0, 8)
 
@@ -91,25 +91,25 @@ func (p *ChallengePolicy) Decide(in IssueInput) IssueDecision {
 		state = &loaded
 	}
 
-	level := LevelFromState(base, *state, p.cfg.Risk)
+	level := LevelFromState(base, *state, rt.Risk)
 	if up := level - base; up > 0 {
 		reasons = append(reasons, fmt.Sprintf("client_history(%+d)", up))
 	}
-	if ip := IPPressureBoost(in.IPRequests, p.cfg.Captcha.IPEscalatePerMin); ip > 0 {
+	if ip := IPPressureBoost(in.IPRequests, rt.Captcha.IPEscalatePerMinute); ip > 0 {
 		level += ip
 		reasons = append(reasons, fmt.Sprintf("ip_pressure(%+d)", ip))
 	}
 
-	if p.cfg.Risk.Enabled && (in.Env != nil || in.Request != nil) {
+	if rt.Risk.Enabled && (in.Env != nil || in.Request != nil) {
 		env := risk.EvaluateEnv(in.Env, in.Request)
 		reasons = append(reasons, env.Reasons...)
 		decision.Consistent = env.Consistent
 		envScore := env.Score
-		if threshold := p.cfg.Risk.FPReplayThreshold; threshold > 0 && in.FPReplays > threshold {
+		if threshold := rt.Risk.FPReplayThreshold; threshold > 0 && in.FPReplays > threshold {
 			envScore += fpReplayPoints
 			reasons = append(reasons, fmt.Sprintf("fp_replayed(%+d)", fpReplayPoints))
 		}
-		if cap := p.cfg.Risk.EnvScoreCap; cap > 0 && envScore > cap {
+		if cap := rt.Risk.EnvScoreCap; cap > 0 && envScore > cap {
 			envScore = cap
 		}
 		decision.EnvScore = envScore

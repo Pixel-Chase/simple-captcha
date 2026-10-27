@@ -31,19 +31,11 @@ function validate(current: string, next: string, confirm: string): string | null
 interface PasswordPageProps {
   token: string;
   username: string;
-  /** 首次登录强制改密：改完之前控制台其他页面不可用 */
-  forced: boolean;
   onChanged: (result: LoginResponse) => void;
   onSessionExpired: () => void;
 }
 
-export function PasswordPage({
-  token,
-  username,
-  forced,
-  onChanged,
-  onSessionExpired,
-}: PasswordPageProps) {
+export function PasswordPage({ token, username, onChanged, onSessionExpired }: PasswordPageProps) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -90,23 +82,14 @@ export function PasswordPage({
   return (
     <section className="password">
       <div className="password__intro">
-        <p className="eyebrow">{forced ? '首次登录' : '账号安全'}</p>
-        <h1>{forced ? '先修改初始密码' : '修改管理员密码'}</h1>
-        {forced ? (
-          <p className="password__lead">
-            初始密码由后端首次启动时随机生成，并打印在服务控制台里：它会留在{' '}
-            <code>docker logs</code>{' '}
-            和日志采集系统中。改成只有你知道的密码之后，日志里的那串即失效。
-            改密完成前，背景图与接入应用管理暂不可用。
-          </p>
-        ) : (
-          <p className="password__lead">
-            修改后，其他浏览器或设备上的登录会全部退出，当前页面自动换用新会话。
-          </p>
-        )}
+        <p className="eyebrow">账号安全</p>
+        <h1>修改管理员密码</h1>
+        <p className="password__lead">
+          修改后，其他浏览器或设备上的登录会全部退出，当前页面自动换用新会话。
+        </p>
         <p className="password__note">
-          忘记密码时，在后端执行 <code>./simple-captcha reset-admin-password</code>
-          重新生成，下次登录同样需要先修改。
+          忘记密码时，在后端执行 <code>./simple-captcha reset-admin</code>
+          ：管理员账号被删除，用启动日志中的新口令在初始化页面重新设置用户名与密码，接入应用不受影响。
         </p>
       </div>
 
@@ -117,7 +100,7 @@ export function PasswordPage({
         <input type="hidden" autoComplete="username" value={username} readOnly />
 
         <label className="field">
-          <span className="field__label">{forced ? '初始密码' : '当前密码'}</span>
+          <span className="field__label">当前密码</span>
           <input
             className="field__input"
             type="password"
@@ -158,14 +141,14 @@ export function PasswordPage({
             {error}
           </div>
         )}
-        {done && !forced && (
+        {done && (
           <div className="alert alert--success" role="status">
             密码已修改，其他会话已全部退出。
           </div>
         )}
 
         <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
-          {busy ? '保存中…' : forced ? '修改并进入控制台' : '保存新密码'}
+          {busy ? '保存中…' : '保存新密码'}
         </button>
       </form>
     </section>

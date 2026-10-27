@@ -18,7 +18,7 @@ import type { ClickDot, SlideRegionPoint, SlidePoint } from './_internal';
 import { collectEnvWithAnomalies, solvePow, useBehaviorTrace } from './_internal/telemetry';
 import { useCaptchaRequest } from './hooks';
 import { useCaptchaConfig } from './CaptchaProvider';
-import { CaptchaError } from './CaptchaError';
+import { appRejectedError, CaptchaError } from './CaptchaError';
 import type { CaptchaStatus } from './_internal/shared/status.types';
 import type { ClickData } from './_internal/click/click.types';
 import type { RotateData } from './_internal/rotate/rotate.types';
@@ -240,7 +240,9 @@ export const CaptchaInternal = forwardRef<CaptchaRef, CaptchaInternalProps>((pro
       }
       const response = error as CaptchaErrorResponse;
       setVisible(false);
-      onFail(new CaptchaError('LOAD_FAILED', response.error, response));
+      onFail(
+        appRejectedError(response) ?? new CaptchaError('LOAD_FAILED', response.error, response),
+      );
       onClosed();
     }
   };
@@ -282,6 +284,15 @@ export const CaptchaInternal = forwardRef<CaptchaRef, CaptchaInternalProps>((pro
       hideAfter(SUCCESS_HOLD_MS);
       onSuccess(result);
     } catch (error) {
+      // 应用被拒绝（停用或来源被移出名单）不是答错：立即结束，不再换题重试
+      const rejected = appRejectedError(error as CaptchaErrorResponse);
+      if (rejected) {
+        failCountRef.current = 0;
+        setStatus('fail');
+        hideAfter(FAIL_HOLD_MS);
+        onFail(rejected);
+        return;
+      }
       failCountRef.current += 1;
       setStatus('fail');
       if (failCountRef.current >= maxAttempts) {

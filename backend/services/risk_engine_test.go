@@ -6,7 +6,7 @@ import (
 )
 
 func TestShouldBlock_RequiresBehaviorEvidence(t *testing.T) {
-	engine := &RiskEngine{cfg: testPolicyConfig()}
+	engine := &RiskEngine{settings: fixedSettings(testPolicyConfig())}
 
 	cases := []struct {
 		name   string
@@ -32,13 +32,13 @@ func TestShouldBlock_ModeAndEnabled(t *testing.T) {
 
 	logMode := testPolicyConfig()
 	logMode.Risk.Mode = "log"
-	if (&RiskEngine{cfg: logMode}).ShouldBlock(blockable) {
+	if (&RiskEngine{settings: fixedSettings(logMode)}).ShouldBlock(blockable) {
 		t.Error("log mode must never block")
 	}
 
 	disabled := testPolicyConfig()
 	disabled.Risk.Enabled = false
-	if (&RiskEngine{cfg: disabled}).ShouldBlock(blockable) {
+	if (&RiskEngine{settings: fixedSettings(disabled)}).ShouldBlock(blockable) {
 		t.Error("disabled risk must never block")
 	}
 }
@@ -46,7 +46,7 @@ func TestShouldBlock_ModeAndEnabled(t *testing.T) {
 // TestShouldBlock_VDIUserWithHumanTraceNotBlocked 软件渲染器 + 无插件 + 无语言列表的桌面环境，配合真人轨迹不得被拦
 func TestShouldBlock_VDIUserWithHumanTraceNotBlocked(t *testing.T) {
 	cfg := testPolicyConfig()
-	engine := &RiskEngine{cfg: cfg}
+	engine := &RiskEngine{settings: fixedSettings(cfg)}
 	env := &risk.Env{
 		UA:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 		WebGL:    "llvmpipe (LLVM 15.0.7, 256 bits)",

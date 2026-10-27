@@ -14,7 +14,6 @@ import (
 )
 
 const testIndex = `<!doctype html><html><head>` +
-	`<meta name="captcha-api-prefix" content="__CAPTCHA_API_PREFIX__" />` +
 	`<script type="module" src="./assets/index-abc123.js"></script></head><body></body></html>`
 
 func builtAssets() fs.FS {
@@ -27,10 +26,10 @@ func builtAssets() fs.FS {
 	}
 }
 
-func newRouter(assets fs.FS, apiPrefix string) *gin.Engine {
+func newRouter(assets fs.FS) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	Register(r, NewHandler(assets, apiPrefix))
+	Register(r, NewHandler(assets))
 	return r
 }
 
@@ -41,7 +40,7 @@ func get(r http.Handler, method, target string) *httptest.ResponseRecorder {
 }
 
 func TestConsole_RedirectsToTrailingSlash(t *testing.T) {
-	r := newRouter(builtAssets(), "/api/v1")
+	r := newRouter(builtAssets())
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		w := get(r, method, "/console")
 		assert.Equal(t, http.StatusMovedPermanently, w.Code, method)
@@ -49,31 +48,24 @@ func TestConsole_RedirectsToTrailingSlash(t *testing.T) {
 	}
 }
 
-func TestConsole_IndexInjectsAPIPrefix(t *testing.T) {
-	r := newRouter(builtAssets(), "/captcha/api")
+// API 路径固定为同源的 /api/v1：index.html 原样返回，不再注入任何配置
+func TestConsole_ServesIndexUnchanged(t *testing.T) {
+	r := newRouter(builtAssets())
 
 	for _, target := range []string{"/console/", "/console/index.html"} {
 		w := get(r, http.MethodGet, target)
 		require.Equal(t, http.StatusOK, w.Code, target)
-		body := w.Body.String()
-		assert.Contains(t, body, `content="/captcha/api"`)
-		assert.NotContains(t, body, apiPrefixPlaceholder)
+		assert.Equal(t, testIndex, w.Body.String())
+		assert.NotContains(t, w.Body.String(), "__CAPTCHA_API_PREFIX__")
 		assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
 		assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
 		assert.Contains(t, w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
 		assert.Equal(t, "noindex, nofollow", w.Header().Get("X-Robots-Tag"))
 	}
-
-	// API 挂在根路径时前缀为空串；前缀里的特殊字符按 HTML 属性转义
-	w := get(newRouter(builtAssets(), ""), http.MethodGet, "/console/")
-	assert.Contains(t, w.Body.String(), `name="captcha-api-prefix" content=""`)
-	w = get(newRouter(builtAssets(), `/x"><script>`), http.MethodGet, "/console/")
-	assert.NotContains(t, w.Body.String(), `"><script>`)
-	assert.Contains(t, w.Body.String(), `content="/x&#34;&gt;&lt;script&gt;"`)
 }
 
 func TestConsole_ServesHashedAssetsWithLongCache(t *testing.T) {
-	r := newRouter(builtAssets(), "/api/v1")
+	r := newRouter(builtAssets())
 
 	w := get(r, http.MethodGet, "/console/assets/index-abc123.js")
 	require.Equal(t, http.StatusOK, w.Code)
@@ -96,7 +88,7 @@ func TestConsole_ServesHashedAssetsWithLongCache(t *testing.T) {
 }
 
 func TestConsole_OnlyServesBuiltFiles(t *testing.T) {
-	r := newRouter(builtAssets(), "/api/v1")
+	r := newRouter(builtAssets())
 
 	for _, target := range []string{
 		"/console/missing.js",
@@ -115,8 +107,8 @@ func TestConsole_OnlyServesBuiltFiles(t *testing.T) {
 }
 
 func TestConsole_NotBuiltShowsHint(t *testing.T) {
-	r := newRouter(fstest.MapFS{".gitkeep": {Data: nil}}, "/api/v1")
-	assert.False(t, NewHandler(fstest.MapFS{}, "/api/v1").Built())
+	r := newRouter(fstest.MapFS{".gitkeep": {Data: nil}})
+	assert.False(t, NewHandler(fstest.MapFS{}).Built())
 
 	w := get(r, http.MethodGet, "/console/")
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)

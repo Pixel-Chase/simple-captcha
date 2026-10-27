@@ -4,8 +4,8 @@
 # 变量优先级（高 → 低）：
 #   1. 命令行 / 当前 shell 已有的环境变量，例如 PORT=4000 ./run-dev.sh
 #   2. .env               个人或生产覆盖项，不入库
-#   3. .env.development   仓库内的开发默认值（Redis 本机、本地放开跨域等）
-# 参数原样传给程序，例如 ./run-dev.sh reset-admin-password 重置管理员密码
+#   3. .env.development   仓库内的开发默认值（调试模式、本地放开跨域等）
+# 参数原样传给程序，例如 ./run-dev.sh reset-admin 重置管理员账号（回到初始化页面）
 # 文件格式：每行 KEY=VALUE，# 开头为注释；含空格或 $ 的值请用单引号包裹。
 set -eu
 cd "$(dirname "$0")"
@@ -31,11 +31,11 @@ load_env_file .env.development
 # Go 不在 PATH 时尝试默认安装位置
 command -v go >/dev/null 2>&1 || PATH="$PATH:/usr/local/go/bin"
 if ! command -v go >/dev/null 2>&1; then
-  echo "未找到 go 命令，请安装 Go 1.23+ 或把它加入 PATH" >&2
+  echo "未找到 go 命令，请安装 Go 1.27+ 或把它加入 PATH" >&2
   exit 1
 fi
 
 if [ $# -eq 0 ]; then
-  echo "启动后端: PORT=${PORT:-8080} GIN_MODE=${GIN_MODE:-release} REDIS=${REDIS_HOST:-localhost}:${REDIS_PORT:-6379}"
+  echo "启动后端: PORT=${PORT:-8080} GIN_MODE=${GIN_MODE:-release} 数据目录=$(pwd)/data"
 fi
 exec go run . "$@"

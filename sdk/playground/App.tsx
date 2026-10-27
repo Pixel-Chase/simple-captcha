@@ -1,5 +1,5 @@
 import { CaptchaProvider } from '@aetherlib/g-captcha';
-import { API_BASE, API_PREFIX } from './api';
+import { API_PREFIX, CONSOLE_APP_ID } from './api';
 import { ConsoleView, parseConsoleSection, TopbarUser } from './console/ConsoleView';
 import type { ConsoleSection } from './console/ConsoleView';
 import { useConsoleAuth, useLocationHash } from './console/useConsoleAuth';
@@ -28,16 +28,23 @@ const consoleHref = (section: ConsoleSection) =>
 /** 本地演示站：接入文档 + 控制台。线上管理后台见 console/ConsoleApp（内嵌在 Go 服务里，不含接入文档） */
 export default function App() {
   const route = parseRoute(useLocationHash());
-  const { auth, handleSession, handleLogout, handleSessionExpired } = useConsoleAuth();
+  const {
+    auth,
+    handleSession,
+    handleLogout,
+    handleSessionExpired,
+    handleNotInitialized,
+    handleAlreadyInitialized,
+  } = useConsoleAuth();
 
-  // 未登录的控制台首页是暗色展台，顶栏与页脚随之切换
-  const home = route.name === 'console' && auth.status === 'anonymous';
+  // 未登录（含未初始化）的控制台首页是暗色展台，顶栏与页脚随之切换
+  const home = route.name === 'console' && (auth.status === 'anonymous' || auth.status === 'setup');
 
   const tabClass = (name: Route['name']) =>
     route.name === name ? 'topbar__tab topbar__tab--active' : 'topbar__tab';
 
   return (
-    <CaptchaProvider api={{ basePath: API_BASE, prefix: API_PREFIX }}>
+    <CaptchaProvider api={{ appId: CONSOLE_APP_ID }}>
       <div className={home ? 'app app--home' : 'app'}>
         <header className="topbar">
           <div className="topbar__brand">
@@ -70,12 +77,14 @@ export default function App() {
               hrefFor={consoleHref}
               handleSession={handleSession}
               handleSessionExpired={handleSessionExpired}
+              handleNotInitialized={handleNotInitialized}
+              handleAlreadyInitialized={handleAlreadyInitialized}
             />
           )}
         </main>
 
         <footer className="footer">
-          后端 {API_BASE} · 管理员初始密码在后端首次启动时打印于服务控制台
+          API 与页面同源（{API_PREFIX}，开发时由 Vite 代理转发）· 初始化口令打印在后端启动日志中
         </footer>
       </div>
     </CaptchaProvider>

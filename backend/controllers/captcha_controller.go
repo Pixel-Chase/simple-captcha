@@ -38,25 +38,13 @@ func NewCaptchaController() *CaptchaController {
 	}
 }
 
-// issueParams 出题流程的输入，由 GET 与 POST 两个处理器分别组装
+// issueParams 出题流程的输入
 type issueParams struct {
 	requestedType string
 	mode          string
 	scale         int
 	dpr           float64
 	env           *risk.Env
-	viaPost       bool
-}
-
-// GetCaptchaHandler 生成验证码处理器（GET：旧版 SDK 兼容，不携带环境信号）
-func (ctrl *CaptchaController) GetCaptchaHandler(c *gin.Context) {
-	req := middleware.GetCaptchaRequest(c)
-	if req == nil {
-		log.Printf("获取请求参数失败: ip=%s", helper.GetRealClientIP(c))
-		helper.SimpleErrorResponse(c, helper.ErrCodeInternalError, "内部错误")
-		return
-	}
-	ctrl.issue(c, issueParams{requestedType: req.Type, mode: req.Mode, scale: req.Scale(), dpr: req.Dpr})
 }
 
 // IssueCaptchaHandler 生成验证码处理器（POST：请求体携带环境信号，出题前据此加难）
@@ -67,7 +55,7 @@ func (ctrl *CaptchaController) IssueCaptchaHandler(c *gin.Context) {
 		helper.SimpleErrorResponse(c, helper.ErrCodeInternalError, "内部错误")
 		return
 	}
-	ctrl.issue(c, issueParams{requestedType: req.Type, mode: req.Mode, scale: req.Scale(), dpr: req.Dpr, env: req.Env, viaPost: true})
+	ctrl.issue(c, issueParams{requestedType: req.Type, mode: req.Mode, scale: req.Scale(), dpr: req.Dpr, env: req.Env})
 }
 
 // requestSignals 提取请求头信号并附上指纹参考列表（未配置时为 nil，指纹只记录不计分）
@@ -77,7 +65,7 @@ func (ctrl *CaptchaController) requestSignals(c *gin.Context, dpr float64) *risk
 	return signals
 }
 
-// issue 出题：决定难度与题型、生成题目、记录出题评估。GET 与 POST 的响应完全一致
+// issue 出题：决定难度与题型、生成题目、记录出题评估
 func (ctrl *CaptchaController) issue(c *gin.Context, p issueParams) {
 	ip := helper.GetRealClientIP(c)
 	clientHash := helper.ClientFingerprint(c)
@@ -112,8 +100,9 @@ func (ctrl *CaptchaController) issue(c *gin.Context, p issueParams) {
 		Mode:       p.mode,
 		Scale:      p.scale,
 		Difficulty: decision.Level,
+		AppID:      middleware.GetRequestAppID(c),
 	}
-	if ctrl.config.Captcha.BindClient {
+	if config.Runtime().Captcha.BindClient {
 		challenge.ClientHash = clientHash
 	}
 
@@ -124,12 +113,8 @@ func (ctrl *CaptchaController) issue(c *gin.Context, p issueParams) {
 		return
 	}
 
-	via := "get"
-	if p.viaPost {
-		via = "post"
-	}
-	log.Printf("生成验证码成功: type=%s, mode=%s, via=%s, scale=%d, level=%d, boost=%d, envScore=%d, key=%s, ip=%s, ipRequests=%d",
-		captchaType, p.mode, via, captData.Scale, captData.Difficulty, decision.Boost, decision.EnvScore, captData.Key, ip, ipRequests)
+	log.Printf("生成验证码成功: type=%s, mode=%s, scale=%d, level=%d, boost=%d, envScore=%d, key=%s, ip=%s, ipRequests=%d",
+		captchaType, p.mode, captData.Scale, captData.Difficulty, decision.Boost, decision.EnvScore, captData.Key, ip, ipRequests)
 
 	ctrl.riskEngine.RecordIssue(&services.IssueContext{
 		Type:       captchaType,
@@ -138,7 +123,7 @@ func (ctrl *CaptchaController) issue(c *gin.Context, p issueParams) {
 		Key:        captData.Key,
 		Env:        p.env,
 		Request:    signals,
-		ViaPost:    p.viaPost,
+		AppID:      challenge.AppID,
 	}, decision)
 
 	response := ctrl.buildCaptchaResponse(captchaType, captData)
@@ -182,6 +167,7 @@ func (ctrl *CaptchaController) VerifyCaptchaHandler(c *gin.Context) {
 		Env:        req.Env,
 		Request:    ctrl.requestSignals(c, 0),
 		Pow:        req.Pow,
+		AppID:      middleware.GetRequestAppID(c),
 	}
 	riskResult := ctrl.riskEngine.Evaluate(evalCtx)
 	blocked := ctrl.riskEngine.ShouldBlock(riskResult)
@@ -193,9 +179,10 @@ func (ctrl *CaptchaController) VerifyCaptchaHandler(c *gin.Context) {
 		Key:         req.Key,
 		Answer:      ctrl.extractVerifyData(req),
 		Pow:         req.Pow,
+		AppID:       evalCtx.AppID,
 		RiskBlocked: blocked,
 	}
-	if ctrl.config.Captcha.BindClient {
+	if config.Runtime().Captcha.BindClient {
 		input.ClientHash = clientHash
 	}
 
@@ -228,7 +215,8 @@ func (ctrl *CaptchaController) ValidateCaptchaHandler(c *gin.Context) {
 		return
 	}
 
-	if !ctrl.riskControl.ValidateSecondVerifyToken(req.Key) {
+	// 只能查询并消费本应用签发的 key：属于其他应用的 key 与无效 key 的响应相同，且不会被消费
+	if !ctrl.riskControl.ConsumeSecondVerifyToken(req.Key, middleware.GetAppID(c)) {
 		log.Printf("二次验证令牌无效: key=%s, app=%s, ip=%s", req.Key, middleware.GetAppID(c), helper.GetRealClientIP(c))
 		helper.SimpleErrorResponse(c, helper.ErrCodeExpired, "验证码已失效")
 		return
@@ -291,7 +279,7 @@ func (ctrl *CaptchaController) extractVerifyData(req *models.VerifyRequest) stri
 }
 
 // 为了保持向后兼容，保留原有的函数签名。
-// 默认控制器在首个请求时才创建：包初始化阶段不触发服务管理器（加载素材、连接 Redis、生成管理员凭据），
+// 默认控制器在首个请求时才创建：包初始化阶段不触发服务管理器（加载素材、打开数据库、生成初始化口令），
 // reset-admin-password 等子命令与测试的 TestMain 才能在此之前完成各自的准备
 var (
 	captchaControllerOnce sync.Once
@@ -303,11 +291,6 @@ func defaultCaptchaController() *CaptchaController {
 		captchaController = NewCaptchaController()
 	})
 	return captchaController
-}
-
-// GetCaptchaHandler 全局函数（向后兼容）
-func GetCaptchaHandler(c *gin.Context) {
-	defaultCaptchaController().GetCaptchaHandler(c)
 }
 
 // IssueCaptchaHandler 全局函数（POST 出题）

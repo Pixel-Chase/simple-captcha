@@ -1,17 +1,17 @@
 package services
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
-	"path/filepath"
 	"regexp"
-	"simple-captcha/cache"
 	"simple-captcha/helper"
-	"strconv"
+	"simple-captcha/storage"
 	"strings"
 	"sync"
 	"time"
@@ -20,8 +20,6 @@ import (
 )
 
 const (
-	appsFile = "apps.json"
-
 	appIDPrefix     = "app_"
 	appIDBytes      = 6 // 十六进制后 12 位
 	appSecretPrefix = "sk_"
@@ -30,26 +28,11 @@ const (
 	appNameMaxLen   = 40
 	maxApps         = 100
 
-	appLastUsedKeyPrefix = "admin:app:last_used:"
+	// lastUsedWriteInterval 同一应用的最近使用时间最多每分钟写一次库，S2S 高频调用不会放大成写入
+	lastUsedWriteInterval = time.Minute
 )
 
 var appIDPattern = regexp.MustCompile(`^app_[0-9a-f]{12}$`)
-
-// appRecord apps.json 中的一条应用记录；密钥只保存 SHA-256 哈希（高熵随机串，无需慢哈希）
-type appRecord struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	SecretHash      string    `json:"secretHash"`
-	SecretHint      string    `json:"secretHint"`
-	Enabled         bool      `json:"enabled"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
-	SecretRotatedAt time.Time `json:"secretRotatedAt"`
-}
-
-type appsDocument struct {
-	Apps []appRecord `json:"apps"`
-}
 
 // AppInfo 接入应用对外信息，不含密钥哈希
 type AppInfo struct {
@@ -61,64 +44,179 @@ type AppInfo struct {
 	UpdatedAt       time.Time  `json:"updatedAt"`
 	SecretRotatedAt time.Time  `json:"secretRotatedAt"`
 	LastUsedAt      *time.Time `json:"lastUsedAt"`
+	// Origins 允许发起出题与提交的来源（已规范化）；系统应用为空，只接受同源
+	Origins []string `json:"origins"`
+	// IsSystem 内置系统应用（管理后台），不可删除、停用、改名、轮换密钥或修改来源
+	IsSystem bool `json:"isSystem"`
 }
 
 // AppService 接入应用管理：每个业务后端一个应用、一个独立密钥，凭密钥调用 S2S 接口。
-// 应用列表持久化在数据目录的 apps.json，只由本服务写入，内存中保留一份副本供鉴权查询
+// 应用存于 apps 表，密钥只保存 SHA-256 哈希（高熵随机串，无需慢哈希）
 type AppService struct {
-	path string
+	db *storage.DB
 
-	mu   sync.RWMutex
-	apps []appRecord
+	// writeMu 串行化"检查数量与重名 + 写入"，管理操作频率很低
+	writeMu sync.Mutex
+
+	lastUsedMu      sync.Mutex
+	lastUsedWritten map[string]time.Time // 各应用上次把最近使用时间写库的时刻（进程内存）
 }
 
-// NewAppService 加载数据目录中的应用列表，文件不存在时视为空列表
-func NewAppService(dataDir string) (*AppService, error) {
-	if err := ensureDataDir(dataDir); err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dataDir, appsFile)
-	var doc appsDocument
-	if _, err := readJSONFile(path, &doc); err != nil {
-		return nil, err
-	}
-	return &AppService{path: path, apps: doc.Apps}, nil
+// NewAppService 创建接入应用服务
+func NewAppService(db *storage.DB) *AppService {
+	return &AppService{db: db, lastUsedWritten: make(map[string]time.Time)}
 }
 
-// Count 返回应用数量
+const appColumns = `id, name, secret_hint, enabled, created_at, updated_at, secret_rotated_at, last_used_at, is_system`
+
+func scanApp(row interface{ Scan(...any) error }) (AppInfo, error) {
+	var info AppInfo
+	var created, updated, rotated int64
+	var lastUsed sql.NullInt64
+	if err := row.Scan(&info.ID, &info.Name, &info.SecretHint, &info.Enabled, &created, &updated, &rotated, &lastUsed, &info.IsSystem); err != nil {
+		return AppInfo{}, err
+	}
+	info.Origins = []string{}
+	info.CreatedAt = time.Unix(created, 0)
+	info.UpdatedAt = time.Unix(updated, 0)
+	info.SecretRotatedAt = time.Unix(rotated, 0)
+	if lastUsed.Valid {
+		at := time.Unix(lastUsed.Int64, 0)
+		info.LastUsedAt = &at
+	}
+	return info, nil
+}
+
+// Count 返回接入应用数量（不含内置系统应用）
 func (s *AppService) Count() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return len(s.apps)
-}
-
-// List 按创建时间返回全部应用
-func (s *AppService) List() []AppInfo {
-	s.mu.RLock()
-	records := append([]appRecord{}, s.apps...)
-	s.mu.RUnlock()
-
-	items := make([]AppInfo, 0, len(records))
-	for _, record := range records {
-		items = append(items, withLastUsed(record.info()))
+	var n int
+	if err := s.db.QueryRowContext(context.Background(), `SELECT COUNT(1) FROM apps WHERE is_system = 0`).Scan(&n); err != nil {
+		log.Printf("统计接入应用失败: error=%v", err)
 	}
-	return items
+	return n
 }
 
-// Create 新建应用并返回一次性明文密钥
-func (s *AppService) Create(name string) (*AppInfo, string, *helper.CaptchaError) {
+// List 返回全部应用：系统应用在前，其余按创建时间
+func (s *AppService) List() ([]AppInfo, *helper.CaptchaError) {
+	ctx := context.Background()
+	rows, err := s.db.QueryContext(ctx, `SELECT `+appColumns+` FROM apps ORDER BY is_system DESC, created_at, rowid`)
+	if err != nil {
+		return nil, internalError("读取应用列表失败", err)
+	}
+	items := make([]AppInfo, 0)
+	for rows.Next() {
+		info, err := scanApp(rows)
+		if err != nil {
+			rows.Close()
+			return nil, internalError("读取应用列表失败", err)
+		}
+		items = append(items, info)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, internalError("读取应用列表失败", err)
+	}
+	rows.Close()
+
+	origins, err := s.allOrigins(ctx)
+	if err != nil {
+		return nil, internalError("读取应用允许来源失败", err)
+	}
+	for i := range items {
+		if list, ok := origins[items[i].ID]; ok {
+			items[i].Origins = list
+		}
+	}
+	return items, nil
+}
+
+func (s *AppService) get(ctx context.Context, q queryer, id string) (*AppInfo, error) {
+	info, err := scanApp(q.QueryRowContext(ctx, `SELECT `+appColumns+` FROM apps WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	origins, err := s.originsOf(ctx, q, id)
+	if err != nil {
+		return nil, err
+	}
+	info.Origins = origins
+	return &info, nil
+}
+
+// originsOf 某个应用的允许来源，按添加顺序
+func (s *AppService) originsOf(ctx context.Context, q queryer, id string) ([]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT origin FROM app_origins WHERE app_id = ? ORDER BY rowid`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list := []string{}
+	for rows.Next() {
+		var origin string
+		if err := rows.Scan(&origin); err != nil {
+			return nil, err
+		}
+		list = append(list, origin)
+	}
+	return list, rows.Err()
+}
+
+func (s *AppService) allOrigins(ctx context.Context) (map[string][]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT app_id, origin FROM app_origins ORDER BY rowid`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string][]string)
+	for rows.Next() {
+		var id, origin string
+		if err := rows.Scan(&id, &origin); err != nil {
+			return nil, err
+		}
+		out[id] = append(out[id], origin)
+	}
+	return out, rows.Err()
+}
+
+// replaceOrigins 整体替换应用的允许来源
+func replaceOrigins(ctx context.Context, tx *sql.Tx, id string, origins []string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM app_origins WHERE app_id = ?`, id); err != nil {
+		return err
+	}
+	for _, origin := range origins {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO app_origins (app_id, origin) VALUES (?, ?)`, id, origin); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Create 新建应用并返回一次性明文密钥；origins 为允许发起出题与提交的来源
+func (s *AppService) Create(name string, origins []string) (*AppInfo, string, *helper.CaptchaError) {
 	name, cerr := normalizeAppName(name)
 	if cerr != nil {
 		return nil, "", cerr
 	}
+	origins, cerr = normalizeOrigins(origins)
+	if cerr != nil {
+		return nil, "", cerr
+	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 
-	if len(s.apps) >= maxApps {
+	ctx := context.Background()
+	if n := s.Count(); n >= maxApps {
 		return nil, "", helper.NewCaptchaError(helper.ErrCodeInvalidParam, fmt.Sprintf("应用数量已达上限 %d", maxApps))
 	}
-	if s.nameTaken(name, "") {
+	taken, err := s.nameTaken(ctx, name, "")
+	if err != nil {
+		return nil, "", internalError("读取应用列表失败", err)
+	}
+	if taken {
 		return nil, "", helper.ErrAppNameConflict
 	}
 
@@ -131,107 +229,147 @@ func (s *AppService) Create(name string) (*AppInfo, string, *helper.CaptchaError
 		return nil, "", internalError("生成应用密钥失败", err)
 	}
 
-	now := time.Now()
-	record := appRecord{
-		ID:              appIDPrefix + id,
-		Name:            name,
-		SecretHash:      hash,
-		SecretHint:      hint,
-		Enabled:         true,
-		CreatedAt:       now,
-		UpdatedAt:       now,
-		SecretRotatedAt: now,
-	}
-	next := append(append([]appRecord{}, s.apps...), record)
-	if err := s.persist(next); err != nil {
-		return nil, "", err
+	now := time.Now().Unix()
+	err = s.db.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO apps (id, name, secret_hash, secret_hint, enabled, created_at, updated_at, secret_rotated_at)
+			 VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
+			appIDPrefix+id, name, hash, hint, now, now, now); err != nil {
+			return err
+		}
+		return replaceOrigins(ctx, tx, appIDPrefix+id, origins)
+	})
+	if err != nil {
+		return nil, "", internalError("保存应用失败", err)
 	}
 
-	info := record.info()
-	return &info, secret, nil
+	info, err := s.get(ctx, s.db, appIDPrefix+id)
+	if err != nil || info == nil {
+		return nil, "", internalError("读取应用失败", fmt.Errorf("%v", err))
+	}
+	return info, secret, nil
 }
 
-// Update 修改应用名称与启用状态；停用后该应用的密钥立即无法通过 S2S 鉴权
-func (s *AppService) Update(id, name string, enabled bool) (*AppInfo, *helper.CaptchaError) {
+// Update 修改应用名称、启用状态与允许来源（origins 为 nil 时保持不变）；停用后该应用的密钥与来源立即失效
+func (s *AppService) Update(id, name string, enabled bool, origins *[]string) (*AppInfo, *helper.CaptchaError) {
 	name, cerr := normalizeAppName(name)
 	if cerr != nil {
 		return nil, cerr
 	}
+	var normalized []string
+	if origins != nil {
+		if normalized, cerr = normalizeOrigins(*origins); cerr != nil {
+			return nil, cerr
+		}
+	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 
-	index := s.indexOf(id)
-	if index < 0 {
+	ctx := context.Background()
+	existing, err := s.get(ctx, s.db, id)
+	if err != nil {
+		return nil, internalError("读取应用失败", err)
+	}
+	if existing == nil {
 		return nil, helper.ErrAppNotFound
 	}
-	if s.nameTaken(name, id) {
+	if existing.IsSystem {
+		return nil, helper.ErrSystemAppReadonly
+	}
+	taken, err := s.nameTaken(ctx, name, id)
+	if err != nil {
+		return nil, internalError("读取应用列表失败", err)
+	}
+	if taken {
 		return nil, helper.ErrAppNameConflict
 	}
-
-	next := append([]appRecord{}, s.apps...)
-	record := &next[index]
-	record.Name = name
-	record.Enabled = enabled
-	record.UpdatedAt = time.Now()
-	if err := s.persist(next); err != nil {
-		return nil, err
+	err = s.db.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE apps SET name = ?, enabled = ?, updated_at = ? WHERE id = ?`,
+			name, enabled, time.Now().Unix(), id); err != nil {
+			return err
+		}
+		if origins == nil {
+			return nil
+		}
+		return replaceOrigins(ctx, tx, id, normalized)
+	})
+	if err != nil {
+		return nil, internalError("保存应用失败", err)
 	}
+	info, err := s.get(ctx, s.db, id)
+	if err != nil || info == nil {
+		return nil, helper.ErrAppNotFound
+	}
+	return info, nil
+}
 
-	info := withLastUsed(record.info())
-	return &info, nil
+// readonly 系统应用不可修改；应用不存在时返回 ErrAppNotFound
+func (s *AppService) readonly(ctx context.Context, id string) *helper.CaptchaError {
+	var system bool
+	err := s.db.QueryRowContext(ctx, `SELECT is_system FROM apps WHERE id = ?`, id).Scan(&system)
+	if errors.Is(err, sql.ErrNoRows) {
+		return helper.ErrAppNotFound
+	}
+	if err != nil {
+		return internalError("读取应用失败", err)
+	}
+	if system {
+		return helper.ErrSystemAppReadonly
+	}
+	return nil
+}
+
+func (s *AppService) afterUpdate(ctx context.Context, id string, res sql.Result, err error) (*AppInfo, *helper.CaptchaError) {
+	if err != nil {
+		return nil, internalError("保存应用失败", err)
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return nil, helper.ErrAppNotFound
+	}
+	info, err := s.get(ctx, s.db, id)
+	if err != nil || info == nil {
+		return nil, helper.ErrAppNotFound
+	}
+	return info, nil
 }
 
 // RotateSecret 重置应用密钥并返回新的明文，旧密钥立即失效
 func (s *AppService) RotateSecret(id string) (*AppInfo, string, *helper.CaptchaError) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	index := s.indexOf(id)
-	if index < 0 {
-		return nil, "", helper.ErrAppNotFound
-	}
-
 	secret, hash, hint, err := newAppSecret()
 	if err != nil {
 		return nil, "", internalError("生成应用密钥失败", err)
 	}
-
-	next := append([]appRecord{}, s.apps...)
-	record := &next[index]
-	now := time.Now()
-	record.SecretHash = hash
-	record.SecretHint = hint
-	record.SecretRotatedAt = now
-	record.UpdatedAt = now
-	if err := s.persist(next); err != nil {
-		return nil, "", err
+	ctx := context.Background()
+	if cerr := s.readonly(ctx, id); cerr != nil {
+		return nil, "", cerr
 	}
-
-	info := withLastUsed(record.info())
-	return &info, secret, nil
+	now := time.Now().Unix()
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE apps SET secret_hash = ?, secret_hint = ?, secret_rotated_at = ?, updated_at = ? WHERE id = ?`,
+		hash, hint, now, now, id)
+	info, cerr := s.afterUpdate(ctx, id, res, err)
+	if cerr != nil {
+		return nil, "", cerr
+	}
+	return info, secret, nil
 }
 
 // Delete 删除应用，其密钥立即失效
 func (s *AppService) Delete(id string) *helper.CaptchaError {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	index := s.indexOf(id)
-	if index < 0 {
+	if cerr := s.readonly(context.Background(), id); cerr != nil {
+		return cerr
+	}
+	res, err := s.db.ExecContext(context.Background(), `DELETE FROM apps WHERE id = ?`, id)
+	if err != nil {
+		return internalError("删除应用失败", err)
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
 		return helper.ErrAppNotFound
 	}
-
-	next := make([]appRecord, 0, len(s.apps)-1)
-	next = append(next, s.apps[:index]...)
-	next = append(next, s.apps[index+1:]...)
-	if err := s.persist(next); err != nil {
-		return err
-	}
-
-	if err := cache.Del(appLastUsedKeyPrefix + id); err != nil {
-		log.Printf("清理应用最近使用时间失败: app=%s, error=%v", id, err)
-	}
+	s.lastUsedMu.Lock()
+	delete(s.lastUsedWritten, id)
+	s.lastUsedMu.Unlock()
 	return nil
 }
 
@@ -242,88 +380,67 @@ func (s *AppService) Authenticate(secret string) (*AppInfo, bool) {
 		return nil, false
 	}
 	sum := sha256.Sum256([]byte(secret))
-	hash := []byte(hex.EncodeToString(sum[:]))
+	hash := hex.EncodeToString(sum[:])
 
-	s.mu.RLock()
-	var matched *appRecord
-	for i := range s.apps {
-		if subtle.ConstantTimeCompare(hash, []byte(s.apps[i].SecretHash)) == 1 {
-			matched = &s.apps[i]
+	ctx := context.Background()
+	// 按哈希查索引：比较的是高熵密钥的 SHA-256，时序差异不会泄露密钥本身
+	info, err := scanApp(s.db.QueryRowContext(ctx, `SELECT `+appColumns+` FROM apps WHERE secret_hash = ?`, hash))
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			log.Printf("查询接入应用失败: error=%v", err)
 		}
+		return nil, false
 	}
-	var info AppInfo
-	ok := matched != nil && matched.Enabled
-	if ok {
-		info = matched.info()
-	}
-	s.mu.RUnlock()
-
-	if !ok {
+	// 系统应用没有密钥，不能用于 S2S
+	if !info.Enabled || info.IsSystem {
 		return nil, false
 	}
 
 	now := time.Now()
-	if err := cache.Set(appLastUsedKeyPrefix+info.ID, strconv.FormatInt(now.Unix(), 10), 0); err != nil {
-		log.Printf("记录应用最近使用时间失败: app=%s, error=%v", info.ID, err)
-	}
+	s.touchLastUsed(ctx, info.ID, now)
 	info.LastUsedAt = &now
 	return &info, true
 }
 
-// ValidAppID 路径参数中的应用 ID 格式校验
+// touchLastUsed 记录最近使用时间，按应用节流写库；写入失败只影响展示，不影响鉴权
+func (s *AppService) touchLastUsed(ctx context.Context, id string, now time.Time) {
+	s.lastUsedMu.Lock()
+	last, ok := s.lastUsedWritten[id]
+	due := !ok || now.Sub(last) >= lastUsedWriteInterval
+	if due {
+		s.lastUsedWritten[id] = now
+	}
+	s.lastUsedMu.Unlock()
+	if !due {
+		return
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE apps SET last_used_at = ? WHERE id = ?`, now.Unix(), id); err != nil {
+		log.Printf("记录应用最近使用时间失败: app=%s, error=%v", id, err)
+	}
+}
+
+// ValidAppID 应用 ID 格式校验：app_ + 12 位十六进制，或内置系统应用 app_console
 func ValidAppID(id string) bool {
-	return appIDPattern.MatchString(id)
+	return id == ConsoleAppID || appIDPattern.MatchString(id)
 }
 
-// persist 先落盘再替换内存副本，写盘失败时内存状态保持不变
-func (s *AppService) persist(next []appRecord) *helper.CaptchaError {
-	if err := writeJSONFile(s.path, appsDocument{Apps: next}); err != nil {
-		return internalError("保存应用列表失败", err)
+// nameTaken 名称不区分大小写去重（Unicode 大小写折叠），exceptID 用于改名时排除自身
+func (s *AppService) nameTaken(ctx context.Context, name, exceptID string) (bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name FROM apps`)
+	if err != nil {
+		return false, err
 	}
-	s.apps = next
-	return nil
-}
-
-func (s *AppService) indexOf(id string) int {
-	for i := range s.apps {
-		if s.apps[i].ID == id {
-			return i
+	defer rows.Close()
+	for rows.Next() {
+		var id, existing string
+		if err := rows.Scan(&id, &existing); err != nil {
+			return false, err
+		}
+		if id != exceptID && strings.EqualFold(existing, name) {
+			return true, nil
 		}
 	}
-	return -1
-}
-
-// nameTaken 名称不区分大小写去重，exceptID 用于改名时排除自身
-func (s *AppService) nameTaken(name, exceptID string) bool {
-	for _, record := range s.apps {
-		if record.ID != exceptID && strings.EqualFold(record.Name, name) {
-			return true
-		}
-	}
-	return false
-}
-
-func (r appRecord) info() AppInfo {
-	return AppInfo{
-		ID:              r.ID,
-		Name:            r.Name,
-		SecretHint:      r.SecretHint,
-		Enabled:         r.Enabled,
-		CreatedAt:       r.CreatedAt,
-		UpdatedAt:       r.UpdatedAt,
-		SecretRotatedAt: r.SecretRotatedAt,
-	}
-}
-
-// withLastUsed 补上 Redis 中记录的最近使用时间；Redis 数据丢失只影响展示，不影响鉴权
-func withLastUsed(info AppInfo) AppInfo {
-	if raw := cache.Get(appLastUsedKeyPrefix + info.ID); raw != nil {
-		if unix, err := strconv.ParseInt(*raw, 10, 64); err == nil {
-			at := time.Unix(unix, 0)
-			info.LastUsedAt = &at
-		}
-	}
-	return info
+	return false, rows.Err()
 }
 
 // normalizeAppName 去掉首尾空白后要求 1-40 个字符，且不含控制字符

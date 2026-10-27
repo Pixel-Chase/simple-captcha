@@ -12,43 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ValidateCaptchaRequest 验证验证码请求中间件
-func ValidateCaptchaRequest() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var req models.CaptchaRequest
-
-		// 绑定URI参数
-		if err := c.ShouldBindUri(&req); err != nil {
-			log.Printf("URI参数绑定失败: error=%v, ip=%s", err, c.ClientIP())
-			helper.SimpleErrorResponse(c, helper.ErrCodeInvalidParam, "验证码类型参数错误")
-			c.Abort()
-			return
-		}
-
-		// 绑定查询参数
-		if err := c.ShouldBindQuery(&req); err != nil {
-			log.Printf("查询参数绑定失败: error=%v, ip=%s", err, c.ClientIP())
-			helper.SimpleErrorResponse(c, helper.ErrCodeInvalidParam, "查询参数错误")
-			c.Abort()
-			return
-		}
-
-		// 验证参数
-		if err := req.Validate(); err != nil {
-			log.Printf("参数验证失败: req=%+v, error=%v, ip=%s", req, err, c.ClientIP())
-			helper.ErrorResponse(c, err)
-			c.Abort()
-			return
-		}
-
-		// 将验证后的请求对象存储到上下文中
-		c.Set("captcha_request", &req)
-		c.Next()
-	}
-}
-
 // ValidateIssueRequest 验证出题请求（POST）中间件：URI 携带题型，JSON 请求体携带 mode / dpr / env。
-// 空请求体视为未携带环境信号，与 GET 出题等价
+// 空请求体视为未携带环境信号
 func ValidateIssueRequest() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.IssueRequest
@@ -166,14 +131,6 @@ func ValidateStateRequest() gin.HandlerFunc {
 		c.Set("state_request", &req)
 		c.Next()
 	}
-}
-
-// GetCaptchaRequest 从上下文中获取验证码请求
-func GetCaptchaRequest(c *gin.Context) *models.CaptchaRequest {
-	if req, exists := c.Get("captcha_request"); exists {
-		return req.(*models.CaptchaRequest)
-	}
-	return nil
 }
 
 // GetIssueRequest 从上下文中获取出题请求（POST）

@@ -14,11 +14,12 @@ simple-captcha/
 │   ├── services/                # 业务逻辑层（调用 Go-Captcha 引擎生成图形验证数据）
 │   ├── models/                  # 数据模型与响应结构定义
 │   ├── routes/                  # API 路由注册
-│   ├── middleware/              # 通用中间件（请求拦截、CORS等）
-│   ├── cache/                   # 缓存配置 (Redis)
+│   ├── middleware/              # 通用中间件（请求拦截、按应用的来源校验与跨域等）
+│   ├── cache/                   # 进程内存中的短期数据（题目、二次验证 key、IP 计数、风控状态，带过期时间）
+│   ├── storage/                 # SQLite（data/captcha.db）连接与编号迁移（migrations/NNNN_*.sql，只追加）
 │   ├── config/                  # 应用配置项
 │   ├── helper/                  # 全局工具函数
-│   ├── risk/                    # 人机判别纯计算：轨迹特征、环境 / 请求头 / TLS 指纹规则评分、PoW（与 HTTP、Redis 无关）
+│   ├── risk/                    # 人机判别纯计算：轨迹特征、环境 / 请求头 / TLS 指纹规则评分、PoW（与 HTTP、存储无关）
 │   ├── assets/fonts/            # 内置字体（go:embed），点选题使用站酷快乐体（OFL 1.1，授权见 OFL.txt）
 │   ├── internal/gocaptcha/      # 验证码图形引擎（fork 自 go-captcha v2.0.5，自行维护，与上游的差异记在 NOTICE.md）
 │   ├── console/                 # 内嵌的管理后台页面（//go:embed dist，dist 由 sdk 的 pnpm build:console 生成，不入库）
@@ -44,8 +45,9 @@ simple-captcha/
 ### 3.1 技术栈
 *   **Web 框架**: Gin (`github.com/gin-gonic/gin`)
 *   **核心图形引擎**: 内置的 `internal/gocaptcha`（fork 自 go-captcha v2.0.5，上游已停更，由本项目自行维护）；点选字体内置于 `assets/fonts`，字符集、图形与拼图块素材仍引用 `github.com/wenlng/go-captcha-assets`。新增或更换素材只用授权明确可商用的开源资源，授权文件随素材一同入库
-*   **缓存与持久化**: Redis (`github.com/go-redis/redis/v8`)
-*   **开发语言**: Go 1.23+
+*   **持久化**: 内嵌 SQLite（`modernc.org/sqlite`，纯 Go，适配 `CGO_ENABLED=0`），文件为 `data/captcha.db`，保存管理员账号与会话、接入应用与允许来源、策略配置、风控观察；只考虑单实例部署
+*   **短期数据**: 进程内存（`backend/cache`），不使用 Redis
+*   **开发语言**: Go 1.27+
 
 ### 3.2 架构与编码准则
 1. **分层架构**: 遵循 `Controller -> Service` 的线性调用链路。Controller 仅负责参数绑定、校验与组装响应，复杂的验证码生产、切图比对等硬核业务逻辑需统一定义在 Service 层。
@@ -81,7 +83,7 @@ simple-captcha/
 3. **接口约定对齐**: 若后端调整了参数入参或返回值，必须当即去 `sdk/src/hooks/use-captcha-request.ts` 和相关 `types` 中进行同步修复。
 
 > **日常调试指北：**
-> * 启动后端服务 (位于 `backend/`)： `./run-dev.sh`（依次加载 `.env` 与 `.env.development`）；管理后台常驻开启，管理员密码首次启动时随机生成并打印在终端（凭据存 `backend/data/`，遗失用 `./run-dev.sh reset-admin-password`）；S2S 鉴权用管理后台「接入应用」签发的应用密钥，没有 `API_KEY` 配置；生产配置复制 `.env.example` 为 `.env`
-> * 启动前端本地演示页 (位于 `sdk/`，热更新引用 `src` 源码)： `pnpm start`；构建 SDK 产物： `pnpm build`
+> * 启动后端服务 (位于 `backend/`)： `./run-dev.sh`（依次加载 `.env` 与 `.env.development`，两者都可以没有），不需要 Redis 容器；首次启动在终端打印初始化口令，打开控制台在初始化页面设置管理员用户名与密码（数据存 `backend/data/captcha.db`，遗失用 `./run-dev.sh reset-admin` 重新初始化）；验证码与风控策略在控制台「策略配置」修改、立即生效，环境变量只剩部署参数；接入应用在控制台创建，前端传 `appId`、只接受允许来源，S2S 用应用密钥鉴权；API 路径固定为 `/api/v1`
+> * 启动前端本地演示页 (位于 `sdk/`，热更新引用 `src` 源码)： `pnpm start`，Vite 把 `/api/` 代理到 `VITE_API_PROXY_TARGET`（默认 `http://127.0.0.1:3321`），页面与 API 同源、用内置应用 `app_console` 出题；构建 SDK 产物： `pnpm build`
 > * 管理后台内嵌在 Go 服务的 `/console/`：`pnpm build:console` 输出到 `backend/console/dist` 后重新编译才生效；镜像构建上下文是仓库根目录（`docker build -f backend/Dockerfile .`），会自动构建前端。控制台页面改动在 `sdk/playground/console` 与 `playground/pages`，演示站与内嵌页共用
 > * 接入文档页（`/#/docs`）以 `?raw` 读取仓库根目录 `README.md`，按二级标题切分后用 marked 渲染；展示哪些章节、如何分组见 `sdk/playground/docs/content.ts`。修订接入说明只改 README，不要在 playground 里另写一份；README 二级标题改名时同步更新该清单

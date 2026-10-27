@@ -83,15 +83,15 @@ func TestIsTrustedProxyRequest(t *testing.T) {
 }
 
 func TestTLSFingerprint_IgnoredFromUntrustedRemote(t *testing.T) {
-	cfg := skipWithoutRisk(t)
+	rt := skipWithoutRisk(t)
 	withTLSFingerprintHeader(t, testJA4Header)
 	installFingerprintList(t, testListPayload)
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 
 	ua := uniqueUA("tls-untrusted")
 	body := issueWithFingerprintHeader(t, remoteAddrFor(ua), ua, testDeniedFP)
 	assert.Equal(t, base, int(body["difficulty"].(float64)), "非可信来源携带的指纹头必须被忽略")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		entry := telemetryEntryFor(t, body["key"].(string))
 		_, hasTLS := entry["tls"]
 		assert.False(t, hasTLS, "被忽略的指纹不应写入遥测")
@@ -99,15 +99,15 @@ func TestTLSFingerprint_IgnoredFromUntrustedRemote(t *testing.T) {
 }
 
 func TestTLSFingerprint_DeniedFromTrustedProxyEscalates(t *testing.T) {
-	cfg := skipWithoutRisk(t)
+	rt := skipWithoutRisk(t)
 	withTLSFingerprintHeader(t, testJA4Header)
 	installFingerprintList(t, testListPayload)
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 
 	ua := uniqueUA("tls-denied")
 	body := issueWithFingerprintHeader(t, trustedRemoteAddr(t, 21), ua, testDeniedFP)
 	assert.Equal(t, services.ClampDifficulty(base+1), int(body["difficulty"].(float64)), "拒绝列表 40 分应加 1 级")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		entry := telemetryEntryFor(t, body["key"].(string))
 		assert.Equal(t, testDeniedFP, entry["tls"])
 		assert.Contains(t, fmt.Sprint(entry["reasons"]), "tls_denylisted(+40)")
@@ -115,15 +115,15 @@ func TestTLSFingerprint_DeniedFromTrustedProxyEscalates(t *testing.T) {
 }
 
 func TestTLSFingerprint_FamilyMismatchEscalates(t *testing.T) {
-	cfg := skipWithoutRisk(t)
+	rt := skipWithoutRisk(t)
 	withTLSFingerprintHeader(t, testJA4Header)
 	installFingerprintList(t, testListPayload)
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 
 	ua := uniqueUA("tls-family")
 	body := issueWithFingerprintHeader(t, trustedRemoteAddr(t, 22), ua, testFirefoxFP)
 	assert.Equal(t, services.ClampDifficulty(base+1), int(body["difficulty"].(float64)), "Firefox 指纹配 Chrome UA 应加 1 级")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		assert.Contains(t, fmt.Sprint(telemetryEntryFor(t, body["key"].(string))["reasons"]), "tls_ua_family_mismatch(+30)")
 	}
 
@@ -133,28 +133,28 @@ func TestTLSFingerprint_FamilyMismatchEscalates(t *testing.T) {
 }
 
 func TestTLSFingerprint_RecordedWithoutList(t *testing.T) {
-	cfg := skipWithoutRisk(t)
+	rt := skipWithoutRisk(t)
 	withTLSFingerprintHeader(t, testJA4Header)
 	installFingerprintList(t, "")
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 
 	ua := uniqueUA("tls-nolist")
 	body := issueWithFingerprintHeader(t, trustedRemoteAddr(t, 24), ua, testUnknownFP)
 	assert.Equal(t, base, int(body["difficulty"].(float64)), "没有列表时指纹只记录不计分")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		assert.Equal(t, testUnknownFP, telemetryEntryFor(t, body["key"].(string))["tls"], "指纹原值应写入遥测供整理列表")
 	}
 }
 
 func TestTLSFingerprint_HeaderDisabledByDefault(t *testing.T) {
-	cfg := skipWithoutRisk(t)
+	rt := skipWithoutRisk(t)
 	withTLSFingerprintHeader(t, "")
 	installFingerprintList(t, testListPayload)
 
 	ua := uniqueUA("tls-disabled")
 	body := issueWithFingerprintHeader(t, trustedRemoteAddr(t, 25), ua, testDeniedFP)
-	assert.Equal(t, services.ClampDifficulty(cfg.Captcha.DefaultDifficulty), int(body["difficulty"].(float64)), "未配置头名时即使来自可信代理也不读取")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	assert.Equal(t, services.ClampDifficulty(rt.Captcha.DefaultDifficulty), int(body["difficulty"].(float64)), "未配置头名时即使来自可信代理也不读取")
+	if rt.Risk.TelemetryRetention > 0 {
 		_, hasTLS := telemetryEntryFor(t, body["key"].(string))["tls"]
 		assert.False(t, hasTLS)
 	}

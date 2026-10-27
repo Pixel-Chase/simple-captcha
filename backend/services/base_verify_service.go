@@ -1,6 +1,7 @@
 package services
 
 import (
+	"simple-captcha/config"
 	"simple-captcha/helper"
 	"simple-captcha/risk"
 	"strconv"
@@ -36,6 +37,16 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 		return false, "参数错误", helper.NewCaptchaError(helper.ErrCodeInvalidParam, "参数错误")
 	}
 	key := in.Key
+	// 整个校验流程使用同一份策略快照
+	rt := config.Runtime()
+
+	// 应用绑定：提交的 appId 必须与出题时一致。不一致时与"题目不存在"的响应完全相同，
+	// 也不计尝试次数、不作废题目，别的应用无法借此探测或耗尽这道题
+	if current, err := bvs.GetCaptchaData(key); err != nil {
+		return false, "验证码已失效", err
+	} else if ParseMeta(current).AppID != in.AppID {
+		return false, "验证码已失效", helper.NewCaptchaError(helper.ErrCodeExpired, "验证码不存在或已失效")
+	}
 
 	// 检查是否达到最大尝试次数
 	if maxReached, err := bvs.IsMaxAttemptsReached(key); err != nil {
@@ -57,17 +68,18 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 		return false, "验证码已失效", getErr
 	}
 	meta := ParseMeta(verifyData)
+	maxAttempts := attemptLimit(verifyData, rt)
 
 	// 客户端绑定：出题与提交必须来自同一客户端，不匹配视为 key 被转移使用，直接作废
-	if bvs.config.Captcha.BindClient && meta.ClientHash != "" && meta.ClientHash != in.ClientHash {
+	if rt.Captcha.BindClient && meta.ClientHash != "" && meta.ClientHash != in.ClientHash {
 		bvs.DeleteCaptchaData(key)
 		return false, helper.ErrClientMismatch.Message, helper.NewCaptchaError(helper.ErrCodeClientMismatch, "客户端指纹不匹配")
 	}
 
 	// 时间窗口：出题到提交间隔过短判定为自动化提交，计入一次失败
-	if minSolve := bvs.config.Captcha.MinSolveTime; minSolve > 0 {
+	if minSolve := rt.Captcha.MinSolveTime(); minSolve > 0 {
 		if created := CreatedAt(verifyData); !created.IsZero() && time.Since(created) < minSolve {
-			return bvs.failResult(key, attempts, helper.ErrTooFast.Message, helper.ErrCodeTooFast)
+			return bvs.failResult(key, attempts, maxAttempts, helper.ErrTooFast.Message, helper.ErrCodeTooFast)
 		}
 	}
 
@@ -75,11 +87,11 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 	if meta.PowBits > 0 {
 		switch {
 		case in.Pow == nil || in.Pow.Solution == "":
-			if bvs.config.Captcha.PowRequired {
-				return bvs.failResult(key, attempts, helper.ErrPowInvalid.Message, helper.ErrCodePowInvalid)
+			if rt.Pow.Required {
+				return bvs.failResult(key, attempts, maxAttempts, helper.ErrPowInvalid.Message, helper.ErrCodePowInvalid)
 			}
 		case in.Pow.Nonce != meta.PowNonce || !risk.VerifyPow(meta.PowNonce, key, in.Pow.Solution, meta.PowBits):
-			return bvs.failResult(key, attempts, helper.ErrPowInvalid.Message, helper.ErrCodePowInvalid)
+			return bvs.failResult(key, attempts, maxAttempts, helper.ErrPowInvalid.Message, helper.ErrCodePowInvalid)
 		}
 	}
 
@@ -100,7 +112,7 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 	// 比对照常执行以保持耗时一致，结果被强制判为失败，同样消耗一次尝试机会
 	answerMatched := validateData(userData, correctData, meta)
 	if in.RiskBlocked || !answerMatched {
-		return bvs.failResult(key, attempts, "验证失败", helper.ErrCodeVerifyFailed)
+		return bvs.failResult(key, attempts, maxAttempts, "验证失败", helper.ErrCodeVerifyFailed)
 	}
 
 	// 验证成功：原题作废，签发一次性二次验证 key
@@ -114,9 +126,10 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 	secondVerifyData := map[string]interface{}{
 		"verified":   true,
 		"verifyTime": time.Now().Unix(),
-		"expireAt":   time.Now().Add(bvs.config.Captcha.SecondVerifyExpire).Unix(),
+		"expireAt":   time.Now().Add(rt.Captcha.SecondVerifyExpire()).Unix(),
 		"origin_key": key,
 		"type":       meta.Type,
+		"appId":      meta.AppID,
 		"token":      helper.GenerateRandomString(16),
 	}
 
@@ -127,9 +140,10 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 	return true, secondKey, nil
 }
 
-// failResult 统一处理失败：剩余次数耗尽时作废题目
-func (bvs *BaseVerifyService) failResult(key string, attempts int, message string, code int) (bool, string, *helper.CaptchaError) {
-	if remaining := bvs.config.Captcha.MaxAttempts - attempts; remaining <= 0 {
+// failResult 统一处理失败：剩余次数耗尽时作废题目。maxAttempts 是出题时写入题目的上限，
+// 与入口的 IsMaxAttemptsReached 一致，不读当前策略
+func (bvs *BaseVerifyService) failResult(key string, attempts, maxAttempts int, message string, code int) (bool, string, *helper.CaptchaError) {
+	if remaining := maxAttempts - attempts; remaining <= 0 {
 		bvs.DeleteCaptchaData(key)
 		return false, "尝试次数过多，请重新获取验证码", helper.NewCaptchaError(helper.ErrCodeTooManyAttempts, "尝试次数过多")
 	}

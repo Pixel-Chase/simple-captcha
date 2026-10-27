@@ -1,43 +1,52 @@
 package services
 
 import (
+	"fmt"
+	"simple-captcha/cache"
 	"testing"
 	"time"
-
-	"github.com/go-redis/redis/v8"
 )
 
-// TestTouchFingerprint_FailOpen Redis 不可达时按未重放处理：返回 0、不 panic、不阻塞主流程
-func TestTouchFingerprint_FailOpen(t *testing.T) {
-	store := &ClientRiskStore{cfg: testPolicyConfig()}
-	broken := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1", DialTimeout: 200 * time.Millisecond, MaxRetries: 0})
-	defer broken.Close()
-
-	start := time.Now()
-	if got := store.touchFingerprint(broken, "fp-broken", "client-a"); got != 0 {
-		t.Errorf("unreachable redis must fail open with 0, got %d", got)
-	}
-	if elapsed := time.Since(start); elapsed > 3*time.Second {
-		t.Errorf("fail-open should return quickly, took %s", elapsed)
-	}
-}
-
-func TestTouchFingerprint_DisabledOrEmptyInputsSkipRedis(t *testing.T) {
-	store := &ClientRiskStore{cfg: testPolicyConfig()}
-	// client 为 nil：任何真正的 Redis 调用都会 panic，返回 0 说明没有触达 Redis
-	if got := store.touchFingerprint(nil, "fp", "client"); got != 0 {
-		t.Errorf("nil client should return 0, got %d", got)
-	}
+func TestTouchFingerprint_DisabledOrEmptyInputsSkipStore(t *testing.T) {
+	mem := cache.NewMemory(cache.WithoutSweeper())
+	defer mem.Stop()
 
 	disabled := testPolicyConfig()
 	disabled.Risk.FPReplayThreshold = 0
-	store = &ClientRiskStore{cfg: disabled}
-	broken := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1", DialTimeout: 100 * time.Millisecond, MaxRetries: 0})
-	defer broken.Close()
-	if got := store.touchFingerprint(broken, "fp", "client"); got != 0 {
-		t.Errorf("threshold 0 must skip redis and return 0, got %d", got)
+	store := &ClientRiskStore{settings: fixedSettings(disabled), store: mem}
+	if got := store.TouchFingerprint("fp", "client"); got != 0 {
+		t.Errorf("threshold 0 must skip store and return 0, got %d", got)
 	}
-	if got := store.touchFingerprint(broken, "", "client"); got != 0 {
+
+	store = &ClientRiskStore{settings: fixedSettings(testPolicyConfig()), store: mem}
+	if got := store.TouchFingerprint("", "client"); got != 0 {
 		t.Errorf("empty fp must return 0, got %d", got)
+	}
+	if got := store.TouchFingerprint("fp", ""); got != 0 {
+		t.Errorf("empty client must return 0, got %d", got)
+	}
+	if n := mem.Len(cache.KindFingerprint); n != 0 {
+		t.Errorf("skipped calls must not create entries, got %d", n)
+	}
+}
+
+func TestTouchFingerprint_SaturatesAtThresholdPlusOne(t *testing.T) {
+	mem := cache.NewMemory(cache.WithoutSweeper())
+	defer mem.Stop()
+	cfg := testPolicyConfig()
+	cfg.Risk.FPReplayThreshold = 2
+	cfg.Risk.FPReplayWindowSeconds = 60
+	store := &ClientRiskStore{settings: fixedSettings(cfg), store: mem}
+
+	for i, want := range []int{1, 2, 3, 4, 4} {
+		if got := store.TouchFingerprint("fp", fmt.Sprintf("client-%d", i)); got != want {
+			t.Errorf("client-%d: want %d, got %d", i, want, got)
+		}
+	}
+	if size := mem.FingerprintSize("fp"); size != 3 {
+		t.Errorf("set must stop growing at threshold+1, got %d", size)
+	}
+	if ttl, ok := mem.TTL(cache.KindFingerprint, "fp"); !ok || ttl > time.Minute {
+		t.Errorf("ttl must be refreshed to the window, got %s %t", ttl, ok)
 	}
 }

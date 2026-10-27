@@ -12,6 +12,7 @@ import (
 	"simple-captcha/helper"
 	"simple-captcha/middleware"
 	"simple-captcha/services"
+	"simple-captcha/storage"
 	"strings"
 	"testing"
 
@@ -34,7 +35,19 @@ func (h *adminHarness) createApp(t *testing.T, token, name string) (map[string]i
 	return body["app"].(map[string]interface{}), body["secret"].(string)
 }
 
+// listApps 列出接入应用，不含内置的系统应用（见 listAllApps）
 func (h *adminHarness) listApps(t *testing.T, token string) []interface{} {
+	t.Helper()
+	items := make([]interface{}, 0)
+	for _, item := range h.listAllApps(t, token) {
+		if item.(map[string]interface{})["isSystem"] != true {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func (h *adminHarness) listAllApps(t *testing.T, token string) []interface{} {
 	t.Helper()
 	w := h.do(http.MethodGet, "/apps", nil, token, "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -85,18 +98,19 @@ func TestApps_CreateAndList(t *testing.T) {
 	assert.NotContains(t, listed, "secret")
 	assert.NotContains(t, listed, "secretHash")
 
-	// 落盘文件只有哈希，权限仅属主可读写
-	path := filepath.Join(h.dataDir, "apps.json")
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.NotContains(t, string(data), secret)
-	info, err := os.Stat(path)
+	// 库中只有哈希，数据库文件权限仅属主可读写；不再生成 apps.json
+	assertFileLacks(t, h.dataDir, secret)
+	info, err := os.Stat(filepath.Join(h.dataDir, storage.FileName))
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	_, err = os.Stat(filepath.Join(h.dataDir, "apps.json"))
+	assert.True(t, os.IsNotExist(err))
 
-	// 重新加载数据目录：应用仍在，原密钥仍可鉴权
-	reloaded, err := services.NewAppService(h.dataDir)
+	// 另开一个连接读取同一个库：应用仍在，原密钥仍可鉴权
+	db, err := storage.Open(h.dataDir)
 	require.NoError(t, err)
+	defer db.Close()
+	reloaded := services.NewAppService(db)
 	assert.Equal(t, 1, reloaded.Count())
 	_, ok := reloaded.Authenticate(secret)
 	assert.True(t, ok)
@@ -208,7 +222,7 @@ func TestApps_StateQueryRequiresAppSecret(t *testing.T) {
 
 	expectUnauthorized := func(t *testing.T, secret string) {
 		t.Helper()
-		key, cerr := h.risk.GenerateSecondVerifyToken("s2s-test")
+		key, cerr := h.risk.GenerateSecondVerifyToken("app_aaaaaaaaaaaa")
 		require.Nil(t, cerr)
 		w := h.queryState(t, secret, key)
 		assert.Equal(t, http.StatusUnauthorized, w.Code, "secret=%q", secret)
@@ -228,8 +242,8 @@ func TestApps_StateQueryRequiresAppSecret(t *testing.T) {
 		expectUnauthorized(t, bad)
 	}
 
-	// 正确密钥：鉴权通过，second_key 一次性有效
-	key, cerr := h.risk.GenerateSecondVerifyToken("s2s-test")
+	// 正确密钥：鉴权通过，本应用的 second_key 一次性有效
+	key, cerr := h.risk.GenerateSecondVerifyToken(app["id"].(string))
 	require.Nil(t, cerr)
 	w := h.queryState(t, secret, key)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -252,35 +266,31 @@ func TestApps_StateQueryRequiresAppSecret(t *testing.T) {
 	expectUnauthorized(t, secret)
 }
 
-func TestApps_PersistFailureKeepsState(t *testing.T) {
+// 存储不可用时（库已关闭）应用管理返回 500，不会 panic
+func TestApps_StorageFailureReturns500(t *testing.T) {
 	h := newAdminHarness(t, 1)
 	token := h.login(t)
 	h.createApp(t, token, "first")
 
-	// 数据目录变为只读：写盘失败时返回 500，内存中的列表保持不变
-	require.NoError(t, os.Chmod(h.dataDir, 0o500))
-	t.Cleanup(func() { _ = os.Chmod(h.dataDir, 0o700) })
-	if f, err := os.CreateTemp(h.dataDir, "probe-*"); err == nil {
-		// 以 root 运行时权限位不生效，跳过这一段
-		_ = f.Close()
-		_ = os.Remove(f.Name())
-		t.Skip("当前用户无视目录权限，无法模拟写盘失败")
-	}
-
-	w := h.doJSON(http.MethodPost, "/apps", map[string]string{"name": "second"}, token)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Len(t, h.listApps(t, token), 1)
-	assert.Equal(t, 1, h.apps.Count())
+	// 鉴权本身也查库：直接调用服务层，绕开会话校验
+	require.NoError(t, h.db.Close())
+	_, _, cerr := h.apps.Create("second", nil)
+	require.NotNil(t, cerr)
+	assert.Equal(t, helper.ErrCodeInternalError, cerr.Code)
+	_, cerr = h.apps.List()
+	require.NotNil(t, cerr)
+	assert.Equal(t, helper.ErrCodeInternalError, cerr.Code)
+	_, ok := h.apps.Authenticate("sk_" + strings.Repeat("0", 48))
+	assert.False(t, ok)
 }
 
 func TestApps_MaxApps(t *testing.T) {
-	apps, err := services.NewAppService(t.TempDir())
-	require.NoError(t, err)
+	apps := services.NewAppService(storage.OpenTemp(t))
 	for i := 0; i < 100; i++ {
-		_, _, cerr := apps.Create(fmt.Sprintf("app-%d", i))
+		_, _, cerr := apps.Create(fmt.Sprintf("app-%d", i), nil)
 		require.Nil(t, cerr)
 	}
-	_, _, cerr := apps.Create("one-too-many")
+	_, _, cerr := apps.Create("one-too-many", nil)
 	require.NotNil(t, cerr)
 	assert.Equal(t, helper.ErrCodeInvalidParam, cerr.Code)
 	assert.Equal(t, 100, apps.Count())

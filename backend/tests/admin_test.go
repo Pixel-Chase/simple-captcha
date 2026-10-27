@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -19,6 +20,7 @@ import (
 	"simple-captcha/helper"
 	"simple-captcha/routes"
 	"simple-captcha/services"
+	"simple-captcha/storage"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -32,7 +34,7 @@ import (
 
 const (
 	adminTestUser = "admin"
-	// adminTestPassword 首次登录强制改密后使用的密码；初始密码由服务随机生成，见 adminHarness.password
+	// adminTestPassword 初始化时设置的管理员密码
 	adminTestPassword = "s3cret-demo-pass"
 )
 
@@ -48,11 +50,15 @@ type adminHarness struct {
 	store      *services.BackgroundStore
 	admin      *services.AdminService
 	apps       *services.AppService
+	settings   *services.SettingsService
 	risk       *services.RiskControlServiceImpl
+	db         *storage.DB
 	dir        string
 	dataDir    string
 	remoteAddr string
-	// password 当前有效的管理员密码：起初是随机初始密码，login 完成强制改密后变为 adminTestPassword
+	// setupCode 启动时生成的一次性初始化口令
+	setupCode string
+	// password 当前有效的管理员密码：初始化之前为空，初始化后为 adminTestPassword
 	password string
 }
 
@@ -66,7 +72,6 @@ func newAdminHarness(t *testing.T, imageCount int, mutate ...func(*config.AdminC
 	require.NoError(t, err)
 
 	cfg := config.AdminConfig{
-		Username:       adminTestUser,
 		DataDir:        t.TempDir(),
 		SessionTTL:     time.Hour,
 		MaxUploadSize:  2 << 20,
@@ -76,28 +81,24 @@ func newAdminHarness(t *testing.T, imageCount int, mutate ...func(*config.AdminC
 		fn(&cfg)
 	}
 
-	// 先行生成凭据以拿到初始密码；NewAdminService 发现凭据已存在便不会重新生成
-	initialPassword, err := services.EnsureAdminCredential(cfg.DataDir)
+	// 与服务启动一致：打开数据目录中的库并生成初始化口令
+	db, err := storage.Open(cfg.DataDir)
 	require.NoError(t, err)
-	require.NotEmpty(t, initialPassword)
+	t.Cleanup(func() { _ = db.Close() })
+	setupCode, err := services.PrepareSetup(context.Background(), db)
+	require.NoError(t, err)
+	require.NotEmpty(t, setupCode)
 
 	risk, ok := services.GetServiceManager().GetRiskControlService().(*services.RiskControlServiceImpl)
 	require.True(t, ok)
 
-	admin, err := services.NewAdminService(cfg, store, risk)
-	require.NoError(t, err)
-	apps, err := services.NewAppService(cfg.DataDir)
-	require.NoError(t, err)
-	// 删除应用会顺带清掉 Redis 里不过期的最近使用时间，避免每次跑测试都残留键
-	t.Cleanup(func() {
-		for _, app := range apps.List() {
-			_ = apps.Delete(app.ID)
-		}
-	})
+	admin := services.NewAdminService(cfg, db, store, risk)
+	apps := services.NewAppService(db)
+	settings := services.NewSettingsService(db)
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	routes.RegisterAdminRoutes(r.Group("/api/v1/admin"), admin, apps, risk)
+	routes.RegisterAdminRoutes(r.Group("/api/v1/admin"), admin, apps, settings, risk)
 
 	seq := adminHarnessSeq.Add(1)
 	return &adminHarness{
@@ -105,11 +106,13 @@ func newAdminHarness(t *testing.T, imageCount int, mutate ...func(*config.AdminC
 		store:      store,
 		admin:      admin,
 		apps:       apps,
+		settings:   settings,
 		risk:       risk,
+		db:         db,
 		dir:        dir,
 		dataDir:    cfg.DataDir,
 		remoteAddr: fmt.Sprintf("198.51.100.%d:4000", seq),
-		password:   initialPassword,
+		setupCode:  setupCode,
 	}
 }
 
@@ -160,14 +163,46 @@ func (h *adminHarness) doJSON(method, path string, payload interface{}, token st
 // freshCaptchaKey 直接通过风控服务签发一个二次验证令牌，等价于前端完成一次行为验证
 func (h *adminHarness) freshCaptchaKey(t *testing.T) string {
 	t.Helper()
-	token, err := h.risk.GenerateSecondVerifyToken("admin-login-test")
+	// 管理员登录只接受管理后台系统应用的验证结果
+	token, err := h.risk.GenerateSecondVerifyToken(services.ConsoleAppID)
 	require.Nil(t, err)
 	return token
 }
 
-// login 以当前密码登录；仍处于初始密码状态时顺带完成强制改密，返回可访问全部管理接口的会话令牌
+// assertSessionKeys 会话响应只含用户名与过期时间（以及 extra 指定的字段），不再有强制改密之类的状态位
+func assertSessionKeys(t *testing.T, body map[string]interface{}, extra ...string) {
+	t.Helper()
+	keys := make([]string, 0, len(body))
+	for k := range body {
+		keys = append(keys, k)
+	}
+	assert.ElementsMatch(t, append([]string{"username", "expiresAt"}, extra...), keys)
+}
+
+// initialize 用初始化口令完成首次初始化，返回初始化接口直接签发的会话令牌
+func (h *adminHarness) initialize(t *testing.T) string {
+	t.Helper()
+	w := h.doJSON(http.MethodPost, "/setup", map[string]string{
+		"setupCode": h.setupCode,
+		"username":  adminTestUser,
+		"password":  adminTestPassword,
+	}, "")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	h.password = adminTestPassword
+
+	body := decodeBody(t, w)
+	assertSessionKeys(t, body, "token")
+	token, _ := body["token"].(string)
+	require.Len(t, token, 64)
+	return token
+}
+
+// login 返回可访问全部管理接口的会话令牌：尚未初始化时先完成初始化，否则以当前密码登录
 func (h *adminHarness) login(t *testing.T) string {
 	t.Helper()
+	if h.password == "" {
+		return h.initialize(t)
+	}
 	w := h.doJSON(http.MethodPost, "/login", map[string]string{
 		"username":   adminTestUser,
 		"password":   h.password,
@@ -177,21 +212,6 @@ func (h *adminHarness) login(t *testing.T) string {
 
 	body := decodeBody(t, w)
 	token, _ := body["token"].(string)
-	require.Len(t, token, 64)
-	if body["mustChangePassword"] != true {
-		return token
-	}
-
-	w = h.doJSON(http.MethodPut, "/password", map[string]string{
-		"currentPassword": h.password,
-		"newPassword":     adminTestPassword,
-	}, token)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	h.password = adminTestPassword
-
-	body = decodeBody(t, w)
-	require.Equal(t, false, body["mustChangePassword"])
-	token, _ = body["token"].(string)
 	require.Len(t, token, 64)
 	return token
 }
@@ -262,6 +282,7 @@ func errorCode(t *testing.T, w *httptest.ResponseRecorder) int {
 
 func TestAdmin_LoginFlow(t *testing.T) {
 	h := newAdminHarness(t, 3)
+	h.initialize(t)
 
 	captchaKey := h.freshCaptchaKey(t)
 	w := h.doJSON(http.MethodPost, "/login", map[string]string{
@@ -273,7 +294,7 @@ func TestAdmin_LoginFlow(t *testing.T) {
 	assert.Len(t, token, 64)
 	assert.Equal(t, adminTestUser, body["username"])
 	assert.Greater(t, body["expiresAt"].(float64), float64(time.Now().Unix()))
-	assert.Equal(t, true, body["mustChangePassword"], "随机初始密码登录后必须改密")
+	assertSessionKeys(t, body, "token")
 
 	// 会话可用
 	w = h.do(http.MethodGet, "/session", nil, token, "")
@@ -297,6 +318,7 @@ func TestAdmin_LoginFlow(t *testing.T) {
 
 func TestAdmin_LoginRejectsBadCredentials(t *testing.T) {
 	h := newAdminHarness(t, 2)
+	h.initialize(t)
 
 	cases := []struct {
 		name     string

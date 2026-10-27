@@ -2,14 +2,12 @@ package tests
 
 import (
 	"bytes"
-	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"simple-captcha/cache"
 	"simple-captcha/config"
 	"simple-captcha/risk"
 	"simple-captcha/services"
@@ -48,16 +46,26 @@ func uniqueUA(prefix string) string {
 
 // rawIssueRequest 构造出题请求但不补浏览器请求头，由调用方自行设置
 func rawIssueRequest(t *testing.T, method, captchaType string, body interface{}) *http.Request {
-	cfg := config.LoadConfig()
 	var payload []byte
 	if body != nil {
 		var err error
 		payload, err = json.Marshal(body)
 		require.NoError(t, err)
 	}
-	req := httptest.NewRequest(method, cfg.Server.APIPrefix+"/captchas/"+captchaType, bytes.NewReader(payload))
+	req := httptest.NewRequest(method, config.APIPrefix+"/captchas/"+captchaType, bytes.NewReader(payload))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	return asConsoleApp(req)
+}
+
+// asConsoleApp 以内置系统应用（管理后台，只接受同源）的身份访问用户侧接口：带 appId 查询参数与同源 Origin
+func asConsoleApp(req *http.Request) *http.Request {
+	q := req.URL.Query()
+	q.Set("appId", services.ConsoleAppID)
+	req.URL.RawQuery = q.Encode()
+	if req.Header.Get("Origin") == "" {
+		req.Header.Set("Origin", "http://"+req.Host)
 	}
 	return req
 }
@@ -86,31 +94,31 @@ func difficultyOf(t *testing.T, w *httptest.ResponseRecorder) int {
 	return int(issueBody(t, w)["difficulty"].(float64))
 }
 
-// telemetryEntryFor 从 Redis 遥测列表里找出该题目的出题评估记录
+// telemetryEntryFor 从风控观察记录里找出该题目的出题评估记录
 func telemetryEntryFor(t *testing.T, key string) map[string]interface{} {
-	raw, err := cache.GetRedisClient().LRange(context.Background(), "captcha:telemetry", 0, 100).Result()
+	items, err := services.NewClientRiskStore().RecentTelemetry(100)
 	require.NoError(t, err)
-	for _, item := range raw {
-		var entry map[string]interface{}
-		if json.Unmarshal([]byte(item), &entry) == nil && entry["key"] == key && entry["kind"] == "issue" {
+	for _, entry := range items {
+		if entry["key"] == key && entry["kind"] == "issue" {
 			return entry
 		}
 	}
-	require.FailNow(t, "出题评估应写入 captcha:telemetry", "key=%s", key)
+	require.FailNow(t, "出题评估应写入风控观察记录", "key=%s", key)
 	return nil
 }
 
-func skipWithoutRisk(t *testing.T) *config.Config {
-	cfg := config.LoadConfig()
-	if !cfg.Risk.Enabled {
-		t.Skip("RISK_ENABLED=false")
+// skipWithoutRisk 风控评分关闭时跳过用例，返回当前策略快照
+func skipWithoutRisk(t *testing.T) *config.RuntimeSettings {
+	rt := config.Runtime()
+	if !rt.Risk.Enabled {
+		t.Skip("策略配置中关闭了风控评分")
 	}
-	return cfg
+	return rt
 }
 
 func TestIssueEndpoint_CleanEnvStaysDefaultBeforeAndAfterSuccess(t *testing.T) {
-	cfg := config.LoadConfig()
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	rt := config.Runtime()
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	ua := uniqueUA("issue-clean")
 	env := cleanIssueEnvFor(ua)
 
@@ -127,7 +135,7 @@ func TestIssueEndpoint_CleanEnvStaysDefaultBeforeAndAfterSuccess(t *testing.T) {
 		attempt["pow"] = pow
 	}
 	payload, _ := json.Marshal(attempt)
-	req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text/"+key+"/attempts", bytes.NewReader(payload))
+	req := asConsoleApp(httptest.NewRequest(http.MethodPost, config.APIPrefix+"/captchas/slide-text/"+key+"/attempts", bytes.NewReader(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = remoteAddrFor(ua)
 	w := serve(withBrowserHeaders(req, ua))
@@ -140,8 +148,8 @@ func TestIssueEndpoint_CleanEnvStaysDefaultBeforeAndAfterSuccess(t *testing.T) {
 }
 
 func TestIssueEndpoint_WebdriverEscalates(t *testing.T) {
-	cfg := skipWithoutRisk(t)
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	rt := skipWithoutRisk(t)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	ua := uniqueUA("issue-webdriver")
 	env := cleanIssueEnvFor(ua)
 	env.Webdriver = true
@@ -157,28 +165,20 @@ func TestIssueEndpoint_WebdriverEscalates(t *testing.T) {
 	assert.Equal(t, services.ClampDifficulty(base+2), difficultyOf(t, w), "webdriver + automation 加 2 级")
 }
 
-func TestIssueEndpoint_EmptyBodyMatchesGet(t *testing.T) {
-	cfg := config.LoadConfig()
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+// 出题只接受 POST：不带请求体时按默认难度出题；旧版 GET 出题已删除，返回 404
+func TestIssueEndpoint_EmptyBodyAndGetRemoved(t *testing.T) {
+	rt := config.Runtime()
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	ua := uniqueUA("issue-empty")
 
 	post := issueBody(t, issueRequest(t, http.MethodPost, "rotate", nil, ua))
-	get := issueBody(t, issueRequest(t, http.MethodGet, "rotate", nil, ua))
-
-	assert.Equal(t, base, int(post["difficulty"].(float64)), "不带请求体的 POST 与 GET 等价")
-	assert.Equal(t, base, int(get["difficulty"].(float64)), "真实浏览器里的旧版 SDK 走 GET 仍是默认难度")
-
-	keysOf := func(m map[string]interface{}) []string {
-		keys := make([]string, 0, len(m))
-		for k := range m {
-			keys = append(keys, k)
-		}
-		return keys
-	}
-	assert.ElementsMatch(t, keysOf(get), keysOf(post), "POST 与 GET 的响应字段集合一致")
+	assert.Equal(t, base, int(post["difficulty"].(float64)), "不带请求体的 POST 按默认难度出题")
 	for _, field := range []string{"key", "type", "image", "imageWidth", "imageHeight", "scale", "difficulty"} {
 		assert.Contains(t, post, field)
 	}
+
+	w := serve(rawIssueRequest(t, http.MethodGet, "rotate", nil))
+	assert.Equal(t, http.StatusNotFound, w.Code, "GET /api/v1/captchas/rotate 已删除")
 }
 
 func TestIssueEndpoint_RejectsOversizedBody(t *testing.T) {
@@ -187,7 +187,7 @@ func TestIssueEndpoint_RejectsOversizedBody(t *testing.T) {
 	require.Greater(t, limit, int64(0))
 
 	body := `{"dpr":1` + strings.Repeat(" ", int(limit)+1024) + `}`
-	req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text", strings.NewReader(body))
+	req := asConsoleApp(httptest.NewRequest(http.MethodPost, config.APIPrefix+"/captchas/slide-text", strings.NewReader(body)))
 	req.ContentLength = -1
 	req.Header.Set("Content-Type", "application/json")
 	rec := serve(req)
@@ -210,8 +210,8 @@ func TestIssueEndpoint_RejectsOversizedEnvList(t *testing.T) {
 }
 
 func TestIssueEndpoint_TelemetryLogged(t *testing.T) {
-	cfg := skipWithoutRisk(t)
-	if cfg.Risk.TelemetryLogSize <= 0 {
+	rt := skipWithoutRisk(t)
+	if rt.Risk.TelemetryRetention <= 0 {
 		t.Skip("遥测日志已关闭")
 	}
 	ua := uniqueUA("issue-telemetry")
@@ -222,29 +222,22 @@ func TestIssueEndpoint_TelemetryLogged(t *testing.T) {
 	body := issueBody(t, issueRequest(t, http.MethodPost, "click-shape", map[string]interface{}{"dpr": 2, "env": env}, ua))
 	found := telemetryEntryFor(t, body["key"].(string))
 
-	assert.Equal(t, true, found["viaPost"])
 	assert.Equal(t, env.Fingerprint, found["fp"])
 	assert.EqualValues(t, body["difficulty"], found["level"])
-	assert.EqualValues(t, cfg.Captcha.DefaultDifficulty, found["base"])
+	assert.EqualValues(t, rt.Captcha.DefaultDifficulty, found["base"])
 	assert.EqualValues(t, 1, found["boost"])
 	assert.EqualValues(t, 45, found["envScore"])
 	assert.Equal(t, "click-shape", found["type"])
 	assert.Contains(t, fmt.Sprint(found["reasons"]), "webdriver(+45)")
-	// 写入即脱敏：原始 IP 与完整 UA 不落 Redis
+	// 写入即脱敏：原始 IP 与完整 UA 不落库
 	assert.Regexp(t, `^\d+\.\d+\.\*\.\*$`, found["ip"])
 	assert.Equal(t, "Chrome 130 / Windows", found["ua"])
 }
 
+// 预检对任意来源都放行（拦截在真实请求上），否则 SDK 读不到错误码
 func TestIssueEndpoint_CORSPreflightAllowsPost(t *testing.T) {
-	cfg := config.LoadConfig()
-	if !cfg.CORS.Enabled {
-		t.Skip("CORS_ENABLED=false")
-	}
-	req := httptest.NewRequest(http.MethodOptions, cfg.Server.APIPrefix+"/captchas/auto", nil)
+	req := httptest.NewRequest(http.MethodOptions, config.APIPrefix+"/captchas/auto?appId=app_000000000000", nil)
 	origin := "https://app.example.com"
-	if len(cfg.CORS.AllowOrigins) > 0 && cfg.CORS.AllowOrigins[0] != "*" {
-		origin = cfg.CORS.AllowOrigins[0]
-	}
 	req.Header.Set("Origin", origin)
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
@@ -252,6 +245,7 @@ func TestIssueEndpoint_CORSPreflightAllowsPost(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 	assert.Contains(t, w.Header().Get("Access-Control-Allow-Methods"), "POST")
+	assert.Equal(t, origin, w.Header().Get("Access-Control-Allow-Origin"))
 }
 
 // ---------------------------------------------------------------------------
@@ -259,14 +253,14 @@ func TestIssueEndpoint_CORSPreflightAllowsPost(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIssueEndpoint_BrowserLikeHeadersStayDefault(t *testing.T) {
-	cfg := skipWithoutRisk(t)
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	rt := skipWithoutRisk(t)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	ua := uniqueUA("issue-consistent")
 
 	body := issueBody(t, issueRequest(t, http.MethodPost, "slide-text", map[string]interface{}{"dpr": 2, "env": cleanIssueEnvFor(ua)}, ua))
 	assert.Equal(t, base, int(body["difficulty"].(float64)))
 
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		entry := telemetryEntryFor(t, body["key"].(string))
 		assert.Equal(t, true, entry["consistent"], "请求头齐全且与 env 一致应记录 consistent=true")
 		assert.EqualValues(t, 0, entry["envScore"])
@@ -274,7 +268,7 @@ func TestIssueEndpoint_BrowserLikeHeadersStayDefault(t *testing.T) {
 }
 
 func TestIssueEndpoint_FakeChromeWithoutBrowserHeadersEscalates(t *testing.T) {
-	cfg := skipWithoutRisk(t)
+	rt := skipWithoutRisk(t)
 	ua := uniqueUA("issue-fake-chrome")
 	// 只有一个冒充 Chrome 的 UA：没有 Sec-Fetch-*、Client Hints、Accept-Language
 	req := rawIssueRequest(t, http.MethodPost, "slide-text", map[string]interface{}{"dpr": 2, "env": cleanIssueEnvFor(ua)})
@@ -283,7 +277,7 @@ func TestIssueEndpoint_FakeChromeWithoutBrowserHeadersEscalates(t *testing.T) {
 	body := issueBody(t, serve(req))
 
 	assert.Equal(t, services.MaxDifficulty, int(body["difficulty"].(float64)), "25 + 15 + 15 = 55 分应加 2 级")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		reasons := fmt.Sprint(telemetryEntryFor(t, body["key"].(string))["reasons"])
 		for _, want := range []string{"sec_fetch_missing", "client_hints_missing", "accept_language_missing"} {
 			assert.Contains(t, reasons, want)
@@ -292,36 +286,35 @@ func TestIssueEndpoint_FakeChromeWithoutBrowserHeadersEscalates(t *testing.T) {
 	}
 }
 
-func TestGetEndpoint_NonBrowserUAEscalates(t *testing.T) {
-	cfg := skipWithoutRisk(t)
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
-	req := rawIssueRequest(t, http.MethodGet, "slide-text", nil)
+func TestIssueEndpoint_NonBrowserUAEscalates(t *testing.T) {
+	rt := skipWithoutRisk(t)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
+	req := rawIssueRequest(t, http.MethodPost, "slide-text", nil)
 	curlUA := fmt.Sprintf("curl/8.5.0 t%d", time.Now().UnixNano())
 	req.Header.Set("User-Agent", curlUA)
 	req.RemoteAddr = remoteAddrFor(curlUA)
 	body := issueBody(t, serve(req))
 
 	assert.Equal(t, services.ClampDifficulty(base+1), int(body["difficulty"].(float64)), "20 + 15 = 35 分应加 1 级")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		entry := telemetryEntryFor(t, body["key"].(string))
 		reasons := fmt.Sprint(entry["reasons"])
 		assert.Contains(t, reasons, "non_browser_ua")
 		assert.Contains(t, reasons, "accept_language_missing")
 		assert.Equal(t, false, entry["consistent"])
-		assert.Equal(t, false, entry["viaPost"])
 	}
 }
 
 func TestIssueEndpoint_UAMismatchEscalates(t *testing.T) {
-	cfg := skipWithoutRisk(t)
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	rt := skipWithoutRisk(t)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	ua := uniqueUA("issue-ua-mismatch")
 	env := cleanIssueEnvFor(ua)
 	env.UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0"
 
 	body := issueBody(t, issueRequest(t, http.MethodPost, "slide-text", map[string]interface{}{"dpr": 2, "env": env}, ua))
 	assert.Equal(t, services.ClampDifficulty(base+1), int(body["difficulty"].(float64)), "ua_mismatch 30 分加 1 级")
-	if cfg.Risk.TelemetryLogSize > 0 {
+	if rt.Risk.TelemetryRetention > 0 {
 		assert.Contains(t, fmt.Sprint(telemetryEntryFor(t, body["key"].(string))["reasons"]), "ua_mismatch")
 	}
 }

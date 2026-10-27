@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { CaptchaError, useCaptcha } from '@aetherlib/g-captcha';
-import { adminApi, getErrorMessage } from '../api';
+import { ADMIN_ERROR_CODE, adminApi, getErrorMessage, isAdminApiError } from '../api';
 import type { LoginResponse } from '../api';
 import { CaptchaShowcase } from './CaptchaShowcase';
 
@@ -17,10 +17,12 @@ const FACTS = ['一次性 second_key', '工作量证明 PoW', '行为轨迹风�
 
 interface LoginPageProps {
   onLogin: (result: LoginResponse) => void;
+  /** 服务端尚未初始化（例如执行了 reset-admin）：切到初始化页面 */
+  onNotInitialized: () => void;
 }
 
 /** 控制台首页（未登录）：介绍 + 登录卡片 + 题型体验 */
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage({ onLogin, onNotInitialized }: LoginPageProps) {
   return (
     <div className="home">
       <section className="home__hero">
@@ -43,7 +45,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </ul>
         </div>
 
-        <LoginForm onLogin={onLogin} />
+        <LoginForm onLogin={onLogin} onNotInitialized={onNotInitialized} />
       </section>
 
       <CaptchaShowcase />
@@ -51,9 +53,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   );
 }
 
-function LoginForm({ onLogin }: LoginPageProps) {
+function LoginForm({ onLogin, onNotInitialized }: LoginPageProps) {
   const { verify, holder } = useCaptcha();
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [stage, setStage] = useState<Stage>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,10 @@ function LoginForm({ onLogin }: LoginPageProps) {
     try {
       onLogin(await adminApi.login({ username: name, password, captchaKey: secondKey }));
     } catch (err) {
+      if (isAdminApiError(err) && err.code === ADMIN_ERROR_CODE.notInitialized) {
+        onNotInitialized();
+        return;
+      }
       setError(getErrorMessage(err));
       setStage('idle');
     }
@@ -146,8 +152,7 @@ function LoginForm({ onLogin }: LoginPageProps) {
         </button>
 
         <p className="login-card__hint">
-          初始密码在服务首次启动时打印于日志，首次登录后需修改；遗失可执行{' '}
-          <code>reset-admin-password</code>。
+          用户名与密码在首次初始化时设置；遗失可在后端执行 <code>reset-admin</code> 重新初始化。
         </p>
       </form>
     </>

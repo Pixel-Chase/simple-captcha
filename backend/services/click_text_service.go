@@ -3,6 +3,7 @@ package services
 import (
 	"log"
 	"simple-captcha/assets/fonts"
+	"simple-captcha/config"
 	"simple-captcha/helper"
 
 	"github.com/golang/freetype/truetype"
@@ -113,7 +114,7 @@ func generateClickCaptcha(bs *BaseService, captcha click.Captcha, req *Challenge
 
 	// 只扰动主图；提示图不含背景素材，保持原样便于辨认
 	masterImageBase64, err := imagedata.NewJPEGImageData(newImageJitter().apply(captData.GetMasterImage().Get())).
-		ToBase64WithQuality(bs.config.Captcha.ImageQuality)
+		ToBase64WithQuality(config.Runtime().Captcha.ImageQuality)
 	if err != nil {
 		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaGenError, "主图片转换失败", err.Error())
 	}

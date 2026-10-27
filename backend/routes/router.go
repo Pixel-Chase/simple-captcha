@@ -1,9 +1,11 @@
 package routes
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"runtime"
+	"simple-captcha/cache"
 	"simple-captcha/config"
 	"simple-captcha/console"
 	"simple-captcha/controllers"
@@ -49,7 +51,6 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.SecurityMiddleware())
 	r.Use(middleware.TrustedProxyMiddleware(r))
 	r.Use(middleware.CompressionMiddleware())
-	r.Use(middleware.CORSMiddleware(cfg.CORS))
 
 	// 开发环境特殊中间件
 	if cfg.Server.Environment == "development" {
@@ -64,18 +65,18 @@ func SetupRouter() *gin.Engine {
 	r.GET(cfg.Monitoring.StatsPath, statsHandler)
 
 	// 验证码API路由组
-	api := r.Group(cfg.Server.APIPrefix + "/captchas")
+	api := r.Group(config.APIPrefix + "/captchas")
 	api.Use(middleware.NoCacheMiddleware()) // 验证码接口（含错误响应）一律禁止缓存
 
 	// 注册验证码相关路由
 	registerCaptchaRoutes(api, serviceManager.GetAppService(), middleware.CaptchaIPPressureMiddleware(riskControl))
 
 	// 管理后台路由：管理员登录 + 背景图与接入应用管理
-	RegisterAdminRoutes(r.Group(cfg.Server.APIPrefix+"/admin"),
-		serviceManager.GetAdminService(), serviceManager.GetAppService(), riskControl)
+	RegisterAdminRoutes(r.Group(config.APIPrefix+"/admin"),
+		serviceManager.GetAdminService(), serviceManager.GetAppService(), serviceManager.GetSettingsService(), riskControl)
 
 	// 管理后台页面：内嵌的前端构建产物，与 API 同源，无需跨域配置
-	consoleHandler := console.NewHandler(console.Assets(), cfg.Server.APIPrefix)
+	consoleHandler := console.NewHandler(console.Assets())
 	console.Register(r, consoleHandler)
 	if consoleHandler.Built() {
 		log.Printf("管理后台页面: %s/", console.BasePath)
@@ -87,14 +88,18 @@ func SetupRouter() *gin.Engine {
 }
 
 // RegisterAdminRoutes 注册管理后台路由。
-// 登录接口叠加 IP 限流并以行为验证作为前置；其余接口要求 Bearer 会话令牌，
-// 且在修改初始密码之前只开放会话查询、注销与改密。
+// 初始化与登录接口叠加 IP 限流：初始化以启动日志中的一次性口令为凭据，登录以行为验证作为前置；
+// 其余接口要求 Bearer 会话令牌。
 // 单独导出以便测试用自定义的服务实例（如临时素材与数据目录）构建路由。
-func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps *services.AppService, riskControl services.RiskControlService) {
+func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps *services.AppService,
+	settings *services.SettingsService, riskControl services.RiskControlService) {
 	adminCtrl := controllers.NewAdminController(admin)
 	appCtrl := controllers.NewAppController(apps)
+	settingsCtrl := controllers.NewSettingsController(settings)
 	rg.Use(middleware.NoCacheMiddleware())
 
+	rg.GET("/setup", adminCtrl.SetupStatusHandler)
+	rg.POST("/setup", middleware.AdminRateLimitMiddleware(riskControl), adminCtrl.SetupHandler)
 	rg.POST("/login", middleware.AdminRateLimitMiddleware(riskControl), adminCtrl.LoginHandler)
 
 	authed := rg.Group("", middleware.AdminAuthMiddleware(admin))
@@ -102,37 +107,40 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, admin *services.AdminService, apps
 	authed.DELETE("/session", adminCtrl.LogoutHandler)
 	authed.PUT("/password", middleware.AdminRateLimitMiddleware(riskControl), adminCtrl.ChangePasswordHandler)
 
-	ready := authed.Group("", middleware.RequirePasswordChanged())
-	ready.GET("/backgrounds", adminCtrl.ListBackgroundsHandler)
-	ready.POST("/backgrounds", adminCtrl.UploadBackgroundHandler)
-	ready.GET("/backgrounds/:name", adminCtrl.PreviewBackgroundHandler)
-	ready.DELETE("/backgrounds/:name", adminCtrl.DeleteBackgroundHandler)
+	authed.GET("/backgrounds", adminCtrl.ListBackgroundsHandler)
+	authed.POST("/backgrounds", adminCtrl.UploadBackgroundHandler)
+	authed.GET("/backgrounds/:name", adminCtrl.PreviewBackgroundHandler)
+	authed.DELETE("/backgrounds/:name", adminCtrl.DeleteBackgroundHandler)
 
-	ready.GET("/risk/telemetry", adminCtrl.RiskTelemetryHandler)
+	authed.GET("/risk/telemetry", adminCtrl.RiskTelemetryHandler)
 
-	ready.GET("/apps", appCtrl.ListHandler)
-	ready.POST("/apps", appCtrl.CreateHandler)
-	ready.PUT("/apps/:id", appCtrl.UpdateHandler)
-	ready.POST("/apps/:id/secret", appCtrl.RotateSecretHandler)
-	ready.DELETE("/apps/:id", appCtrl.DeleteHandler)
+	authed.GET("/apps", appCtrl.ListHandler)
+	authed.POST("/apps", appCtrl.CreateHandler)
+	authed.PUT("/apps/:id", appCtrl.UpdateHandler)
+	authed.POST("/apps/:id/secret", appCtrl.RotateSecretHandler)
+	authed.DELETE("/apps/:id", appCtrl.DeleteHandler)
+
+	authed.GET("/settings", settingsCtrl.GetHandler)
+	authed.PUT("/settings", settingsCtrl.UpdateHandler)
 }
 
 // registerCaptchaRoutes 注册验证码相关路由；ipPressure 只挂在用户侧的出题与提交接口上
 func registerCaptchaRoutes(rg *gin.RouterGroup, apps *services.AppService, ipPressure gin.HandlerFunc) {
-	// 获取验证码资源（GET：旧版 SDK 兼容，不携带环境信号）
-	rg.GET("/:type",
-		ipPressure,
-		middleware.ValidateCaptchaRequest(),
-		controllers.GetCaptchaHandler)
+	// 用户侧接口按 appId 校验来源并返回跨域响应头；预检对任意来源放行，拦截在真实请求上，先于出题与计数
+	appOrigin := middleware.AppOriginMiddleware(apps)
 
-	// 获取验证码资源（POST：请求体携带环境信号，服务端出题前据此加难；响应与 GET 一致）
+	// 获取验证码资源（POST：请求体携带环境信号，服务端出题前据此加难）
+	rg.OPTIONS("/:type", appOrigin)
 	rg.POST("/:type",
+		appOrigin,
 		ipPressure,
 		middleware.ValidateIssueRequest(),
 		controllers.IssueCaptchaHandler)
 
 	// 提交一次验证答案（用户侧）
+	rg.OPTIONS("/:type/:key/attempts", appOrigin)
 	rg.POST("/:type/:key/attempts",
+		appOrigin,
 		ipPressure,
 		middleware.ValidateVerifyRequest(),
 		controllers.VerifyCaptchaHandler)
@@ -160,20 +168,22 @@ func healthCheckHandler(c *gin.Context) {
 		"uptime":      getUptime().String(),
 	}
 
-	// 检查Redis连接
-	cacheService := serviceManager.GetCacheService()
-	if cacheService != nil {
-		if err := cacheService.Ping(); err != nil {
-			health["redis"] = map[string]interface{}{
+	// 检查持久数据存储
+	if db := serviceManager.GetStorage(); db != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		err := db.PingContext(ctx)
+		cancel()
+		if err != nil {
+			health["status"] = "error"
+			health["storage"] = map[string]interface{}{
 				"status": "error",
 				"error":  err.Error(),
 			}
 			c.JSON(http.StatusServiceUnavailable, health)
 			return
-		} else {
-			health["redis"] = map[string]interface{}{
-				"status": "ok",
-			}
+		}
+		health["storage"] = map[string]interface{}{
+			"status": "ok",
 		}
 	}
 
@@ -229,9 +239,8 @@ func statsHandler(c *gin.Context) {
 			"environment": cfg.Server.Environment,
 			"config": map[string]interface{}{
 				"server_port":            cfg.Server.Port,
-				"redis_host":             cfg.Redis.Host,
-				"captcha_cache_expire":   cfg.Captcha.CacheExpiration.String(),
-				"ip_escalate_per_minute": cfg.Captcha.IPEscalatePerMin,
+				"captcha_cache_expire":   config.Runtime().Captcha.Expire().String(),
+				"ip_escalate_per_minute": config.Runtime().Captcha.IPEscalatePerMinute,
 			},
 		},
 		"runtime": map[string]interface{}{
@@ -245,6 +254,24 @@ func statsHandler(c *gin.Context) {
 	// 添加服务统计
 	if serviceStats := serviceManager.GetStats(); serviceStats != nil {
 		stats["services"] = serviceStats
+	}
+
+	// 存储：持久数据（SQLite）与进程内存中的短期数据条目数
+	storageStats := map[string]interface{}{"status": "ok"}
+	if db := serviceManager.GetStorage(); db != nil {
+		if err := db.PingContext(c.Request.Context()); err != nil {
+			storageStats["status"] = "error"
+		}
+		storageStats["path"] = db.Path()
+	}
+	mem := cache.Shared()
+	memory := map[string]interface{}{}
+	for _, kind := range []cache.Kind{cache.KindChallenge, cache.KindRateLimit, cache.KindClient, cache.KindFingerprint} {
+		memory[string(kind)] = map[string]interface{}{"entries": mem.Len(kind), "evicted": mem.Evicted(kind)}
+	}
+	stats["storage"] = map[string]interface{}{"sqlite": storageStats, "memory": memory}
+	if telemetry := serviceManager.GetTelemetryStore(); telemetry != nil {
+		stats["telemetry"] = map[string]interface{}{"dropped": telemetry.Dropped()}
 	}
 
 	// 添加中间件指标：关闭采集时请求数恒为 0，GetMetrics 算错误率会除以 0，得到的 NaN/Inf 无法序列化成 JSON

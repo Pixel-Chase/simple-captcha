@@ -20,7 +20,7 @@ RUN pnpm build:console
 # ----------------------------
 # 第二阶段：编译 Go 服务
 # ----------------------------
-FROM --platform=$BUILDPLATFORM golang:1.23.4-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64

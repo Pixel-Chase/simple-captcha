@@ -78,9 +78,15 @@ export interface ThemeTokens {
   borderRadius?: number;
 }
 
+/**
+ * 验证码服务接入参数
+ * - baseURL：验证码服务的 origin，例如 https://captcha.example.com；不传表示与页面同源。
+ *   API 路径固定为 /api/v1，验证码服务应部署在独立域名下，不支持挂在子路径
+ * - appId：管理后台「接入应用」中的应用 ID；服务端只接受该应用允许来源发起的出题与提交
+ */
 export interface ApiConfig {
-  basePath?: string;
-  prefix?: string;
+  baseURL?: string;
+  appId: string;
 }
 
 export interface CaptchaErrorResponse {

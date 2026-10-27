@@ -2,11 +2,13 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/hex"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -14,9 +16,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"simple-captcha/cache"
 	"simple-captcha/config"
 	"simple-captcha/helper"
+	"simple-captcha/storage"
 	"sort"
 	"strings"
 	"sync"
@@ -30,7 +32,6 @@ import (
 )
 
 const (
-	adminSessionKeyPrefix = "admin:session:"
 	adminTokenBytes       = 32 // 会话令牌随机字节数，十六进制后 64 字符
 	backgroundStemMaxLen  = 40 // 落盘文件名中保留的原始文件名可读前缀长度
 	backgroundNameRetries = 5  // 随机后缀冲突时的重试次数
@@ -45,14 +46,12 @@ var (
 	allowedUploadFormats = []string{"jpeg", "png"}
 )
 
-// AdminSession 管理员登录会话，序列化后存入 Redis
+// AdminSession 管理员登录会话，存于 admin_sessions 表（只存令牌哈希）
 type AdminSession struct {
-	Username  string    `json:"username"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	// Generation 签发时的凭据代次，改密或重置密码后不再匹配，旧会话随之失效
-	Generation string `json:"generation"`
-	// MustChangePassword 由当前凭据实时推导，不落 Redis
-	MustChangePassword bool `json:"-"`
+	Username  string
+	ExpiresAt time.Time
+	// Generation 签发时的账号代次，改密或重置后不再匹配，旧会话随之失效
+	Generation string
 }
 
 // BackgroundInfo 背景图元信息
@@ -77,121 +76,215 @@ type UploadConstraints struct {
 	AllowedFormats    []string `json:"allowedFormats"`
 }
 
-// AdminService 管理后台业务：管理员登录会话 + 背景图增删查
+// AdminService 管理后台业务：初始化、管理员登录会话 + 背景图增删查
 type AdminService struct {
 	cfg         config.AdminConfig
-	credentials *credentialStore
+	db          *storage.DB
 	backgrounds *BackgroundStore
 	riskControl RiskControlService
 
-	credMu sync.Mutex // 串行化改密，避免并发请求交错写入凭据
-	fsMu   sync.Mutex // 串行化写盘与重载，保证"至少保留一张"的判断原子
+	fsMu sync.Mutex // 串行化写盘与重载，保证"至少保留一张"的判断原子
 }
 
-// NewAdminService 创建管理服务。数据目录中还没有管理员凭据时随机生成初始密码，
-// 明文只在这一次打印到控制台，首次登录后必须修改
-func NewAdminService(cfg config.AdminConfig, backgrounds *BackgroundStore, riskControl RiskControlService) (*AdminService, error) {
-	password, err := EnsureAdminCredential(cfg.DataDir)
-	if err != nil {
-		return nil, fmt.Errorf("初始化管理员凭据失败: %w", err)
-	}
-
-	s := &AdminService{
+// NewAdminService 创建管理服务。账号与会话每次都查库、不在进程内缓存，
+// 因此 reset-admin 子命令在服务运行期间修改数据库也立即生效
+func NewAdminService(cfg config.AdminConfig, db *storage.DB, backgrounds *BackgroundStore, riskControl RiskControlService) *AdminService {
+	return &AdminService{
 		cfg:         cfg,
-		credentials: newCredentialStore(cfg.DataDir),
+		db:          db,
 		backgrounds: backgrounds,
 		riskControl: riskControl,
 	}
+}
 
-	if password != "" {
-		log.Print(AdminPasswordNotice(cfg.Username, password))
-	} else if cred, err := s.credentials.load(); err == nil && cred.MustChangePassword {
-		log.Println("管理员尚未修改初始密码；初始密码只在生成时打印过一次，遗失可执行 ./simple-captcha reset-admin-password")
+// Initialized 是否已完成首次初始化（已存在管理员账号）
+func (s *AdminService) Initialized() (bool, *helper.CaptchaError) {
+	acc, err := loadAdminAccount(context.Background(), s.db)
+	if err != nil {
+		return false, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取管理员账号失败", err.Error())
 	}
-	return s, nil
+	return acc != nil, nil
+}
+
+// Setup 首次初始化：校验启动日志中的一次性口令，写入管理员账号并作废口令，随后直接签发会话。
+// "确认未初始化 + 写入账号 + 作废口令"在同一事务中完成，并发的两次初始化只有一次成功
+func (s *AdminService) Setup(code, username, password string) (string, *AdminSession, *helper.CaptchaError) {
+	username, msg := normalizeAdminUsername(username)
+	if msg == "" {
+		msg = validateNewPassword(password)
+	}
+	if msg != "" {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInvalidParam, msg)
+	}
+	// bcrypt 较慢，放在事务之外，避免占住唯一的数据库连接
+	acc, err := newAdminAccount(username, password)
+	if err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "生成密码哈希失败", err.Error())
+	}
+
+	ctx := context.Background()
+	var token string
+	var session *AdminSession
+	var cerr *helper.CaptchaError
+	err = s.db.Tx(ctx, func(tx *sql.Tx) error {
+		existing, err := loadAdminAccount(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			cerr = helper.ErrAlreadyInitialized
+			return cerr
+		}
+		var storedHash string
+		err = tx.QueryRowContext(ctx, `SELECT code_hash FROM admin_setup WHERE id = 1`).Scan(&storedHash)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if !setupCodeMatches(code, storedHash) {
+			cerr = helper.ErrSetupCodeInvalid
+			return cerr
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO admin_account (id, username, password_hash, generation, updated_at) VALUES (1, ?, ?, ?, ?)`,
+			acc.Username, acc.PasswordHash, acc.Generation, acc.UpdatedAt.Unix()); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM admin_setup`); err != nil {
+			return err
+		}
+		token, session, err = s.insertSession(ctx, tx, acc)
+		return err
+	})
+	if cerr != nil {
+		return "", nil, cerr
+	}
+	if err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "初始化管理员账号失败", err.Error())
+	}
+	return token, session, nil
 }
 
 // Login 校验登录前置验证码与账号密码，成功后签发不透明会话令牌。
 //
 // 验证码令牌先于密码比对被消费：无论密码对错，每次尝试都要重新完成一次行为验证，
-// 暴力猜解的成本因此随之抬高。
+// 暴力猜解的成本因此随之抬高。尚未初始化时直接返回 ErrNotInitialized，不消费验证码
 func (s *AdminService) Login(username, password, captchaKey string) (string, *AdminSession, *helper.CaptchaError) {
-	if !s.riskControl.ValidateSecondVerifyToken(captchaKey) {
+	ctx := context.Background()
+	acc, err := loadAdminAccount(ctx, s.db)
+	if err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取管理员账号失败", err.Error())
+	}
+	if acc == nil {
+		return "", nil, helper.ErrNotInitialized
+	}
+	// 只接受管理后台系统应用的验证结果：接入应用里通过的验证码不能拿来登录
+	if !s.riskControl.ConsumeSecondVerifyToken(captchaKey, ConsoleAppID) {
 		return "", nil, helper.ErrCaptchaRequired
 	}
 
-	cred, err := s.credentials.load()
-	if err != nil {
-		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取管理员凭据失败", err.Error())
-	}
-
 	// 用户名与密码都做常量时间比较，并且无论用户名是否匹配都执行 bcrypt，避免时序侧信道
-	userOK := subtle.ConstantTimeCompare([]byte(username), []byte(s.cfg.Username)) == 1
-	passOK := bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(password)) == nil
+	userOK := subtle.ConstantTimeCompare([]byte(username), []byte(acc.Username)) == 1
+	passOK := bcrypt.CompareHashAndPassword([]byte(acc.PasswordHash), []byte(password)) == nil
 	if !userOK || !passOK {
 		return "", nil, helper.ErrLoginFailed
 	}
-	return s.issueSession(cred)
+
+	var token string
+	var session *AdminSession
+	err = s.db.Tx(ctx, func(tx *sql.Tx) error {
+		// 顺带清理已过期的会话，表不会无限增长
+		if _, err := tx.ExecContext(ctx, `DELETE FROM admin_sessions WHERE expires_at <= ?`, time.Now().Unix()); err != nil {
+			return err
+		}
+		var err error
+		token, session, err = s.insertSession(ctx, tx, acc)
+		return err
+	})
+	if err != nil {
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "保存会话失败", err.Error())
+	}
+	return token, session, nil
 }
 
-// ChangePassword 校验当前密码后更换密码。凭据代次随之更换，包括当前会话在内的全部旧会话立即失效，
+// ChangePassword 校验当前密码后更换密码。账号代次随之更换，包括当前会话在内的全部旧会话立即失效，
 // 调用方拿到新签发的会话继续操作
-func (s *AdminService) ChangePassword(token, currentPassword, newPassword string) (string, *AdminSession, *helper.CaptchaError) {
+func (s *AdminService) ChangePassword(currentPassword, newPassword string) (string, *AdminSession, *helper.CaptchaError) {
 	if msg := validateNewPassword(newPassword); msg != "" {
 		return "", nil, helper.NewCaptchaError(helper.ErrCodeInvalidParam, msg)
 	}
 
-	s.credMu.Lock()
-	defer s.credMu.Unlock()
-
-	cred, err := s.credentials.load()
+	ctx := context.Background()
+	acc, err := loadAdminAccount(ctx, s.db)
 	if err != nil {
-		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取管理员凭据失败", err.Error())
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取管理员账号失败", err.Error())
 	}
-	if bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(currentPassword)) != nil {
+	if acc == nil {
+		return "", nil, helper.ErrUnauthorized
+	}
+	if bcrypt.CompareHashAndPassword([]byte(acc.PasswordHash), []byte(currentPassword)) != nil {
 		return "", nil, helper.ErrWrongPassword
 	}
 	if newPassword == currentPassword {
 		return "", nil, helper.NewCaptchaError(helper.ErrCodeInvalidParam, "新密码不能与当前密码相同")
 	}
 
-	next, err := newCredential(newPassword, false)
+	next, err := newAdminAccount(acc.Username, newPassword)
 	if err != nil {
 		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "生成密码哈希失败", err.Error())
 	}
-	if err := s.credentials.save(next); err != nil {
-		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "保存管理员凭据失败", err.Error())
-	}
 
-	s.Logout(token)
-	return s.issueSession(next)
-}
-
-// issueSession 签发随机会话令牌，Redis 中只保存令牌哈希
-func (s *AdminService) issueSession(cred *adminCredential) (string, *AdminSession, *helper.CaptchaError) {
-	raw := make([]byte, adminTokenBytes)
-	if _, err := rand.Read(raw); err != nil {
-		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "生成会话令牌失败", err.Error())
+	var token string
+	var session *AdminSession
+	var cerr *helper.CaptchaError
+	err = s.db.Tx(ctx, func(tx *sql.Tx) error {
+		// 以读取时的代次为条件更新：比对密码期间账号已被并发修改（另一次改密或重置）则放弃本次修改
+		res, err := tx.ExecContext(ctx,
+			`UPDATE admin_account SET password_hash = ?, generation = ?, updated_at = ? WHERE id = 1 AND generation = ?`,
+			next.PasswordHash, next.Generation, next.UpdatedAt.Unix(), acc.Generation)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil || n != 1 {
+			cerr = helper.ErrUnauthorized
+			return cerr
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM admin_sessions`); err != nil {
+			return err
+		}
+		token, session, err = s.insertSession(ctx, tx, next)
+		return err
+	})
+	if cerr != nil {
+		return "", nil, cerr
 	}
-	token := hex.EncodeToString(raw)
-
-	session := &AdminSession{
-		Username:   s.cfg.Username,
-		ExpiresAt:  time.Now().Add(s.cfg.SessionTTL),
-		Generation: cred.Generation,
-	}
-	payload, err := json.Marshal(session)
 	if err != nil {
-		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "序列化会话失败", err.Error())
+		return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "保存管理员密码失败", err.Error())
 	}
-	if err := cache.Set(sessionKey(token), string(payload), s.cfg.SessionTTL); err != nil {
-		return "", nil, helper.NewCaptchaError(helper.ErrCodeCacheError, "保存会话失败", err.Error())
-	}
-	session.MustChangePassword = cred.MustChangePassword
 	return token, session, nil
 }
 
-// Authenticate 校验 Bearer 令牌，返回对应会话；凭据代次不一致（已改密或重置）的会话视为失效
+// insertSession 签发随机会话令牌，库中只保存令牌哈希
+func (s *AdminService) insertSession(ctx context.Context, tx *sql.Tx, acc *adminAccount) (string, *AdminSession, error) {
+	token, err := randomHex(adminTokenBytes)
+	if err != nil {
+		return "", nil, err
+	}
+	now := time.Now()
+	session := &AdminSession{
+		Username:   acc.Username,
+		ExpiresAt:  now.Add(s.cfg.SessionTTL),
+		Generation: acc.Generation,
+	}
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO admin_sessions (token_hash, username, generation, created_at, expires_at) VALUES (?, ?, ?, ?, ?)`,
+		sessionHash(token), session.Username, session.Generation, now.Unix(), session.ExpiresAt.Unix())
+	if err != nil {
+		return "", nil, err
+	}
+	return token, session, nil
+}
+
+// Authenticate 校验 Bearer 令牌，返回对应会话；已过期或账号代次不一致（已改密或重置）的会话视为失效
 func (s *AdminService) Authenticate(token string) (*AdminSession, bool) {
 	if len(token) != adminTokenBytes*2 {
 		return nil, false
@@ -200,28 +293,22 @@ func (s *AdminService) Authenticate(token string) (*AdminSession, bool) {
 		return nil, false
 	}
 
-	raw := cache.Get(sessionKey(token))
-	if raw == nil {
-		return nil, false
-	}
-
 	var session AdminSession
-	if err := json.Unmarshal([]byte(*raw), &session); err != nil {
-		return nil, false
-	}
-	if time.Now().After(session.ExpiresAt) {
-		return nil, false
-	}
-
-	cred, err := s.credentials.load()
+	var expires int64
+	err := s.db.QueryRowContext(context.Background(),
+		`SELECT s.username, s.generation, s.expires_at
+		   FROM admin_sessions s
+		   JOIN admin_account a ON a.id = 1 AND a.generation = s.generation
+		  WHERE s.token_hash = ? AND s.expires_at > ?`,
+		sessionHash(token), time.Now().Unix(),
+	).Scan(&session.Username, &session.Generation, &expires)
 	if err != nil {
-		log.Printf("读取管理员凭据失败: error=%v", err)
+		if !errors.Is(err, sql.ErrNoRows) {
+			log.Printf("查询管理会话失败: error=%v", err)
+		}
 		return nil, false
 	}
-	if session.Generation != cred.Generation {
-		return nil, false
-	}
-	session.MustChangePassword = cred.MustChangePassword
+	session.ExpiresAt = time.Unix(expires, 0)
 	return &session, true
 }
 
@@ -230,15 +317,15 @@ func (s *AdminService) Logout(token string) {
 	if token == "" {
 		return
 	}
-	if err := cache.Del(sessionKey(token)); err != nil {
+	if _, err := s.db.ExecContext(context.Background(), `DELETE FROM admin_sessions WHERE token_hash = ?`, sessionHash(token)); err != nil {
 		log.Printf("作废管理会话失败: error=%v", err)
 	}
 }
 
-// sessionKey Redis 中只保存令牌的哈希，即使缓存内容泄露也无法直接冒用会话
-func sessionKey(token string) string {
+// sessionHash 库中只保存令牌的哈希，即使数据库文件泄露也无法直接冒用会话
+func sessionHash(token string) string {
 	sum := sha256.Sum256([]byte(token))
-	return adminSessionKeyPrefix + hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:])
 }
 
 // Constraints 返回上传约束

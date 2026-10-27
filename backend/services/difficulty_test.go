@@ -64,7 +64,7 @@ func TestToleranceScalesWithImage(t *testing.T) {
 }
 
 func TestLevelFromState(t *testing.T) {
-	riskCfg := config.RiskConfig{Enabled: true, EscalateThreshold: 55, BlockThreshold: 85}
+	riskCfg := config.RiskSettings{Enabled: true, EscalateThreshold: 55, BlockThreshold: 85}
 
 	if got := LevelFromState(3, ClientRisk{}, riskCfg); got != 3 {
 		t.Errorf("fresh client should stay at base, got %d", got)
@@ -81,7 +81,7 @@ func TestLevelFromState(t *testing.T) {
 	if got := LevelFromState(1, ClientRisk{LastScore: 90}, riskCfg); got != 3 {
 		t.Errorf("score above block threshold should add two levels, got %d", got)
 	}
-	disabled := config.RiskConfig{Enabled: false, EscalateThreshold: 55, BlockThreshold: 85}
+	disabled := config.RiskSettings{Enabled: false, EscalateThreshold: 55, BlockThreshold: 85}
 	if got := LevelFromState(2, ClientRisk{LastScore: 100}, disabled); got != 2 {
 		t.Errorf("disabled risk should ignore score, got %d", got)
 	}

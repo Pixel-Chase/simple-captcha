@@ -1,44 +1,52 @@
 import type { CaptchaErrorResponse } from '@aetherlib/g-captcha';
 
-/** 与 backend/console 约定的占位符：服务端返回 index.html 时替换为实际的 API_PREFIX */
-const API_PREFIX_PLACEHOLDER = '__CAPTCHA_API_PREFIX__';
-
-/** 内嵌在 Go 服务中时由服务端写入的 API 前缀；本地演示站没有该 meta 或仍是占位符，返回 null */
-const embeddedApiPrefix = (() => {
-  const content = document.querySelector<HTMLMetaElement>(
-    'meta[name="captcha-api-prefix"]',
-  )?.content;
-  return content === undefined || content === API_PREFIX_PLACEHOLDER ? null : content;
-})();
-
 /**
- * 验证码后端地址与 API 前缀，演示页与 SDK 共用同一个服务：
- * - 内嵌在 Go 服务中（/console/）：与页面同源，前缀取服务端配置的 API_PREFIX
- * - 本地演示站：VITE_API_BASE（见 .env.example），前缀固定 /api/v1
+ * 验证码后端与页面同源，API 路径固定为 /api/v1：
+ * - 内嵌在 Go 服务中（/console/）：本来就同源
+ * - 本地演示站：Vite 开发服务器把 /api 代理到 VITE_API_PROXY_TARGET（见 vite.config.ts 与 .env.example）
  */
-export const API_BASE =
-  embeddedApiPrefix !== null
-    ? window.location.origin
-    : (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3321').replace(/\/+$/, '');
-export const API_PREFIX = embeddedApiPrefix ?? '/api/v1';
-const ADMIN_ENDPOINT = `${API_BASE}${API_PREFIX}/admin`;
+export const API_PREFIX = '/api/v1';
+const ADMIN_ENDPOINT = `${API_PREFIX}/admin`;
+
+/** 管理后台自己的内置系统应用：只接受同源请求，不可删除或修改（见 backend 的 app_console） */
+export const CONSOLE_APP_ID = 'app_console';
 
 const TOKEN_STORAGE_KEY = 'g-captcha-admin-token';
 
+/** 登录、初始化与改密成功后签发的会话 */
 export interface LoginResponse {
   token: string;
   username: string;
   /** Unix 秒 */
   expiresAt: number;
-  /** 仍在使用随机初始密码：改密之前只开放会话查询、注销与改密 */
-  mustChangePassword: boolean;
 }
 
 export interface SessionResponse {
   username: string;
   expiresAt: number;
-  mustChangePassword: boolean;
 }
+
+/** 是否已完成首次初始化（已设置管理员账号） */
+export interface SetupStatusResponse {
+  initialized: boolean;
+}
+
+/** 管理接口中控制台需要区别处理的业务错误码 */
+export const ADMIN_ERROR_CODE = {
+  /** 尚未初始化：登录页据此切换到初始化页面 */
+  notInitialized: 2012,
+  /** 已初始化：初始化页面据此切回登录页 */
+  alreadyInitialized: 2013,
+  /** 初始化口令错误 */
+  setupCodeInvalid: 2014,
+} as const;
+
+/** 初始化相关错误的中文提示，比服务端的通用文案多给一句处理办法 */
+const ADMIN_ERROR_TEXT: Record<number, string> = {
+  [ADMIN_ERROR_CODE.notInitialized]: '管理后台尚未初始化，请先完成初始化',
+  [ADMIN_ERROR_CODE.alreadyInitialized]: '管理后台已完成初始化，请直接登录',
+  [ADMIN_ERROR_CODE.setupCodeInvalid]: '初始化口令错误，请以服务最近一次启动日志中的口令为准',
+};
 
 export interface BackgroundItem {
   name: string;
@@ -77,6 +85,10 @@ export interface AppItem {
   updatedAt: string;
   secretRotatedAt: string;
   lastUsedAt: string | null;
+  /** 允许发起出题与提交的来源（已规范化）；系统应用为空，只接受同源 */
+  origins: string[];
+  /** 内置系统应用（管理后台）：不可删除、停用、改名、轮换密钥或修改来源 */
+  isSystem: boolean;
 }
 
 export interface AppListResponse {
@@ -90,6 +102,44 @@ export interface AppSecretResponse {
   secret: string;
 }
 
+/** 验证码与风控策略（与 backend/config/runtime.go 的 RuntimeSettings 一致），保存后立即生效 */
+export interface RuntimeSettings {
+  captcha: {
+    expireSeconds: number;
+    secondVerifyExpireSeconds: number;
+    maxAttempts: number;
+    ipEscalatePerMinute: number;
+    defaultDifficulty: number;
+    minSolveTimeMs: number;
+    bindClient: boolean;
+    imageQuality: number;
+    maxScale: number;
+  };
+  pow: {
+    enabled: boolean;
+    required: boolean;
+    difficulty: number;
+    maxDifficulty: number;
+  };
+  risk: {
+    enabled: boolean;
+    mode: 'enforce' | 'log';
+    escalateThreshold: number;
+    blockThreshold: number;
+    stateTtlSeconds: number;
+    telemetryRetention: number;
+    envScoreCap: number;
+    blockMinBehavior: number;
+    fpReplayThreshold: number;
+    fpReplayWindowSeconds: number;
+  };
+}
+
+export interface SettingsResponse {
+  settings: RuntimeSettings;
+  defaults: RuntimeSettings;
+}
+
 /**
  * 风控观察：一条遥测记录（已由服务端脱敏）。
  * kind=issue 为出题评估（level / base / boost / envScore），kind=verify 为校验评分（score / success）；
@@ -98,6 +148,8 @@ export interface AppSecretResponse {
 export interface RiskTelemetryItem {
   kind?: 'issue' | 'verify';
   time?: string;
+  /** 请求所属的接入应用 ID；早期记录没有该字段 */
+  app?: string;
   type?: string;
   key?: string;
   client?: string;
@@ -151,6 +203,9 @@ export function getErrorMessage(error: unknown, fallback = '操作失败，请�
   if (typeof error === 'string') {
     return error;
   }
+  if (error instanceof AdminApiError && ADMIN_ERROR_TEXT[error.code]) {
+    return ADMIN_ERROR_TEXT[error.code];
+  }
   if (error instanceof Error) {
     return error.message || fallback;
   }
@@ -197,6 +252,17 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
 }
 
 export const adminApi = {
+  setupStatus() {
+    return request<SetupStatusResponse>('/setup');
+  },
+  /** 首次初始化：口令见服务启动日志；成功后直接签发会话 */
+  setup(body: { setupCode: string; username: string; password: string }) {
+    return request<LoginResponse>('/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  },
   login(body: { username: string; password: string; captchaKey: string }) {
     return request<LoginResponse>('/login', {
       method: 'POST',
@@ -244,18 +310,23 @@ export const adminApi = {
       token,
     );
   },
-  createApp(token: string, name: string) {
+  createApp(token: string, name: string, origins: string[]) {
     return request<AppSecretResponse>(
       '/apps',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, origins }),
       },
       token,
     );
   },
-  updateApp(token: string, id: string, body: { name: string; enabled: boolean }) {
+  /** origins 缺省时保持不变，提供时整体替换 */
+  updateApp(
+    token: string,
+    id: string,
+    body: { name: string; enabled: boolean; origins?: string[] },
+  ) {
     return request<AppItem>(
       `/apps/${encodeURIComponent(id)}`,
       {
@@ -275,6 +346,21 @@ export const adminApi = {
   },
   deleteApp(token: string, id: string) {
     return request<void>(`/apps/${encodeURIComponent(id)}`, { method: 'DELETE' }, token);
+  },
+  getSettings(token: string) {
+    return request<SettingsResponse>('/settings', {}, token);
+  },
+  /** 提交完整策略；校验失败返回 400，错误信息含字段名 */
+  updateSettings(token: string, settings: RuntimeSettings) {
+    return request<{ settings: RuntimeSettings }>(
+      '/settings',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      },
+      token,
+    );
   },
   /** 预览需要携带令牌，无法直接用 <img src>，这里取回 blob 生成对象 URL */
   async fetchPreview(token: string, name: string): Promise<string> {

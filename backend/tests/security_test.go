@@ -2,7 +2,6 @@ package tests
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,7 +20,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,7 +76,8 @@ func solvePow(t *testing.T, key string, meta *services.ChallengeMeta) *risk.PowS
 }
 
 func waitMinSolveTime() {
-	time.Sleep(config.LoadConfig().Captcha.MinSolveTime + 100*time.Millisecond)
+	rt := config.Runtime()
+	time.Sleep(rt.Captcha.MinSolveTime() + 100*time.Millisecond)
 }
 
 func TestGenerateKey_RandomAndIndependentOfAnswer(t *testing.T) {
@@ -132,13 +131,14 @@ func TestVerify_TooFastRejectedThenSucceeds(t *testing.T) {
 	service, _ := manager.GetCaptchaService("slide-text")
 	verifier, _ := manager.GetVerifyService("slide-text")
 
-	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text", ClientHash: "client-fast"})
+	const appID = "app_aaaaaaaaaaaa"
+	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text", ClientHash: "client-fast", AppID: appID})
 	require.Nil(t, err)
 	answer, meta := slideAnswer(t, data.Key)
 	pow := solvePow(t, data.Key, meta)
 
 	// 立即提交：即使答案正确也应被时间窗口拦下，并计入一次失败
-	ok, msg, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, ClientHash: "client-fast", Pow: pow})
+	ok, msg, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, ClientHash: "client-fast", Pow: pow, AppID: appID})
 	assert.False(t, ok)
 	require.NotNil(t, verifyErr)
 	assert.Equal(t, helper.ErrCodeTooFast, verifyErr.Code)
@@ -146,15 +146,16 @@ func TestVerify_TooFastRejectedThenSucceeds(t *testing.T) {
 
 	waitMinSolveTime()
 
-	ok, secondKey, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, ClientHash: "client-fast", Pow: pow})
+	ok, secondKey, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer, ClientHash: "client-fast", Pow: pow, AppID: appID})
 	assert.Nil(t, verifyErr)
 	assert.True(t, ok)
 	assert.NotEmpty(t, secondKey)
 
 	// 二次验证 key 一次性消费
 	riskControl := manager.GetRiskControlService()
-	assert.True(t, riskControl.ValidateSecondVerifyToken(secondKey))
-	assert.False(t, riskControl.ValidateSecondVerifyToken(secondKey))
+	// 二次验证 key 属于出题的应用，一次性消费
+	assert.True(t, riskControl.ConsumeSecondVerifyToken(secondKey, appID))
+	assert.False(t, riskControl.ConsumeSecondVerifyToken(secondKey, appID))
 }
 
 func TestVerify_PowInvalidRejected(t *testing.T) {
@@ -186,8 +187,8 @@ func TestVerify_PowInvalidRejected(t *testing.T) {
 }
 
 func TestVerify_PowOptionalWhenNotRequired(t *testing.T) {
-	cfg := config.LoadConfig()
-	if cfg.Captcha.PowRequired {
+	rt := config.Runtime()
+	if rt.Pow.Required {
 		t.Skip("CAPTCHA_POW_REQUIRED=true，跳过可选 PoW 用例")
 	}
 
@@ -206,6 +207,7 @@ func TestVerify_PowOptionalWhenNotRequired(t *testing.T) {
 }
 
 func TestVerify_WrongAnswerConsumesAttempts(t *testing.T) {
+	rt := config.Runtime()
 	manager := services.GetServiceManager()
 	service, _ := manager.GetCaptchaService("slide-text")
 	verifier, _ := manager.GetVerifyService("slide-text")
@@ -216,7 +218,7 @@ func TestVerify_WrongAnswerConsumesAttempts(t *testing.T) {
 	pow := solvePow(t, data.Key, meta)
 	waitMinSolveTime()
 
-	maxAttempts := config.LoadConfig().Captcha.MaxAttempts
+	maxAttempts := rt.Captcha.MaxAttempts
 	for i := 1; i < maxAttempts; i++ {
 		ok, _, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: "1,1", Pow: pow})
 		assert.False(t, ok)
@@ -228,6 +230,68 @@ func TestVerify_WrongAnswerConsumesAttempts(t *testing.T) {
 	assert.False(t, ok)
 	require.NotNil(t, verifyErr)
 	assert.Equal(t, helper.ErrCodeTooManyAttempts, verifyErr.Code)
+}
+
+// 出题后修改尝试次数上限只影响之后出的题：已出的题从入口检查到失败计数都按出题时的上限，
+// 不会出现"正确答案还能通过、错误答案却被立即作废"的两套标准
+func TestVerify_MaxAttemptsFixedAtIssue(t *testing.T) {
+	tests := []struct {
+		name           string
+		issued, latest int
+	}{
+		{"出题后下调", 5, 1},
+		{"出题后上调", 2, 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restoreRuntime(t)
+			setMaxAttempts := func(n int) {
+				next := *config.Runtime()
+				next.Captcha.MaxAttempts = n
+				require.NoError(t, config.ApplyRuntime(next))
+			}
+			manager := services.GetServiceManager()
+			service, _ := manager.GetCaptchaService("slide-text")
+			verifier, _ := manager.GetVerifyService("slide-text")
+			wrong := func(key string, pow *risk.PowSolution) *helper.CaptchaError {
+				ok, _, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: key, Answer: "1,1", Pow: pow})
+				assert.False(t, ok)
+				require.NotNil(t, verifyErr)
+				return verifyErr
+			}
+
+			setMaxAttempts(tt.issued)
+			exhausted, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text"})
+			require.Nil(t, err)
+			passing, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text"})
+			require.Nil(t, err)
+			setMaxAttempts(tt.latest)
+
+			exhaustedAnswer, exhaustedMeta := slideAnswer(t, exhausted.Key)
+			exhaustedPow := solvePow(t, exhausted.Key, exhaustedMeta)
+			passingAnswer, passingMeta := slideAnswer(t, passing.Key)
+			passingPow := solvePow(t, passing.Key, passingMeta)
+			waitMinSolveTime()
+
+			// 错满出题时的上限：前 issued-1 次是普通失败，第 issued 次作废题目，之后正确答案也无法通过
+			for i := 1; i < tt.issued; i++ {
+				assert.Equal(t, helper.ErrCodeVerifyFailed, wrong(exhausted.Key, exhaustedPow).Code, "第 %d 次", i)
+			}
+			assert.Equal(t, helper.ErrCodeTooManyAttempts, wrong(exhausted.Key, exhaustedPow).Code, "第 %d 次", tt.issued)
+			ok, _, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: exhausted.Key, Answer: exhaustedAnswer, Pow: exhaustedPow})
+			assert.False(t, ok)
+			require.NotNil(t, verifyErr)
+			assert.Equal(t, helper.ErrCodeExpired, verifyErr.Code)
+
+			// 错 issued-1 次后，正确答案仍能通过
+			for i := 1; i < tt.issued; i++ {
+				assert.Equal(t, helper.ErrCodeVerifyFailed, wrong(passing.Key, passingPow).Code, "第 %d 次", i)
+			}
+			ok, _, verifyErr = verifier.VerifyData(&services.VerifyInput{Key: passing.Key, Answer: passingAnswer, Pow: passingPow})
+			assert.Nil(t, verifyErr)
+			assert.True(t, ok)
+		})
+	}
 }
 
 func TestVerify_ScaledChallengeUsesImageCoordinates(t *testing.T) {
@@ -254,7 +318,7 @@ func TestVerify_ScaledChallengeUsesImageCoordinates(t *testing.T) {
 	assert.True(t, ok)
 }
 
-func TestRateLimiter_RedisSlidingWindow(t *testing.T) {
+func TestRateLimiter_SlidingWindow(t *testing.T) {
 	cfg := config.LoadConfig()
 	if cfg.Admin.IPLimitPerMin <= 0 {
 		t.Skip("ADMIN_IP_LIMIT_PER_MINUTE 为 0，管理员限流已关闭")
@@ -278,42 +342,42 @@ func TestRateLimiter_RedisSlidingWindow(t *testing.T) {
 
 // 同一出口 IP 的验证码请求量只让题目变难，任何请求量都不拒绝；业务后端的 S2S 状态查询不计入出口 IP
 func TestRouter_SharedEgressEscalatesInsteadOfBlocking(t *testing.T) {
-	cfg := config.LoadConfig()
-	threshold := cfg.Captcha.IPEscalatePerMin
+	rt := config.Runtime()
+	threshold := rt.Captcha.IPEscalatePerMinute
 	if threshold <= 0 {
 		t.Skip("CAPTCHA_IP_ESCALATE_PER_MINUTE 为 0，按 IP 加难已关闭")
 	}
 
 	const egressIP = "198.51.100.77"
-	bucket := services.RateLimitKeyPrefix + egressIP
-	rdb := cache.GetRedisClient()
-	ctx := context.Background()
-	require.NoError(t, rdb.Del(ctx, bucket).Err())
-	t.Cleanup(func() { rdb.Del(ctx, bucket) })
+	bucket := services.CaptchaRateLimitKey(egressIP)
+	mem := cache.Shared()
+	mem.Del(cache.KindRateLimit, bucket)
+	t.Cleanup(func() { mem.Del(cache.KindRateLimit, bucket) })
 
 	// 直接往窗口里预填请求记录，模拟同一出口下很多人在同一分钟里出题
 	seed := func(n int) {
-		require.NoError(t, rdb.Del(ctx, bucket).Err())
-		now := time.Now().UnixMilli()
-		members := make([]*redis.Z, 0, n)
+		mem.Del(cache.KindRateLimit, bucket)
 		for i := 0; i < n; i++ {
-			members = append(members, &redis.Z{Score: float64(now), Member: fmt.Sprintf("seed-%d", i)})
-		}
-		if n > 0 {
-			require.NoError(t, rdb.ZAdd(ctx, bucket, members...).Err())
+			mem.Hit(bucket, time.Minute, n+1)
 		}
 	}
 	// 用一个全新的 UA 后缀，保证客户端历史状态为空，难度只受出口 IP 请求量影响；
 	// 请求头按真实浏览器补齐，否则请求头核验会额外加难
 	userAgent := browserUA(fmt.Sprintf("shared-egress-test/%d", time.Now().UnixNano()))
-	get := func(path string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+	send := func(method, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set("Origin", "http://"+req.Host)
 		req.RemoteAddr = egressIP + ":4321"
 		withBrowserHeaders(req, userAgent)
 		w := httptest.NewRecorder()
 		router().ServeHTTP(w, req)
 		return w
 	}
+	// 出题只有 POST；空请求体即不携带环境信号；以管理后台系统应用的身份同源访问
+	issue := func(path string) *httptest.ResponseRecorder {
+		return send(http.MethodPost, path+"?appId="+services.ConsoleAppID)
+	}
+	get := func(path string) *httptest.ResponseRecorder { return send(http.MethodGet, path) }
 	levelOf := func(w *httptest.ResponseRecorder) int {
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		var body map[string]interface{}
@@ -325,34 +389,35 @@ func TestRouter_SharedEgressEscalatesInsteadOfBlocking(t *testing.T) {
 
 	// 每次请求自身也会计入窗口：预填 n 条后实际计数为 n+1
 	const path = "/api/v1/captchas/slide-text"
-	base := services.ClampDifficulty(cfg.Captcha.DefaultDifficulty)
+	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 
 	seed(0)
-	assert.Equal(t, base, levelOf(get(path)), "低于加难阈值时保持基础难度")
+	assert.Equal(t, base, levelOf(issue(path)), "低于加难阈值时保持基础难度")
 
 	// S2S 状态查询走应用密钥鉴权，不计入出口 IP 的请求量
 	assert.Equal(t, http.StatusUnauthorized, get("/api/v1/captchas/states/"+strings.Repeat("a", 32)).Code)
-	assert.EqualValues(t, 1, rdb.ZCard(ctx, bucket).Val())
+	assert.Equal(t, 1, mem.WindowCount(bucket, time.Minute))
 
 	seed(threshold)
-	assert.Equal(t, services.ClampDifficulty(base+1), levelOf(get(path)), "超过加难阈值 1 倍加 1 级")
+	assert.Equal(t, services.ClampDifficulty(base+1), levelOf(issue(path)), "超过加难阈值 1 倍加 1 级")
 
 	seed(2 * threshold)
-	assert.Equal(t, services.ClampDifficulty(base+2), levelOf(get(path)), "超过加难阈值 2 倍加 2 级")
+	assert.Equal(t, services.ClampDifficulty(base+2), levelOf(issue(path)), "超过加难阈值 2 倍加 2 级")
 
 	// 请求量再大也只是加难到顶，不拒绝；封顶后的请求不再写入窗口
 	flood := 50 * threshold
 	seed(flood)
-	assert.Equal(t, services.ClampDifficulty(base+2), levelOf(get(path)), "任何请求量都不因 IP 被拒绝")
-	assert.EqualValues(t, flood, rdb.ZCard(ctx, bucket).Val())
+	assert.Equal(t, services.ClampDifficulty(base+2), levelOf(issue(path)), "任何请求量都不因 IP 被拒绝")
+	assert.Equal(t, flood, mem.WindowCount(bucket, time.Minute))
 }
 
 func TestClientRiskStore_EscalatesDifficulty(t *testing.T) {
+	rt := config.Runtime()
 	store := services.NewClientRiskStore()
 	policy := services.NewChallengePolicy(store)
 	clientHash := fmt.Sprintf("test-client-%d", time.Now().UnixNano())
 
-	base := config.LoadConfig().Captcha.DefaultDifficulty
+	base := rt.Captcha.DefaultDifficulty
 	assert.Equal(t, base, policy.Decide(services.IssueInput{ClientHash: clientHash}).Level)
 
 	store.Record(clientHash, false, 10)
@@ -369,7 +434,7 @@ func TestClientRiskStore_EscalatesDifficulty(t *testing.T) {
 }
 
 func TestRiskEngine_BlocksObviousBot(t *testing.T) {
-	cfg := config.LoadConfig()
+	rt := config.Runtime()
 	engine := services.NewRiskEngine(nil)
 	if !engine.Enabled() {
 		t.Skip("RISK_ENABLED=false")
@@ -386,8 +451,8 @@ func TestRiskEngine_BlocksObviousBot(t *testing.T) {
 		},
 	})
 	require.NotNil(t, result)
-	assert.GreaterOrEqual(t, result.Score, cfg.Risk.BlockThreshold)
-	if cfg.Risk.Mode == "enforce" {
+	assert.GreaterOrEqual(t, result.Score, rt.Risk.BlockThreshold)
+	if rt.Risk.Mode == "enforce" {
 		assert.True(t, engine.ShouldBlock(result))
 	}
 }
@@ -454,7 +519,7 @@ func TestVerify_RiskBlockedFailsOnlyAtAnswerComparison(t *testing.T) {
 // TestVerify_RiskBlockedMatchesNormalPathErrors 被拦截的请求在答案比对之前的每个阶段，
 // 返回值都必须与未拦截时完全一致，否则攻击者可以故意触发前置错误来探测自己是否被拦截
 func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
-	cfg := config.LoadConfig()
+	rt := config.Runtime()
 	manager := services.GetServiceManager()
 	service, _ := manager.GetCaptchaService("slide-text")
 	verifier, _ := manager.GetVerifyService("slide-text")
@@ -494,7 +559,7 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 		},
 		{
 			name: "提交过快",
-			skip: cfg.Captcha.MinSolveTime <= 0,
+			skip: rt.Captcha.MinSolveTime() <= 0,
 			build: func(t *testing.T) *services.VerifyInput {
 				key, answer, pow := fresh(t, "")
 				return &services.VerifyInput{Key: key, Answer: answer, Pow: pow}
@@ -503,7 +568,7 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 		},
 		{
 			name: "客户端不匹配",
-			skip: !cfg.Captcha.BindClient,
+			skip: !rt.Captcha.BindClient,
 			build: func(t *testing.T) *services.VerifyInput {
 				key, answer, pow := fresh(t, "client-a")
 				waitMinSolveTime()
@@ -550,14 +615,14 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 }
 
 func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
-	cfg := config.LoadConfig()
-	if !cfg.Risk.Enabled || cfg.Risk.Mode != "enforce" {
+	rt := config.Runtime()
+	if !rt.Risk.Enabled || rt.Risk.Mode != "enforce" {
 		t.Skip("RISK_MODE != enforce")
 	}
 
 	manager := services.GetServiceManager()
 	service, _ := manager.GetCaptchaService("slide-text")
-	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text"})
+	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text", AppID: services.ConsoleAppID})
 	require.Nil(t, err)
 	answer, meta := slideAnswer(t, data.Key)
 	pow := solvePow(t, data.Key, meta)
@@ -565,7 +630,7 @@ func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
 
 	post := func(t *testing.T) (int, string) {
 		body, _ := json.Marshal(map[string]interface{}{"point": answer, "pow": pow, "env": env, "trace": trace})
-		req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text/"+data.Key+"/attempts", bytes.NewReader(body))
+		req := asConsoleApp(httptest.NewRequest(http.MethodPost, config.APIPrefix+"/captchas/slide-text/"+data.Key+"/attempts", bytes.NewReader(body)))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		router().ServeHTTP(rec, req)
@@ -587,7 +652,7 @@ func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
 
 	// 被拦截的请求若提交过快，仍应得到与正常路径一致的"提交过快"，而不是提前暴露 1003
 	expectAttempts := float64(0)
-	if cfg.Captcha.MinSolveTime > 0 {
+	if rt.Captcha.MinSolveTime() > 0 {
 		code, _ := post(t)
 		assert.Equal(t, helper.ErrCodeTooFast, code, "拦截路径上的前置检查响应必须与正常路径一致")
 		expectAttempts++
@@ -610,7 +675,7 @@ func TestVerifyEndpoint_RejectsOversizedBody(t *testing.T) {
 
 	// 语法合法但超过上限的 JSON；ContentLength 置为 -1 模拟 chunked 传输，只能靠 MaxBytesReader 截断
 	body := `{"point":"1,1"` + strings.Repeat(" ", int(limit)+1024) + `}`
-	req := httptest.NewRequest(http.MethodPost, cfg.Server.APIPrefix+"/captchas/slide-text/"+strings.Repeat("a", 32)+"/attempts", strings.NewReader(body))
+	req := asConsoleApp(httptest.NewRequest(http.MethodPost, config.APIPrefix+"/captchas/slide-text/"+strings.Repeat("a", 32)+"/attempts", strings.NewReader(body)))
 	req.ContentLength = -1
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

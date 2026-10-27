@@ -18,7 +18,7 @@ export default () => {
 
   return (
     <CaptchaProvider
-      api={{ basePath: 'http://127.0.0.1:3321' }}
+      api={{ baseURL: 'https://captcha.example.com', appId: 'app_xxxxxxxxxxxx' }}
       theme={{ primaryColor: '#111827', borderRadius: 12 }}
     >
       {holder}
@@ -56,10 +56,12 @@ export default () => {
 
 | 属性 | 说明 | 类型 | 默认值 |
 |---|---|---|---|
-| basePath | 验证码后端服务地址 | `string` | `''` |
-| prefix | API 路径前缀，需与后端 `API_PREFIX` 一致 | `string` | `/api/v1` |
+| baseURL | 验证码服务的 origin，例如 `https://captcha.example.com`；只能是 origin，不带路径，不传表示与页面同源 | `string` | `''` |
+| appId | 验证码服务管理后台「接入应用」里的应用 ID，必填；当前页面的 origin 必须在该应用的允许来源里 | `string` | - |
 
-后端使用自定义前缀时，可配置为 `api={{ basePath: 'http://foo.com', prefix: '/captcha/api' }}`。使用 `/` 或空字符串可将请求直接挂载到 `/captchas`。
+API 路径固定为 `/api/v1`。缺少 `appId` 或 `baseURL` 带路径时，出题直接以 `LOAD_FAILED` 失败；服务端拒绝本应用（应用不存在或已停用、来源不在允许名单内）时以 `APP_REJECTED` 通知。
+
+**从 2.x 升级**：`api={{ basePath, prefix }}` 改为 `api={{ baseURL, appId }}`，并先在管理后台创建应用、填写允许来源。
 
 SDK 会自动完成以下工作，无需业务侧干预：
 
@@ -75,7 +77,7 @@ SDK 会自动完成以下工作，无需业务侧干预：
 | maxAttempts | 连续答错的次数上限，达到后关闭弹窗并以 `MAX_ATTEMPTS` 触发 `onFail` | `number` | `5` |
 | width | 题图渲染宽度（CSS 像素），高度按 3:2 推算 | `number` | `300` |
 | onSuccess | 校验成功回调，`data.second_key` 用于二次验证 | `(data: CaptchaVerifySuccessData) => void` | - |
-| onFail | 题目加载失败（`LOAD_FAILED`）或答错次数用完（`MAX_ATTEMPTS`）时触发 | `(error: CaptchaError) => void` | - |
+| onFail | 题目加载失败（`LOAD_FAILED`）、答错次数用完（`MAX_ATTEMPTS`）或服务端拒绝本应用（`APP_REJECTED`）时触发 | `(error: CaptchaError) => void` | - |
 | onCancel | 用户关闭弹窗时触发，此时不会再触发 `onFail` | `() => void` | - |
 | children | 原样渲染，通常放触发按钮 | `ReactNode` | - |
 
@@ -97,7 +99,7 @@ export default () => {
   const { verify, holder } = useCaptcha();
 
   return (
-    <CaptchaProvider api={{ basePath: 'http://foo.com' }}>
+    <CaptchaProvider api={{ baseURL: 'https://captcha.example.com', appId: 'app_xxxxxxxxxxxx' }}>
       {holder}
       <button
         onClick={async () => {
@@ -124,11 +126,12 @@ export default () => {
 | code | 触发场景 | 通知方式 |
 |---|---|---|
 | `CANCELLED` | 用户关闭弹窗 | 组件模式只触发 `onCancel`；Hook 模式同时以此 reject |
-| `LOAD_FAILED` | 题目获取失败：网络异常、限流或服务端拒绝 | `onFail`，Hook 模式同时 reject |
+| `LOAD_FAILED` | 题目获取失败：网络异常、缺少 `appId`、`baseURL` 不是 origin，或服务端返回其他错误 | `onFail`，Hook 模式同时 reject |
 | `MAX_ATTEMPTS` | 连续答错达到 `maxAttempts`，弹窗已关闭 | `onFail`，Hook 模式同时 reject |
 | `ABORTED` | 上一次 `verify()` 被新的调用替换，或组件已卸载 | 仅 Hook 模式 reject |
+| `APP_REJECTED` | 服务端拒绝了本应用：应用不存在或已停用（`1010`），或当前页面来源不在允许名单内（`1011`）；提交时出现不计入答错次数 | `onFail`，Hook 模式同时 reject |
 
-`error.message` 是可直接展示的中文说明；`LOAD_FAILED` 与 `MAX_ATTEMPTS` 还带有 `error.response`，即服务端返回的 `{ code, error }`。
+`error.message` 是可直接展示的中文说明；`LOAD_FAILED`、`MAX_ATTEMPTS` 与 `APP_REJECTED` 还带有 `error.response`，即服务端返回的 `{ code, error }`。
 
 ## LocaleTexts
 
@@ -192,10 +195,8 @@ curl -X GET \
   -H "Authorization: Bearer <应用密钥>"
 ```
 
-应用密钥在验证码服务的管理后台「接入应用」中创建，每个业务后端一把，只在业务后端使用。
-只有返回 `{"valid": true}` 才代表验证通过，可以放行业务逻辑。
-
-若后端配置了自定义 `API_PREFIX`，此 S2S 地址中的 `/api/v1` 也需替换为相同前缀。
+应用密钥在验证码服务的管理后台「接入应用」中创建，与前端使用的 `appId` 属于同一个应用，只在业务后端使用。
+只有返回 `{"valid": true}` 才代表验证通过，可以放行业务逻辑；`second_key` 只能用出题应用自己的密钥查询，且只能查询一次。
 
 ## 本地开发
 

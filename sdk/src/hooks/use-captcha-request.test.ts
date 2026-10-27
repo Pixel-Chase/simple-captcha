@@ -17,20 +17,16 @@ const env: CaptchaEnv = {
 };
 
 describe('captchaEndpointFor', () => {
-  it('默认前缀 /api/v1', () => {
-    expect(captchaEndpointFor({})).toBe('/api/v1/captchas');
+  it('不传 baseURL 时与页面同源，路径固定为 /api/v1', () => {
+    expect(captchaEndpointFor({ appId: 'app_x' })).toBe('/api/v1/captchas');
   });
 
-  it('规范化 basePath 与 prefix', () => {
-    expect(
-      captchaEndpointFor({ basePath: 'https://captcha.example.com/', prefix: '/captcha/api/' }),
-    ).toBe('https://captcha.example.com/captcha/api/captchas');
-  });
-
-  it('空 prefix 挂在根路径', () => {
-    expect(captchaEndpointFor({ prefix: '/' })).toBe('/captchas');
-    expect(captchaEndpointFor({ basePath: 'http://localhost:8080', prefix: '' })).toBe(
-      'http://localhost:8080/captchas',
+  it('baseURL 去掉末尾斜杠', () => {
+    expect(captchaEndpointFor({ baseURL: 'https://captcha.example.com/', appId: 'app_x' })).toBe(
+      'https://captcha.example.com/api/v1/captchas',
+    );
+    expect(captchaEndpointFor({ baseURL: ' http://localhost:3321// ', appId: 'app_x' })).toBe(
+      'http://localhost:3321/api/v1/captchas',
     );
   });
 });

@@ -1,112 +1,89 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
-	"simple-captcha/config"
+	"simple-captcha/helper"
+	"simple-captcha/services"
 
 	"github.com/gin-gonic/gin"
 )
 
-// CORSMiddleware 跨域中间件
-// 可选参数用于测试或自定义路由注入；不传时使用应用全局配置。
-func CORSMiddleware(corsConfigs ...config.CORSConfig) gin.HandlerFunc {
-	var cfg config.CORSConfig
-	if len(corsConfigs) > 0 {
-		cfg = corsConfigs[0]
-	} else {
-		appConfig := config.GetConfig()
-		if appConfig == nil {
-			appConfig = config.LoadConfig()
-		}
-		cfg = appConfig.CORS
-	}
+const appIDContextKey = "app_id"
 
+// AppOriginMiddleware 用户侧接口（出题、提交）的按应用跨域与来源校验，只挂在这两类路由上：
+//   - 预检（OPTIONS）对任意 Origin 都返回 204 并回显来源。预检一旦失败浏览器根本不会发出真实请求，
+//     SDK 只能看到网络错误、读不到错误码；真正的拦截放在真实请求上
+//   - 真实请求先按查询参数 appId 校验来源，失败返回 403 与错误码（同样回显来源，SDK 才读得到），
+//     通过后才进入出题或提交逻辑，被拒绝的请求不消耗出图 CPU
+//
+// 管理接口与 S2S 状态查询不挂本中间件，不返回任何跨域响应头
+func AppOriginMiddleware(apps *services.AppService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !cfg.Enabled {
-			c.Next()
-			return
-		}
-
-		origin := c.Request.Header.Get("Origin")
-		if origin == "" {
-			c.Next()
-			return
-		}
-
-		allowAllOrigins := contains(cfg.AllowOrigins, "*")
-		if !allowAllOrigins || cfg.AllowCredentials {
+		origin := c.GetHeader("Origin")
+		if origin != "" {
+			c.Header("Access-Control-Allow-Origin", origin)
 			addVaryHeader(c, "Origin")
 		}
-		if !allowAllOrigins && !contains(cfg.AllowOrigins, origin) {
-			if isPreflightRequest(c.Request) {
-				c.AbortWithStatus(http.StatusForbidden)
-				return
-			}
-			c.Next()
-			return
-		}
 
-		// 携带凭证时规范不允许返回通配符，因此需要回显已获准的来源。
-		if allowAllOrigins && !cfg.AllowCredentials {
-			c.Header("Access-Control-Allow-Origin", "*")
-		} else {
-			c.Header("Access-Control-Allow-Origin", origin)
-		}
-
-		if cfg.AllowCredentials {
-			c.Header("Access-Control-Allow-Credentials", "true")
-		}
-		if len(cfg.ExposeHeaders) > 0 {
-			c.Header("Access-Control-Expose-Headers", strings.Join(cfg.ExposeHeaders, ", "))
-		}
-
-		if isPreflightRequest(c.Request) {
-			requestMethod := c.GetHeader("Access-Control-Request-Method")
-			if requestMethod != "" && !containsFold(cfg.AllowMethods, requestMethod) {
-				c.AbortWithStatus(http.StatusForbidden)
-				return
-			}
-
-			c.Header("Access-Control-Allow-Methods", strings.Join(cfg.AllowMethods, ", "))
-			if len(cfg.AllowHeaders) > 0 {
-				c.Header("Access-Control-Allow-Headers", strings.Join(cfg.AllowHeaders, ", "))
-			}
-			if cfg.MaxAge > 0 {
-				c.Header("Access-Control-Max-Age", strconv.FormatInt(int64(cfg.MaxAge.Seconds()), 10))
-			}
+		if c.Request.Method == http.MethodOptions {
+			c.Header("Access-Control-Allow-Methods", "POST, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Content-Type")
+			c.Header("Access-Control-Max-Age", "86400")
 			addVaryHeader(c, "Access-Control-Request-Method")
 			addVaryHeader(c, "Access-Control-Request-Headers")
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
+		appID := c.Query("appId")
+		if err := apps.CheckOrigin(appID, origin, RequestOrigin(c)); err != nil {
+			// appId 与 Origin 都是外部输入，用 %q 转义避免日志注入
+			log.Printf("来源校验未通过: app=%q, origin=%q, ip=%s, code=%d", appID, origin, helper.GetRealClientIP(c), err.Code)
+			helper.ErrorResponse(c, err)
+			c.Abort()
+			return
+		}
+		c.Set(appIDContextKey, appID)
 		c.Next()
 	}
 }
 
-func isPreflightRequest(request *http.Request) bool {
-	return request.Method == http.MethodOptions && request.Header.Get("Access-Control-Request-Method") != ""
-}
-
-func contains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
+// RequestOrigin 请求自身的 scheme://host，用于判定系统应用的同源请求。
+// 只有直连来源命中 TRUSTED_PROXIES 时才采信 X-Forwarded-Host / X-Forwarded-Proto（取第一个值），
+// 否则任何客户端都能伪造这两个头冒充同源
+func RequestOrigin(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	host := c.Request.Host
+	if helper.IsTrustedProxyRequest(c) {
+		if v := firstHeaderValue(c.GetHeader("X-Forwarded-Proto")); v != "" {
+			scheme = strings.ToLower(v)
+		}
+		if v := firstHeaderValue(c.GetHeader("X-Forwarded-Host")); v != "" {
+			host = v
 		}
 	}
-	return false
+	return scheme + "://" + host
 }
 
-func containsFold(values []string, target string) bool {
-	for _, value := range values {
-		if strings.EqualFold(value, target) {
-			return true
+// GetRequestAppID 通过来源校验的应用 ID（查询参数 appId）；未经过校验时返回空串
+func GetRequestAppID(c *gin.Context) string {
+	if v, ok := c.Get(appIDContextKey); ok {
+		if id, ok := v.(string); ok {
+			return id
 		}
 	}
-	return false
+	return ""
+}
+
+func firstHeaderValue(v string) string {
+	first, _, _ := strings.Cut(v, ",")
+	return strings.TrimSpace(first)
 }
 
 func addVaryHeader(c *gin.Context, value string) {

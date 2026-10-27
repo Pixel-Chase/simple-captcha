@@ -10,41 +10,41 @@ import (
 )
 
 // 测试验证码请求验证
-func TestCaptchaRequest_Validate_Success(t *testing.T) {
+func TestIssueRequest_Validate_Success(t *testing.T) {
 	tests := []struct {
 		name string
-		req  models.CaptchaRequest
+		req  models.IssueRequest
 	}{
 		{
 			name: "click-text with light mode",
-			req: models.CaptchaRequest{
+			req: models.IssueRequest{
 				Type: "click-text",
 				Mode: "light",
 			},
 		},
 		{
 			name: "click-shape with dark mode",
-			req: models.CaptchaRequest{
+			req: models.IssueRequest{
 				Type: "click-shape",
 				Mode: "dark",
 			},
 		},
 		{
 			name: "rotate without mode",
-			req: models.CaptchaRequest{
+			req: models.IssueRequest{
 				Type: "rotate",
 			},
 		},
 		{
 			name: "slide-text with light mode",
-			req: models.CaptchaRequest{
+			req: models.IssueRequest{
 				Type: "slide-text",
 				Mode: "light",
 			},
 		},
 		{
 			name: "slide-region with dark mode",
-			req: models.CaptchaRequest{
+			req: models.IssueRequest{
 				Type: "slide-region",
 				Mode: "dark",
 			},
@@ -59,21 +59,21 @@ func TestCaptchaRequest_Validate_Success(t *testing.T) {
 	}
 }
 
-func TestCaptchaRequest_Validate_InvalidType(t *testing.T) {
+func TestIssueRequest_Validate_InvalidType(t *testing.T) {
 	tests := []struct {
 		name string
-		req  models.CaptchaRequest
+		req  models.IssueRequest
 	}{
 		{
 			name: "invalid type",
-			req: models.CaptchaRequest{
+			req: models.IssueRequest{
 				Type: "invalid-type",
 				Mode: "light",
 			},
 		},
 		{
 			name: "empty type",
-			req: models.CaptchaRequest{
+			req: models.IssueRequest{
 				Type: "",
 				Mode: "light",
 			},
@@ -88,8 +88,8 @@ func TestCaptchaRequest_Validate_InvalidType(t *testing.T) {
 	}
 }
 
-func TestCaptchaRequest_Validate_InvalidMode(t *testing.T) {
-	req := models.CaptchaRequest{
+func TestIssueRequest_Validate_InvalidMode(t *testing.T) {
+	req := models.IssueRequest{
 		Type: "click-text",
 		Mode: "invalid-mode",
 	}
@@ -323,8 +323,8 @@ func TestStateRequest_Validate_InvalidKey(t *testing.T) {
 }
 
 // 基准测试
-func BenchmarkCaptchaRequest_Validate(b *testing.B) {
-	req := models.CaptchaRequest{
+func BenchmarkIssueRequest_Validate(b *testing.B) {
+	req := models.IssueRequest{
 		Type: "click-text",
 		Mode: "light",
 	}

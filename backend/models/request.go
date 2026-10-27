@@ -23,20 +23,7 @@ const (
 	maxPowNonceLength    = 64
 )
 
-// CaptchaRequest 验证码请求结构
-type CaptchaRequest struct {
-	Type string  `uri:"type" binding:"required,oneof=auto click-text click-shape rotate slide-text slide-region"`
-	Mode string  `form:"mode" binding:"omitempty,oneof=light dark"`
-	Dpr  float64 `form:"dpr" binding:"omitempty,min=1,max=3"` // 前端 devicePixelRatio，决定出图倍率
-}
-
-// Scale 把 devicePixelRatio 换算为整数出图倍率（1-3）
-func (c *CaptchaRequest) Scale() int {
-	return scaleFromDpr(c.Dpr)
-}
-
-// IssueRequest 出题请求（POST）：请求体携带环境信号，服务端出题前据此加难。
-// 旧版 SDK 仍可用不带请求体的 GET 出题，两者响应完全一致。
+// IssueRequest 出题请求（POST）：请求体携带环境信号，服务端出题前据此加难；请求体可以为空
 type IssueRequest struct {
 	Type string  `uri:"type" json:"-" binding:"required,oneof=auto click-text click-shape rotate slide-text slide-region"`
 	Mode string  `json:"mode" binding:"omitempty,oneof=light dark"`
@@ -232,14 +219,6 @@ func (v *VerifyRequest) Validate() *helper.CaptchaError {
 		return helper.NewCaptchaError(helper.ErrCodeInvalidParam, "参数验证失败", err.Error())
 	}
 
-	return nil
-}
-
-// Validate 验证验证码请求参数
-func (c *CaptchaRequest) Validate() *helper.CaptchaError {
-	if err := ValidateStruct(c); err != nil {
-		return helper.NewCaptchaError(helper.ErrCodeInvalidParam, "参数格式错误", err.Error())
-	}
 	return nil
 }
 

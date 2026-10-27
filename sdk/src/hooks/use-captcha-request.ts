@@ -11,6 +11,7 @@ import type {
   CaptchaVerifySuccessData,
 } from '../Captcha.types';
 import { useCaptchaConfig } from '../CaptchaProvider';
+import { API_PREFIX, apiConfigError, normalizeBaseURL, withAppId } from '../utils/api-config';
 
 export interface GetCaptchaOption {
   type: CaptchaType;
@@ -48,12 +49,9 @@ export function getDevicePixelRatio(): number {
   return Math.min(3, Math.max(1, dpr));
 }
 
-/** 拼接验证码接口根路径：basePath 去掉末尾斜杠，prefix 规范化为单个前导斜杠，空 prefix 表示挂在根路径 */
-export function captchaEndpointFor(api: ApiConfig): string {
-  const basePath = (api.basePath || '').replace(/\/+$/, '');
-  const normalizedPrefix = (api.prefix ?? '/api/v1').trim().replace(/^\/+|\/+$/g, '');
-  const apiPrefix = normalizedPrefix ? `/${normalizedPrefix}` : '';
-  return `${basePath}${apiPrefix}/captchas`;
+/** 拼接验证码接口根路径：`${baseURL}/api/v1/captchas` */
+export function captchaEndpointFor(api: Partial<ApiConfig>): string {
+  return `${normalizeBaseURL(api.baseURL)}${API_PREFIX}/captchas`;
 }
 
 /** 组装出题请求体；未提供的字段不写入，避免服务端把 undefined 当作显式值 */
@@ -76,11 +74,17 @@ export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
   const captchaEndpoint = captchaEndpointFor(api);
 
   const get = async (env?: CaptchaEnv): Promise<CaptchaChallengeData> => {
+    const configError = apiConfigError(api);
+    if (configError) {
+      const normalizedError = { code: 400, error: configError };
+      setError(normalizedError);
+      throw normalizedError;
+    }
     setLoading(true);
     setError(null);
     try {
-      // 出题改为 POST：环境信号随请求体上报，服务端出题前据此加难；响应与旧版 GET 完全一致
-      const url = `${captchaEndpoint}/${option.type}`;
+      // 出题用 POST：环境信号随请求体上报，服务端出题前据此加难
+      const url = withAppId(`${captchaEndpoint}/${option.type}`, api.appId);
       const res = await request.post<CaptchaChallengeData | CaptchaErrorResponse>(
         url,
         buildIssuePayload(option, env),
@@ -112,7 +116,7 @@ export function useCaptchaRequest(option: GetCaptchaOption): GetCaptchaResult {
     try {
       // 提交路径使用服务端实际下发的题型（auto 已被服务端解析）
       const resolvedType = data?.type || option.type;
-      const url = `${captchaEndpoint}/${resolvedType}/${data?.key}/attempts`;
+      const url = withAppId(`${captchaEndpoint}/${resolvedType}/${data?.key}/attempts`, api.appId);
       const res = await request.post<CaptchaVerifySuccessData | CaptchaErrorResponse>(url, body);
       if (isCaptchaErrorResponse(res.data)) {
         setError(res.data);

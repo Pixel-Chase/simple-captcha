@@ -10,6 +10,7 @@ import (
 	"simple-captcha/controllers"
 	"simple-captcha/middleware"
 	"simple-captcha/models"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -34,9 +35,9 @@ func setupTestRouter() *gin.Engine {
 	r.Use(middleware.ErrorHandlerMiddleware())
 
 	captchaGroup := r.Group("/api/v1/captchas")
-	captchaGroup.GET("/:type",
-		middleware.ValidateCaptchaRequest(),
-		controllers.GetCaptchaHandler)
+	captchaGroup.POST("/:type",
+		middleware.ValidateIssueRequest(),
+		controllers.IssueCaptchaHandler)
 	captchaGroup.POST("/:type/:key/attempts",
 		middleware.ValidateVerifyRequest(),
 		controllers.VerifyCaptchaHandler)
@@ -47,6 +48,13 @@ func setupTestRouter() *gin.Engine {
 	return r
 }
 
+// postIssue 以 POST 出题，body 为 JSON 请求体（可为空）
+func postIssue(path, body string) *http.Request {
+	req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
 func decodeBody(t *testing.T, w *httptest.ResponseRecorder) map[string]interface{} {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
@@ -54,10 +62,10 @@ func decodeBody(t *testing.T, w *httptest.ResponseRecorder) map[string]interface
 	return response
 }
 
-func TestGetCaptchaHandler_ValidRequest(t *testing.T) {
+func TestIssueCaptchaHandler_ValidRequest(t *testing.T) {
 	router := setupTestRouter()
 
-	req, _ := http.NewRequest("GET", "/api/v1/captchas/click-text?mode=dark", nil)
+	req := postIssue("/api/v1/captchas/click-text", `{"mode":"dark"}`)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -76,10 +84,10 @@ func TestGetCaptchaHandler_ValidRequest(t *testing.T) {
 	assert.Contains(t, response, "pow", "默认应下发 PoW 挑战")
 }
 
-func TestGetCaptchaHandler_ScaleFromDpr(t *testing.T) {
+func TestIssueCaptchaHandler_ScaleFromDpr(t *testing.T) {
 	router := setupTestRouter()
 
-	req, _ := http.NewRequest("GET", "/api/v1/captchas/slide-text?dpr=3", nil)
+	req := postIssue("/api/v1/captchas/slide-text", `{"dpr":3}`)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -93,12 +101,12 @@ func TestGetCaptchaHandler_ScaleFromDpr(t *testing.T) {
 	assert.LessOrEqual(t, response["thumbWidth"], float64(210))
 }
 
-func TestGetCaptchaHandler_AutoTypeResolvedByServer(t *testing.T) {
+func TestIssueCaptchaHandler_AutoTypeResolvedByServer(t *testing.T) {
 	router := setupTestRouter()
 	allowed := map[string]bool{"click-text": true, "click-shape": true, "slide-text": true, "slide-region": true, "rotate": true}
 
 	for i := 0; i < 5; i++ {
-		req, _ := http.NewRequest("GET", "/api/v1/captchas/auto", nil)
+		req := postIssue("/api/v1/captchas/auto", "")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -108,10 +116,10 @@ func TestGetCaptchaHandler_AutoTypeResolvedByServer(t *testing.T) {
 	}
 }
 
-func TestGetCaptchaHandler_InvalidType(t *testing.T) {
+func TestIssueCaptchaHandler_InvalidType(t *testing.T) {
 	router := setupTestRouter()
 
-	req, _ := http.NewRequest("GET", "/api/v1/captchas/invalid-type", nil)
+	req := postIssue("/api/v1/captchas/invalid-type", "")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -181,23 +189,23 @@ func TestCaptchaStateHandler_InvalidKey(t *testing.T) {
 	assert.EqualValues(t, 1004, response["code"])
 }
 
-func TestValidateCaptchaRequest_Success(t *testing.T) {
-	req := &models.CaptchaRequest{Type: "click-text", Mode: "light"}
+func TestValidateIssueRequest_Success(t *testing.T) {
+	req := &models.IssueRequest{Type: "click-text", Mode: "light"}
 	assert.Nil(t, req.Validate())
 
-	auto := &models.CaptchaRequest{Type: "auto"}
+	auto := &models.IssueRequest{Type: "auto"}
 	assert.Nil(t, auto.Validate())
 }
 
-func TestValidateCaptchaRequest_InvalidType(t *testing.T) {
-	req := &models.CaptchaRequest{Type: "invalid-type", Mode: "light"}
+func TestValidateIssueRequest_InvalidType(t *testing.T) {
+	req := &models.IssueRequest{Type: "invalid-type", Mode: "light"}
 	assert.NotNil(t, req.Validate())
 }
 
-func TestCaptchaRequest_Scale(t *testing.T) {
+func TestIssueRequest_Scale(t *testing.T) {
 	cases := map[float64]int{0: 1, 1: 1, 1.5: 2, 2: 2, 2.6: 3, 3: 3, 9: 3}
 	for dpr, expected := range cases {
-		req := &models.CaptchaRequest{Dpr: dpr}
+		req := &models.IssueRequest{Dpr: dpr}
 		assert.Equal(t, expected, req.Scale(), "dpr=%v", dpr)
 	}
 }
@@ -258,17 +266,17 @@ func TestMiddlewareValidation_MissingParams(t *testing.T) {
 
 // 基准测试
 func BenchmarkValidateRequest(b *testing.B) {
-	req := &models.CaptchaRequest{Type: "click-text", Mode: "light"}
+	req := &models.IssueRequest{Type: "click-text", Mode: "light"}
 	for i := 0; i < b.N; i++ {
 		req.Validate()
 	}
 }
 
-func BenchmarkGetCaptchaHandler(b *testing.B) {
+func BenchmarkIssueCaptchaHandler(b *testing.B) {
 	router := setupTestRouter()
 
 	for i := 0; i < b.N; i++ {
-		req, _ := http.NewRequest("GET", "/api/v1/captchas/click-text", nil)
+		req := postIssue("/api/v1/captchas/click-text", "")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 	}

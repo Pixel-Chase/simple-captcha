@@ -17,18 +17,16 @@ type ChallengeMeta struct {
 	Difficulty int    `json:"difficulty"`
 	PowNonce   string `json:"powNonce,omitempty"`
 	PowBits    int    `json:"powBits,omitempty"`
+	// AppID 出题时所属的应用：提交必须来自同一应用，签发的二次验证 key 也只能被它查询
+	AppID string `json:"appId,omitempty"`
 }
 
-// BaseService 基础服务类
-type BaseService struct {
-	config *config.Config
-}
+// BaseService 基础服务类：题目数据的存取；策略值每次使用时从 config.Runtime() 读取
+type BaseService struct{}
 
 // NewBaseService 创建基础服务
 func NewBaseService() *BaseService {
-	return &BaseService{
-		config: config.LoadConfig(),
-	}
+	return &BaseService{}
 }
 
 // normalizeRequest 返回裁剪过倍率与难度的请求副本
@@ -40,11 +38,12 @@ func (bs *BaseService) normalizeRequest(req *ChallengeRequest, serviceType strin
 	if out.Type == "" {
 		out.Type = serviceType
 	}
+	rt := config.Runtime()
 	if out.Difficulty == 0 {
-		out.Difficulty = bs.config.Captcha.DefaultDifficulty
+		out.Difficulty = rt.Captcha.DefaultDifficulty
 	}
 	out.Difficulty = ClampDifficulty(out.Difficulty)
-	out.Scale = ClampScale(out.Scale, bs.config.Captcha.MaxScale)
+	out.Scale = ClampScale(out.Scale, rt.Captcha.MaxScale)
 	return &out
 }
 
@@ -60,27 +59,29 @@ func (bs *BaseService) persistChallenge(req *ChallengeRequest, data interface{})
 		ClientHash: req.ClientHash,
 		Scale:      req.Scale,
 		Difficulty: req.Difficulty,
+		AppID:      req.AppID,
 	}
 
-	if bs.config.Captcha.PowEnabled {
+	rt := config.Runtime()
+	if rt.Pow.Enabled {
 		nonce, err := helper.GenerateSecureKey()
 		if err != nil {
 			return "", nil, helper.NewCaptchaError(helper.ErrCodeInternalError, "生成PoW挑战失败", err.Error())
 		}
 		meta.PowNonce = nonce
-		meta.PowBits = bs.powBits(req.Difficulty)
+		meta.PowBits = powBits(rt.Pow, req.Difficulty)
 	}
 
-	if saveErr := bs.SaveCaptchaData(key, data, meta); saveErr != nil {
+	if saveErr := bs.saveCaptchaData(rt, key, data, meta); saveErr != nil {
 		return "", nil, saveErr
 	}
 	return key, meta, nil
 }
 
 // powBits 根据难度等级计算 PoW 前导零位数
-func (bs *BaseService) powBits(level int) int {
-	bits := bs.config.Captcha.PowDifficulty + GetDifficultyProfile(level).PowExtraBits
-	if maxBits := bs.config.Captcha.PowMaxDifficulty; bits > maxBits {
+func powBits(pow config.PowSettings, level int) int {
+	bits := pow.Difficulty + GetDifficultyProfile(level).PowExtraBits
+	if maxBits := pow.MaxDifficulty; bits > maxBits {
 		bits = maxBits
 	}
 	if bits < 1 {
@@ -89,10 +90,14 @@ func (bs *BaseService) powBits(level int) int {
 	return bits
 }
 
-// SaveCaptchaData 保存验证码答案与出题上下文到缓存
+// SaveCaptchaData 保存验证码答案与出题上下文到进程内存
 func (bs *BaseService) SaveCaptchaData(key string, data interface{}, meta *ChallengeMeta) *helper.CaptchaError {
+	return bs.saveCaptchaData(config.Runtime(), key, data, meta)
+}
+
+func (bs *BaseService) saveCaptchaData(rt *config.RuntimeSettings, key string, data interface{}, meta *ChallengeMeta) *helper.CaptchaError {
 	if meta == nil {
-		meta = &ChallengeMeta{Scale: 1, Difficulty: bs.config.Captcha.DefaultDifficulty}
+		meta = &ChallengeMeta{Scale: 1, Difficulty: rt.Captcha.DefaultDifficulty}
 	}
 	now := time.Now()
 
@@ -101,8 +106,8 @@ func (bs *BaseService) SaveCaptchaData(key string, data interface{}, meta *Chall
 		"meta":         meta,
 		"createTime":   now.Unix(),
 		"createTimeMs": now.UnixMilli(),
-		"expireAt":     now.Add(bs.config.Captcha.CacheExpiration).Unix(),
-		"maxAttempts":  bs.config.Captcha.MaxAttempts,
+		"expireAt":     now.Add(rt.Captcha.Expire()).Unix(),
+		"maxAttempts":  rt.Captcha.MaxAttempts,
 		"attempts":     0,
 		"verified":     false,
 	}
@@ -112,33 +117,26 @@ func (bs *BaseService) SaveCaptchaData(key string, data interface{}, meta *Chall
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
 	}
 
-	if err = cache.Set(key, verifyDataBytes, bs.config.Captcha.CacheExpiration); err != nil {
-		return helper.NewCaptchaError(helper.ErrCodeCacheError, "保存验证码数据失败", err.Error())
-	}
-
+	cache.Shared().Set(cache.KindChallenge, key, verifyDataBytes, rt.Captcha.Expire())
 	return nil
 }
 
-// GetCaptchaData 从缓存获取验证码数据
+// GetCaptchaData 从进程内存获取验证码数据
 func (bs *BaseService) GetCaptchaData(key string) (map[string]interface{}, *helper.CaptchaError) {
-	if !cache.Exists(key) {
+	raw, ok := cache.Shared().Get(cache.KindChallenge, key)
+	if !ok {
 		return nil, helper.NewCaptchaError(helper.ErrCodeExpired, "验证码不存在或已失效")
 	}
 
-	cacheDataByte := cache.Get(key)
-	if cacheDataByte == nil {
-		return nil, helper.NewCaptchaError(helper.ErrCodeCacheError, "获取验证码数据失败")
-	}
-
 	var verifyData map[string]interface{}
-	if err := json.Unmarshal([]byte(*cacheDataByte), &verifyData); err != nil {
-		cache.Del(key)
+	if err := json.Unmarshal(raw, &verifyData); err != nil {
+		cache.Shared().Del(cache.KindChallenge, key)
 		return nil, helper.NewCaptchaError(helper.ErrCodeCacheError, "验证码数据格式错误")
 	}
 
 	if expireAt, ok := verifyData["expireAt"].(float64); ok {
 		if time.Now().Unix() > int64(expireAt) {
-			cache.Del(key)
+			cache.Shared().Del(cache.KindChallenge, key)
 			return nil, helper.NewCaptchaError(helper.ErrCodeExpired, "验证码已过期")
 		}
 	}
@@ -175,23 +173,28 @@ func CreatedAt(verifyData map[string]interface{}) time.Time {
 	return time.Time{}
 }
 
-// UpdateCaptchaData 更新验证码数据
+// UpdateCaptchaData 更新验证码数据：过期时间沿用出题时的设定；题目已失效时不会重新写入
 func (bs *BaseService) UpdateCaptchaData(key string, verifyData map[string]interface{}) *helper.CaptchaError {
 	verifyDataBytes, err := json.Marshal(verifyData)
 	if err != nil {
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
 	}
 
-	if err = cache.Set(key, verifyDataBytes, bs.config.Captcha.CacheExpiration); err != nil {
-		return helper.NewCaptchaError(helper.ErrCodeCacheError, "更新验证码数据失败", err.Error())
+	existed := false
+	// 条目不存在时不会重新写入，ttl 参数不会生效
+	cache.Shared().Update(cache.KindChallenge, key, 0, func(_ []byte, ok bool) ([]byte, bool) {
+		existed = ok
+		return verifyDataBytes, ok
+	})
+	if !existed {
+		return helper.NewCaptchaError(helper.ErrCodeExpired, "验证码不存在或已失效")
 	}
-
 	return nil
 }
 
 // DeleteCaptchaData 删除验证码数据
 func (bs *BaseService) DeleteCaptchaData(key string) {
-	cache.Del(key)
+	cache.Shared().Del(cache.KindChallenge, key)
 }
 
 // GenerateKey 生成与答案无关的随机验证码 key
@@ -203,26 +206,32 @@ func (bs *BaseService) GenerateKey() (string, *helper.CaptchaError) {
 	return key, nil
 }
 
-// IncrementAttempts 增加尝试次数
+// IncrementAttempts 原子地把尝试次数加一：并发提交同一道题时每次都会被计入，不会因读改写交错而少算
 func (bs *BaseService) IncrementAttempts(key string) (int, *helper.CaptchaError) {
-	verifyData, err := bs.GetCaptchaData(key)
-	if err != nil {
-		return 0, err
-	}
-
-	attempts, ok := verifyData["attempts"].(float64)
-	if !ok {
-		attempts = 0
-	}
-
-	attempts++
-	verifyData["attempts"] = attempts
-
-	if updateErr := bs.UpdateCaptchaData(key, verifyData); updateErr != nil {
-		return int(attempts), updateErr
-	}
-
-	return int(attempts), nil
+	attempts := 0
+	var cerr *helper.CaptchaError
+	cache.Shared().Update(cache.KindChallenge, key, 0, func(old []byte, ok bool) ([]byte, bool) {
+		if !ok {
+			cerr = helper.NewCaptchaError(helper.ErrCodeExpired, "验证码不存在或已失效")
+			return nil, false
+		}
+		var verifyData map[string]interface{}
+		if err := json.Unmarshal(old, &verifyData); err != nil {
+			cerr = helper.NewCaptchaError(helper.ErrCodeCacheError, "验证码数据格式错误")
+			return nil, false
+		}
+		count, _ := verifyData["attempts"].(float64)
+		count++
+		verifyData["attempts"] = count
+		next, err := json.Marshal(verifyData)
+		if err != nil {
+			cerr = helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
+			return old, true
+		}
+		attempts = int(count)
+		return next, true
+	})
+	return attempts, cerr
 }
 
 // IsMaxAttemptsReached 检查是否达到最大尝试次数
@@ -232,17 +241,17 @@ func (bs *BaseService) IsMaxAttemptsReached(key string) (bool, *helper.CaptchaEr
 		return true, err
 	}
 
-	attempts, ok := verifyData["attempts"].(float64)
-	if !ok {
-		attempts = 0
-	}
+	attempts, _ := verifyData["attempts"].(float64)
+	return int(attempts) >= attemptLimit(verifyData, config.Runtime()), nil
+}
 
-	maxAttempts, ok := verifyData["maxAttempts"].(float64)
-	if !ok {
-		maxAttempts = float64(bs.config.Captcha.MaxAttempts)
+// attemptLimit 题目的尝试次数上限：以出题时写入的值为准，与过期时间一样不受之后的策略修改影响，
+// 同一道题从入口检查到失败计数只用这一个上限；记录缺少该字段时退回当前策略
+func attemptLimit(verifyData map[string]interface{}, rt *config.RuntimeSettings) int {
+	if limit, ok := verifyData["maxAttempts"].(float64); ok && limit > 0 {
+		return int(limit)
 	}
-
-	return attempts >= maxAttempts, nil
+	return rt.Captcha.MaxAttempts
 }
 
 // MarkAsVerified 标记为已验证
@@ -265,9 +274,6 @@ func (bs *BaseService) SaveSecondVerifyData(key string, data map[string]interfac
 		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化二次验证数据失败", err.Error())
 	}
 
-	if err = cache.Set(key, dataBytes, bs.config.Captcha.SecondVerifyExpire); err != nil {
-		return helper.NewCaptchaError(helper.ErrCodeCacheError, "保存二次验证数据失败", err.Error())
-	}
-
+	cache.Shared().Set(cache.KindChallenge, key, dataBytes, config.Runtime().Captcha.SecondVerifyExpire())
 	return nil
 }

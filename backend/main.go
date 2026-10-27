@@ -11,17 +11,26 @@ import (
 	"simple-captcha/config"
 	"simple-captcha/routes"
 	"simple-captcha/services"
+	"simple-captcha/storage"
 	"syscall"
 )
 
 func main() {
-	// 子命令：重置管理员密码（遗失初始密码或忘记密码时使用），不启动服务
-	if len(os.Args) > 1 && os.Args[1] == "reset-admin-password" {
-		os.Exit(runResetAdminPassword(config.LoadConfig().Admin, os.Stdout, os.Stderr))
+	// 子命令：重置管理员账号（遗失密码时使用），不启动服务
+	if len(os.Args) > 1 && os.Args[1] == "reset-admin" {
+		os.Exit(runResetAdmin(config.LoadConfig().Admin.DataDir, os.Stdout, os.Stderr))
 	}
 
 	// 初始化配置
 	cfg := config.LoadConfig()
+
+	// 持久数据存储（数据目录下的 captcha.db）：打不开时直接退出，原因写在错误里（目录不可写、文件损坏等）
+	db, err := storage.Open(cfg.Admin.DataDir)
+	if err != nil {
+		log.Fatalln("打开数据存储失败:", err)
+	}
+	log.Printf("数据存储: %s", db.Path())
+	services.UseStorage(db)
 
 	// 初始化服务管理器
 	serviceManager := services.GetServiceManager()
@@ -79,15 +88,22 @@ func main() {
 	serviceManager.Shutdown()
 }
 
-// runResetAdminPassword 子命令 `simple-captcha reset-admin-password`：
-// 重新生成随机管理员密码并打印到标准输出，下次登录后必须修改。数据目录与服务一致（工作目录下的 data），
-// 服务运行中执行也会立即生效，已有会话全部失效；容器部署时用 docker compose exec 在容器内执行。
-func runResetAdminPassword(cfg config.AdminConfig, stdout, stderr io.Writer) int {
-	password, err := services.ResetAdminPassword(cfg.DataDir)
+// runResetAdmin 子命令 `simple-captcha reset-admin`：删除管理员账号与全部会话，生成新的初始化口令并打印，
+// 之后在控制台初始化页面重新设置用户名与密码。数据目录与服务一致（工作目录下的 data）；
+// 服务运行中执行也立即生效，无需重启；接入应用、策略与背景图不受影响。容器部署时用 docker compose exec 在容器内执行
+func runResetAdmin(dataDir string, stdout, stderr io.Writer) int {
+	db, err := storage.Open(dataDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "重置管理员密码失败:", err)
+		fmt.Fprintln(stderr, "重置管理员账号失败:", err)
 		return 1
 	}
-	fmt.Fprint(stdout, services.AdminPasswordNotice(cfg.Username, password))
+	defer db.Close()
+	code, err := services.ResetAdmin(context.Background(), db)
+	if err != nil {
+		fmt.Fprintln(stderr, "重置管理员账号失败:", err)
+		return 1
+	}
+	fmt.Fprint(stdout, services.SetupNotice(code))
+	fmt.Fprintln(stdout, "管理员账号与全部会话已删除，服务无需重启；请用上面的口令在控制台重新初始化。")
 	return 0
 }

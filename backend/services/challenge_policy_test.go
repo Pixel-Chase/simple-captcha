@@ -5,23 +5,22 @@ import (
 	"simple-captcha/config"
 	"simple-captcha/risk"
 	"testing"
-	"time"
 )
 
-func testPolicyConfig() *config.Config {
-	return &config.Config{
-		Captcha: config.CaptchaConfig{DefaultDifficulty: 3, IPEscalatePerMin: 30},
-		Risk: config.RiskConfig{
-			Enabled:           true,
-			Mode:              "enforce",
-			EscalateThreshold: 55,
-			BlockThreshold:    85,
-			EnvScoreCap:       60,
-			BlockMinBehavior:  20,
-			FPReplayThreshold: 5,
-			FPReplayWindow:    10 * time.Minute,
-		},
-	}
+// testPolicyConfig 单测使用的固定策略（与默认值一致），按值返回便于逐项修改
+func testPolicyConfig() config.RuntimeSettings {
+	s := config.DefaultRuntimeSettings()
+	s.Captcha.DefaultDifficulty = 3
+	s.Captcha.IPEscalatePerMinute = 30
+	s.Risk.Enabled = true
+	s.Risk.Mode = "enforce"
+	s.Risk.EscalateThreshold = 55
+	s.Risk.BlockThreshold = 85
+	s.Risk.EnvScoreCap = 60
+	s.Risk.BlockMinBehavior = 20
+	s.Risk.FPReplayThreshold = 5
+	s.Risk.FPReplayWindowSeconds = 600
+	return s
 }
 
 func cleanEnv() *risk.Env {
@@ -41,7 +40,7 @@ func cleanEnv() *risk.Env {
 }
 
 func TestDecide_DefaultStaysForCleanEnv(t *testing.T) {
-	policy := newChallengePolicyWithConfig(testPolicyConfig(), nil)
+	policy := newChallengePolicyWithSettings(fixedSettings(testPolicyConfig()), nil)
 	fresh := &ClientRisk{}
 
 	if d := policy.Decide(IssueInput{Env: cleanEnv(), State: fresh}); d.Level != 3 || d.Boost != 0 || d.EnvScore != 0 {
@@ -56,7 +55,7 @@ func TestDecide_DefaultStaysForCleanEnv(t *testing.T) {
 }
 
 func TestDecide_SoftwareRendererAloneDoesNotEscalate(t *testing.T) {
-	policy := newChallengePolicyWithConfig(testPolicyConfig(), nil)
+	policy := newChallengePolicyWithSettings(fixedSettings(testPolicyConfig()), nil)
 	vdi := cleanEnv()
 	vdi.WebGL = "llvmpipe (LLVM 15.0.7, 256 bits)"
 	d := policy.Decide(IssueInput{Env: vdi, State: &ClientRisk{}})
@@ -66,7 +65,7 @@ func TestDecide_SoftwareRendererAloneDoesNotEscalate(t *testing.T) {
 }
 
 func TestDecide_AutomationEscalates(t *testing.T) {
-	policy := newChallengePolicyWithConfig(testPolicyConfig(), nil)
+	policy := newChallengePolicyWithSettings(fixedSettings(testPolicyConfig()), nil)
 
 	webdriver := cleanEnv()
 	webdriver.Webdriver = true
@@ -87,7 +86,7 @@ func TestDecide_AutomationEscalates(t *testing.T) {
 }
 
 func TestDecide_HistoryAndEnvClampToMax(t *testing.T) {
-	policy := newChallengePolicyWithConfig(testPolicyConfig(), nil)
+	policy := newChallengePolicyWithSettings(fixedSettings(testPolicyConfig()), nil)
 	webdriver := cleanEnv()
 	webdriver.Webdriver = true
 	d := policy.Decide(IssueInput{Env: webdriver, State: &ClientRisk{Fails: 4, LastScore: 90}, IPRequests: 100})
@@ -97,14 +96,14 @@ func TestDecide_HistoryAndEnvClampToMax(t *testing.T) {
 }
 
 func TestDecide_IPPressureStillApplies(t *testing.T) {
-	policy := newChallengePolicyWithConfig(testPolicyConfig(), nil)
+	policy := newChallengePolicyWithSettings(fixedSettings(testPolicyConfig()), nil)
 	if d := policy.Decide(IssueInput{Env: cleanEnv(), State: &ClientRisk{}, IPRequests: 31}); d.Level != 4 {
 		t.Errorf("ip pressure above threshold should add one level, got %+v", d)
 	}
 }
 
 func TestDecide_FingerprintReplay(t *testing.T) {
-	policy := newChallengePolicyWithConfig(testPolicyConfig(), nil)
+	policy := newChallengePolicyWithSettings(fixedSettings(testPolicyConfig()), nil)
 	threshold := testPolicyConfig().Risk.FPReplayThreshold
 	if d := policy.Decide(IssueInput{Env: cleanEnv(), State: &ClientRisk{}, FPReplays: threshold}); d.Level != 3 {
 		t.Errorf("replays at threshold should not escalate, got %+v", d)
@@ -116,7 +115,7 @@ func TestDecide_FingerprintReplay(t *testing.T) {
 
 	disabled := testPolicyConfig()
 	disabled.Risk.FPReplayThreshold = 0
-	if d := newChallengePolicyWithConfig(disabled, nil).Decide(IssueInput{Env: cleanEnv(), State: &ClientRisk{}, FPReplays: 99}); d.Level != 3 {
+	if d := newChallengePolicyWithSettings(fixedSettings(disabled), nil).Decide(IssueInput{Env: cleanEnv(), State: &ClientRisk{}, FPReplays: 99}); d.Level != 3 {
 		t.Errorf("threshold 0 disables replay escalation, got %+v", d)
 	}
 }
@@ -124,7 +123,7 @@ func TestDecide_FingerprintReplay(t *testing.T) {
 func TestDecide_RiskDisabledIgnoresEnv(t *testing.T) {
 	cfg := testPolicyConfig()
 	cfg.Risk.Enabled = false
-	policy := newChallengePolicyWithConfig(cfg, nil)
+	policy := newChallengePolicyWithSettings(fixedSettings(cfg), nil)
 	webdriver := cleanEnv()
 	webdriver.Webdriver = true
 	if d := policy.Decide(IssueInput{Env: webdriver, State: &ClientRisk{}}); d.Level != 3 || d.Boost != 0 {
@@ -145,7 +144,7 @@ func TestDecide_NeverBelowDefault(t *testing.T) {
 	for base := MinDifficulty; base <= MaxDifficulty; base++ {
 		cfg := testPolicyConfig()
 		cfg.Captcha.DefaultDifficulty = base
-		policy := newChallengePolicyWithConfig(cfg, nil)
+		policy := newChallengePolicyWithSettings(fixedSettings(cfg), nil)
 		for i := 0; i < 200; i++ {
 			var env *risk.Env
 			if rnd.Intn(3) > 0 {

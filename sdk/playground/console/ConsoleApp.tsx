@@ -1,5 +1,5 @@
 import { CaptchaProvider } from '@aetherlib/g-captcha';
-import { API_BASE, API_PREFIX } from '../api';
+import { CONSOLE_APP_ID } from '../api';
 import { ConsoleView, parseConsoleSection, TopbarUser } from './ConsoleView';
 import type { ConsoleSection } from './ConsoleView';
 import { useConsoleAuth, useLocationHash } from './useConsoleAuth';
@@ -12,11 +12,20 @@ const consoleHref = (section: ConsoleSection) => (section === 'images' ? '#/' : 
  */
 export function ConsoleApp() {
   const section = parseConsoleSection(useLocationHash().replace(/^#/, ''));
-  const { auth, handleSession, handleLogout, handleSessionExpired } = useConsoleAuth();
+  const {
+    auth,
+    handleSession,
+    handleLogout,
+    handleSessionExpired,
+    handleNotInitialized,
+    handleAlreadyInitialized,
+  } = useConsoleAuth();
 
   return (
-    <CaptchaProvider api={{ basePath: API_BASE, prefix: API_PREFIX }}>
-      <div className={auth.status === 'anonymous' ? 'app app--home' : 'app'}>
+    <CaptchaProvider api={{ appId: CONSOLE_APP_ID }}>
+      <div
+        className={auth.status === 'anonymous' || auth.status === 'setup' ? 'app app--home' : 'app'}
+      >
         <header className="topbar">
           <div className="topbar__brand">
             <span className="topbar__logo" aria-hidden="true" />
@@ -36,12 +45,14 @@ export function ConsoleApp() {
             hrefFor={consoleHref}
             handleSession={handleSession}
             handleSessionExpired={handleSessionExpired}
+            handleNotInitialized={handleNotInitialized}
+            handleAlreadyInitialized={handleAlreadyInitialized}
           />
         </main>
 
         <footer className="footer">
-          管理员初始密码在服务首次启动时打印于服务日志 · 遗失可执行{' '}
-          <code>./simple-captcha reset-admin-password</code>
+          初始化口令打印在服务启动日志中 · 遗失管理员密码可执行{' '}
+          <code>./simple-captcha reset-admin</code> 重新初始化
         </footer>
       </div>
     </CaptchaProvider>

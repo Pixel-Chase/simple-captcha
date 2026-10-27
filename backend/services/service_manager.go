@@ -1,11 +1,13 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"simple-captcha/config"
 	"simple-captcha/helper"
 	"simple-captcha/risk"
+	"simple-captcha/storage"
 	"sync"
 )
 
@@ -16,12 +18,14 @@ type ServiceManagerImpl struct {
 	backgrounds     *BackgroundStore
 	admin           *AdminService
 	apps            *AppService
+	settings        *SettingsService
 	riskControl     RiskControlService
-	cache           CacheService
+	telemetry       *TelemetryStore
 	clientRisk      *ClientRiskStore
 	riskEngine      *RiskEngine
 	policy          *ChallengePolicy
 	tlsFingerprints *risk.FingerprintList
+	db              *storage.DB
 	mutex           sync.RWMutex
 	initialized     bool
 }
@@ -48,9 +52,6 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 		return
 	}
 
-	// 初始化缓存服务
-	sm.cache = NewRedisCacheService()
-
 	// 初始化风险控制服务（IP 限流 + 二次验证令牌）
 	sm.riskControl = NewRiskControlService()
 
@@ -60,6 +61,20 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	sm.policy = NewChallengePolicy(sm.clientRisk)
 
 	cfg := config.LoadConfig()
+
+	// 持久数据存储：main 已提前打开时直接使用，否则（测试经由全局管理器）在配置的数据目录中打开
+	sm.db = takeStorage(cfg.Admin.DataDir)
+
+	// 验证码与风控策略：库中的当前值叠加在默认值之上，加载后替换全局快照
+	sm.settings = NewSettingsService(sm.db)
+	if err := sm.settings.Load(); err != nil {
+		log.Fatalln("加载策略配置失败:", err)
+	}
+
+	// 风控观察：异步批量写入 SQLite，保留条数取「策略配置」中的当前值
+	sm.telemetry = NewTelemetryStore(sm.db, func() int { return config.Runtime().Risk.TelemetryRetention })
+	// 测试里可能创建多个管理器：只有第一个的遥测存储对外生效，所有记录都写进同一个队列
+	sharedTelemetry.CompareAndSwap(nil, sm.telemetry)
 
 	// TLS / HTTP2 指纹参考列表（可选）：配置校验阶段已确认文件可读且为合法 JSON
 	if path := cfg.Risk.TLSFingerprintList; path != "" {
@@ -85,17 +100,16 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	sm.captchaServices["slide-text"] = NewSlideTextCaptchaService(backgrounds)
 	sm.captchaServices["slide-region"] = NewSlideRegionCaptchaService(backgrounds)
 
-	// 管理后台：管理员凭据与接入应用持久化在工作目录下的 data；登录前置验证码由风控服务消费，素材增删作用于同一个仓库
-	admin, err := NewAdminService(cfg.Admin, backgrounds, sm.riskControl)
-	if err != nil {
-		log.Fatalln("初始化管理后台失败:", err)
+	// 管理后台：管理员账号、会话与接入应用存于 captcha.db；登录前置验证码由风控服务消费，素材增删作用于同一个仓库
+	sm.admin = NewAdminService(cfg.Admin, sm.db, backgrounds, sm.riskControl)
+	sm.apps = NewAppService(sm.db)
+	warnLegacyDataFiles(cfg.Admin.DataDir)
+	// 尚未初始化时每次启动都换一个新的初始化口令并打印，有效口令总在最近一次启动日志里
+	if code, err := PrepareSetup(context.Background(), sm.db); err != nil {
+		log.Fatalln("准备管理后台初始化口令失败:", err)
+	} else if code != "" {
+		log.Print(SetupNotice(code))
 	}
-	sm.admin = admin
-	apps, err := NewAppService(cfg.Admin.DataDir)
-	if err != nil {
-		log.Fatalln("加载接入应用失败:", err)
-	}
-	sm.apps = apps
 
 	// 注册验证服务
 	sm.verifyServices["click-text"] = NewClickTextVerifyService()
@@ -135,12 +149,20 @@ func (sm *ServiceManagerImpl) GetRiskControlService() RiskControlService {
 	return sm.riskControl
 }
 
-// GetCacheService 获取缓存服务
-func (sm *ServiceManagerImpl) GetCacheService() CacheService {
+// GetStorage 获取持久数据存储
+func (sm *ServiceManagerImpl) GetStorage() *storage.DB {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 
-	return sm.cache
+	return sm.db
+}
+
+// GetTelemetryStore 获取风控观察记录存储
+func (sm *ServiceManagerImpl) GetTelemetryStore() *TelemetryStore {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.telemetry
 }
 
 // GetRiskEngine 获取风控评分引擎
@@ -197,6 +219,14 @@ func (sm *ServiceManagerImpl) GetAdminService() *AdminService {
 	return sm.admin
 }
 
+// GetSettingsService 获取策略配置服务
+func (sm *ServiceManagerImpl) GetSettingsService() *SettingsService {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	return sm.settings
+}
+
 // GetAppService 获取接入应用服务（S2S 接口鉴权）
 func (sm *ServiceManagerImpl) GetAppService() *AppService {
 	sm.mutex.RLock()
@@ -239,8 +269,8 @@ func (sm *ServiceManagerImpl) ValidateServices() *helper.CaptchaError {
 		return helper.NewCaptchaError(helper.ErrCodeInternalError, "风险控制服务未初始化")
 	}
 
-	if sm.cache == nil {
-		return helper.NewCaptchaError(helper.ErrCodeInternalError, "缓存服务未初始化")
+	if sm.db == nil || sm.telemetry == nil {
+		return helper.NewCaptchaError(helper.ErrCodeInternalError, "数据存储未初始化")
 	}
 
 	if sm.admin == nil || sm.apps == nil {
@@ -320,10 +350,21 @@ func (sm *ServiceManagerImpl) Shutdown() {
 	sm.admin = nil
 	sm.apps = nil
 	sm.riskControl = nil
-	sm.cache = nil
 	sm.clientRisk = nil
 	sm.riskEngine = nil
 	sm.policy = nil
+	// 先把积压的风控观察记录写完，再关闭数据库
+	if sm.telemetry != nil {
+		sharedTelemetry.CompareAndSwap(sm.telemetry, nil)
+		sm.telemetry.Close()
+		sm.telemetry = nil
+	}
+	if sm.db != nil {
+		if err := sm.db.Close(); err != nil {
+			log.Printf("关闭数据存储失败: %v", err)
+		}
+		sm.db = nil
+	}
 	sm.initialized = false
 
 	log.Println("服务管理器已关闭")
@@ -333,7 +374,27 @@ func (sm *ServiceManagerImpl) Shutdown() {
 var (
 	globalServiceManager *ServiceManagerImpl
 	serviceManagerOnce   sync.Once
+
+	pendingStorage *storage.DB
 )
+
+// UseStorage 指定全局服务管理器使用的存储，必须在第一次 GetServiceManager 之前调用
+func UseStorage(db *storage.DB) {
+	pendingStorage = db
+}
+
+func takeStorage(dataDir string) *storage.DB {
+	if pendingStorage != nil {
+		db := pendingStorage
+		pendingStorage = nil
+		return db
+	}
+	db, err := storage.Open(dataDir)
+	if err != nil {
+		log.Fatalln("打开数据存储失败:", err)
+	}
+	return db
+}
 
 // GetServiceManager 获取全局服务管理器实例
 func GetServiceManager() *ServiceManagerImpl {
