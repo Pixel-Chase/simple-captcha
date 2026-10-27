@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { useCopy } from '../components/Toast';
 import { CaptchaShowcase } from './CaptchaShowcase';
+import { GuestBackdrop, TrailMeter } from './GuestBackdrop';
 import './GuestPages.css';
 
 type Stage = 'idle' | 'verifying' | 'submitting';
@@ -15,6 +16,13 @@ const STAGE_VIEW: Record<Stage, { text: string; icon: IconName }> = {
   idle: { text: '验证并登录', icon: 'lock-open' },
   verifying: { text: '请完成行为验证…', icon: 'shield' },
   submitting: { text: '登录中…', icon: 'spinner' },
+};
+
+/** 提交按钮图标的动效：验证中盾牌脉冲，登录中转圈 */
+const STAGE_ICON_CLASS: Record<Stage, string | undefined> = {
+  idle: undefined,
+  verifying: 'login-form__pulse',
+  submitting: 'spin',
 };
 
 /** 遗失密码时在服务器执行的重置命令（镜像内工作目录为 /app，本地开发用 ./run-dev.sh reset-admin） */
@@ -50,10 +58,11 @@ interface LoginPageProps {
   onNotInitialized: () => void;
 }
 
-/** 控制台首页（未登录）：产品简介与安全机制 + 登录卡片 + 题型体验 */
+/** 控制台首页（未登录）：产品简介、安全机制与轨迹读数 + 登录卡片 + 题型体验 */
 export function LoginPage({ onLogin, onNotInitialized }: LoginPageProps) {
   return (
     <div className="guest guest--login">
+      <GuestBackdrop />
       <section className="guest__hero">
         <div className="login-intro">
           <div>
@@ -61,7 +70,9 @@ export function LoginPage({ onLogin, onNotInitialized }: LoginPageProps) {
               <Icon name="shield-check" size={16} />
               行为验证码管理后台
             </span>
-            <h1 className="login-intro__title">自托管行为验证码服务</h1>
+            <h1 className="login-intro__title">
+              自托管<span className="login-intro__accent">行为验证码</span>服务
+            </h1>
             <p className="login-intro__lead">
               管理员登录后统一管理接入应用、风控策略与背景图。登录本身同样受行为验证码保护，每次尝试都要重新完成一次验证。
             </p>
@@ -83,6 +94,8 @@ export function LoginPage({ onLogin, onNotInitialized }: LoginPageProps) {
               ))}
             </ul>
           </div>
+
+          <TrailMeter />
         </div>
 
         <LoginCard onLogin={onLogin} onNotInitialized={onNotInitialized} />
@@ -215,11 +228,7 @@ function LoginCard({ onLogin, onNotInitialized }: LoginPageProps) {
             className="btn btn--primary btn--block login-form__submit"
             disabled={busy}
           >
-            <Icon
-              name={view.icon}
-              size={18}
-              className={stage === 'submitting' ? 'spin' : undefined}
-            />
+            <Icon name={view.icon} size={18} className={STAGE_ICON_CLASS[stage]} />
             {view.text}
           </button>
 

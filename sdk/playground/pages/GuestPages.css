@@ -1,12 +1,22 @@
 /*
- * 未登录页面：登录（LoginPage）、首次初始化（SetupPage）与二者共用的题型体验（CaptchaShowcase）。
- * 视觉取自 sdk/stitch/web 的设计稿 5150fb32…（登录）与 44229690…（初始化）；
- * 登录稿用的是 Tailwind 默认圆角（xl=12px、2xl=16px），初始化稿用 Stitch 主题圆角（lg=32px），两页各按各的稿还原
+ * 未登录页面：登录（LoginPage）、首次初始化（SetupPage）、二者共用的题型体验（CaptchaShowcase）与背景层（GuestBackdrop）。
+ * 版式取自 sdk/stitch/web 的设计稿 5150fb32…（登录）与 44229690…（初始化）；
+ * 登录稿用的是 Tailwind 默认圆角（xl=12px、2xl=16px），初始化稿用 Stitch 主题圆角（lg=32px），两页各按各的稿还原。
+ * 配色是暗色主题：令牌在 styles.css 的 .app--dark 里重定义，这里只写页面专属的暗色细节与动效。
+ *
+ * 动效约定：
+ * - 只动 transform / translate / scale / opacity 等合成层属性，少量小面积的颜色动画
+ * - 题型弹窗（.captcha-holder 里的 SDK 弹窗）是 fixed 定位，它的祖先不能带 transform / filter，
+ *   所以入场动画只加在卡片本身，不加在 .guest、.guest__hero、.showcase 这些容器上
+ * - prefers-reduced-motion 时统一关掉（文件末尾）
  */
 
 /* ---------- 页面骨架 ---------- */
 
 .guest {
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --surface: linear-gradient(180deg, rgba(17, 26, 46, 0.9), rgba(11, 17, 32, 0.9));
+
   display: flex;
   flex-direction: column;
   gap: 64px;
@@ -14,21 +24,6 @@
 
 .guest--login {
   padding-top: 24px;
-}
-
-/* 登录页的浅色光晕背景：铺满视口、垫在内容之下，不参与布局，也不会撑出横向滚动 */
-.guest--login::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-color: var(--canvas);
-  background-image:
-    radial-gradient(at 10% 12%, rgba(83, 58, 253, 0.08) 0, transparent 50%),
-    radial-gradient(at 88% 8%, rgba(99, 102, 241, 0.07) 0, transparent 48%),
-    radial-gradient(at 50% 30%, rgba(245, 233, 212, 0.4) 0, transparent 55%),
-    radial-gradient(at 90% 85%, rgba(83, 58, 253, 0.04) 0, transparent 50%);
 }
 
 .guest__hero {
@@ -43,7 +38,101 @@
   gap: 24px;
 }
 
-/* 表单输入框：右侧带图标，底色为浅灰，聚焦时变白 */
+/* 入场：左栏各块依次浮起，表单卡片稍晚 */
+.login-intro > *,
+.setup-intro > * {
+  animation: guest-rise 0.7s var(--ease-out) both;
+}
+
+.login-intro > :nth-child(2),
+.setup-intro > :nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.login-intro > :nth-child(3),
+.setup-intro > :nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+/* ---------- 背景氛围层（GuestBackdrop） ---------- */
+
+/* 铺满视口、垫在内容之下，不参与布局，也不会撑出横向滚动 */
+.guest-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(ellipse 120% 80% at 50% -10%, #0c1330 0%, #05070f 60%);
+}
+
+/* 网格：外层负责边缘渐隐，内层负责缓慢下移（移动一格后无缝循环） */
+.guest-backdrop__grid {
+  position: absolute;
+  inset: 0;
+  mask-image: radial-gradient(ellipse 75% 65% at 50% 15%, #000 20%, transparent 75%);
+}
+
+.guest-backdrop__grid::before {
+  content: "";
+  position: absolute;
+  inset: -48px 0 0;
+  background-image:
+    linear-gradient(rgba(143, 132, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 132, 255, 0.08) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: guest-grid-drift 6s linear infinite;
+}
+
+.guest-backdrop__glow {
+  position: absolute;
+  border-radius: 50%;
+  animation: guest-breathe 14s ease-in-out infinite alternate;
+}
+
+.guest-backdrop__glow--violet {
+  top: -20vh;
+  left: -10vw;
+  width: 70vw;
+  height: 70vh;
+  background: radial-gradient(closest-side, rgba(83, 58, 253, 0.3), transparent);
+}
+
+.guest-backdrop__glow--cyan {
+  right: -15vw;
+  bottom: -25vh;
+  width: 60vw;
+  height: 70vh;
+  background: radial-gradient(closest-side, rgba(34, 211, 238, 0.12), transparent);
+  animation-delay: -7s;
+}
+
+/* 扫描线：一条带拖影的亮线从上往下扫过，扫完歇几秒 */
+.guest-backdrop__scan {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30vh;
+  border-bottom: 1px solid rgba(165, 180, 255, 0.12);
+  background: linear-gradient(180deg, transparent 40%, rgba(143, 132, 255, 0.06));
+  translate: 0 -31vh;
+  animation: guest-scan 10s linear infinite;
+}
+
+/* 鼠标轨迹层：在内容之上、顶栏（z-index 40）与验证码弹窗之下，不接收指针事件 */
+.guest-trail {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---------- 表单输入框 ---------- */
+
+/* 右侧带图标，底色比卡片略亮，聚焦时变回卡片色并外发光 */
 .guest-field__row {
   display: flex;
   align-items: center;
@@ -63,6 +152,9 @@
 
 .guest-field .field__input:focus {
   background: var(--canvas);
+  box-shadow:
+    0 0 0 1px var(--primary),
+    0 0 0 4px rgba(143, 132, 255, 0.18);
 }
 
 .guest-field__icon {
@@ -75,6 +167,10 @@
   transition: color 0.15s ease;
 }
 
+.guest-field__control:focus-within .guest-field__icon {
+  color: var(--primary);
+}
+
 .guest-field__aside {
   color: var(--ink-mute);
   font-size: 11px;
@@ -83,6 +179,37 @@
 .guest-field__required {
   margin-left: 2px;
   color: var(--danger);
+}
+
+/* ---------- 表单卡片（登录 / 初始化共用） ---------- */
+
+/*
+ * 边框上有一段光沿着卡片缓慢绕行：padding-box 铺卡片底色，border-box 铺随角度旋转的锥形渐变，
+ * 露出来的 1px 边框就是那段光。--guest-angle 注册为 <angle> 才能逐帧插值，不支持的浏览器停在 0deg
+ */
+@property --guest-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.login-card,
+.setup-card {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, #0f172b, var(--canvas)) padding-box,
+    conic-gradient(
+      from var(--guest-angle),
+      var(--hairline) 0 60%,
+      rgba(143, 132, 255, 0.9) 74%,
+      rgba(34, 211, 238, 0.9) 82%,
+      var(--hairline) 92%
+    )
+    border-box;
+  box-shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.8);
+  animation:
+    guest-rise 0.7s var(--ease-out) 0.12s both,
+    guest-orbit 8s linear infinite;
 }
 
 /* ---------- 登录页 ---------- */
@@ -108,10 +235,19 @@
 
 .login-intro__title {
   margin-top: 16px;
-  font-size: 36px;
-  font-weight: 400;
+  font-size: 40px;
+  font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.025em;
+}
+
+/* 标题里的「行为验证码」：紫青渐变字，光泽缓慢流过（渐变首尾同色，循环无缝） */
+.login-intro__accent {
+  background: linear-gradient(90deg, #a49bff, #22d3ee 50%, #a49bff) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: guest-shimmer 6s linear infinite;
 }
 
 .login-intro__lead {
@@ -147,13 +283,17 @@
   padding: 16px 18px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
-  background: var(--canvas);
-  box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s ease;
+  background: var(--surface);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .login-fact:hover {
   border-color: var(--primary-tint-dim);
+  box-shadow: 0 16px 36px -20px var(--glow);
+  transform: translateY(-2px);
 }
 
 .login-fact__head {
@@ -168,7 +308,18 @@
   padding: 6px;
   border-radius: 8px;
   background: var(--primary-faint);
+  box-shadow: inset 0 0 0 1px var(--primary-tint);
   color: var(--primary);
+  transition:
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.login-fact:hover .login-fact__icon {
+  color: var(--accent);
+  box-shadow:
+    inset 0 0 0 1px rgba(34, 211, 238, 0.4),
+    0 0 16px rgba(34, 211, 238, 0.25);
 }
 
 .login-fact__name {
@@ -182,15 +333,124 @@
   line-height: 1.625;
 }
 
+/* 轨迹读数（TrailMeter） */
+.trail-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.trail-meter__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trail-meter__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.trail-meter__title .icon {
+  color: var(--accent);
+}
+
+.trail-meter__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-mute);
+  font-size: 11px;
+  transition: color 0.2s ease;
+}
+
+.trail-meter__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-mute);
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.trail-meter__state--live {
+  color: var(--accent);
+}
+
+.trail-meter__state--live .trail-meter__dot {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.trail-meter__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.trail-meter__stats dt {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.trail-meter__stats dd {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trail-meter__stats small {
+  margin-left: 3px;
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+/* 速度曲线：背景是竖向刻度线 */
+.trail-meter__chart {
+  display: block;
+  width: 100%;
+  height: 40px;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 23px, rgba(148, 163, 200, 0.07) 23px 24px),
+    rgba(5, 7, 15, 0.4);
+}
+
+.trail-meter__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.trail-meter__area {
+  fill: rgba(34, 211, 238, 0.1);
+}
+
+.trail-meter__note {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
 .login-card {
   display: flex;
   flex-direction: column;
   gap: 24px;
   padding: 32px;
-  border: 1px solid var(--hairline);
   border-radius: var(--r);
-  background: var(--canvas);
-  box-shadow: var(--shadow-sm);
 }
 
 .login-card__head {
@@ -249,11 +509,36 @@
   border-color: var(--primary);
 }
 
+/* 提交按钮：悬停时扫过一道光；验证中盾牌脉冲 */
 .btn.login-form__submit {
+  position: relative;
+  overflow: hidden;
   margin-top: 8px;
   padding: 13px 16px;
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(57, 4, 231, 0.3);
+  box-shadow: 0 10px 30px -12px var(--glow);
+}
+
+.btn.login-form__submit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 65%
+  );
+  translate: -100% 0;
+  pointer-events: none;
+}
+
+.btn.login-form__submit:hover:not(:disabled)::after {
+  animation: guest-sheen 0.8s ease;
+}
+
+.login-form__pulse {
+  animation: guest-pulse 1.2s ease-in-out infinite;
 }
 
 .login-recover {
@@ -263,7 +548,7 @@
   padding: 14px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
-  background: var(--canvas-soft);
+  background: rgba(5, 7, 15, 0.45);
 }
 
 .login-recover__title {
@@ -291,9 +576,10 @@
   justify-content: space-between;
   gap: 8px;
   padding: 4px 4px 4px 12px;
+  border: 1px solid var(--hairline);
   border-radius: 8px;
-  background: var(--ink);
-  color: #fff;
+  background: #03050b;
+  color: #a5f3fc;
 }
 
 .login-recover__cmd code {
@@ -305,6 +591,18 @@
   overflow-wrap: anywhere;
 }
 
+/* 终端光标；复制按钮复制的是常量，不受这个伪元素影响 */
+.login-recover__cmd code::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  margin-left: 4px;
+  vertical-align: -2px;
+  background: var(--accent);
+  animation: guest-blink 1.1s steps(1) infinite;
+}
+
 .login-recover__copy {
   display: inline-flex;
   flex-shrink: 0;
@@ -312,7 +610,7 @@
   border: 0;
   border-radius: var(--r-sm);
   background: none;
-  color: #94a3b8;
+  color: var(--ink-mute);
   cursor: pointer;
   transition:
     color 0.15s ease,
@@ -320,12 +618,12 @@
 }
 
 .login-recover__copy:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
 .login-recover__copy:focus-visible {
-  outline: 2px solid var(--primary-tint-dim);
+  outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
 
@@ -371,7 +669,7 @@
   padding: 16px 20px;
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
-  background: var(--canvas);
+  background: var(--surface);
 }
 
 .setup-steps__title {
@@ -409,10 +707,11 @@
   font-size: 11px;
 }
 
-/* 三步依次减弱：当前步骤实心主色，后续步骤逐级变浅 */
+/* 三步依次减弱：当前步骤实心主色并向外扩散光圈，后续步骤逐级变浅 */
 .setup-step__num--1 {
   background: var(--primary-container);
   color: #fff;
+  animation: guest-ring 2.4s ease-out infinite;
 }
 
 .setup-step__num--2 {
@@ -448,7 +747,7 @@
   padding: 1px 8px;
   border-radius: var(--r);
   background: var(--canvas-soft);
-  color: var(--ink-mute);
+  color: #a5f3fc;
   font-size: 11px;
 }
 
@@ -465,7 +764,7 @@
   padding: 20px;
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
-  background: var(--canvas);
+  background: var(--surface);
 }
 
 .setup-note__icon {
@@ -477,6 +776,7 @@
   margin-bottom: 4px;
   border-radius: 50%;
   background: var(--primary-faint);
+  box-shadow: inset 0 0 0 1px var(--primary-tint);
   color: var(--primary-hover);
 }
 
@@ -497,10 +797,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 32px;
-  border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
-  background: var(--canvas);
-  box-shadow: var(--shadow-sm);
 }
 
 .setup-card__head {
@@ -549,7 +846,7 @@
   text-transform: uppercase;
 }
 
-/* 密码规则：满足时圆点变绿 */
+/* 密码规则：满足时圆点变绿并发光 */
 .setup-form__rule {
   display: flex;
   align-items: center;
@@ -562,12 +859,15 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #94a3b8;
-  transition: background 0.15s ease;
+  background: #475569;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .setup-form__rule--ok .setup-form__rule-dot {
   background: var(--good-dot);
+  box-shadow: 0 0 6px var(--good-dot);
 }
 
 .guest-field__icon--ok {
@@ -657,7 +957,7 @@
   padding: 6px 12px;
   border: 1px solid var(--hairline);
   border-radius: 8px;
-  background: var(--canvas);
+  background: rgba(11, 17, 32, 0.8);
   color: var(--ink-mute);
   font-size: 11px;
 }
@@ -666,39 +966,141 @@
   color: var(--primary);
 }
 
+/* 五种题型一行排开；卡片约 234px 宽，示意图内容按 160px 设计（见示意图一节） */
 .showcase__grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.showcase--compact .showcase__grid {
-  gap: 16px;
-}
-
+/*
+ * 卡片：悬停时上浮、边框变亮，::before 的径向光跟随指针（--spot-x / --spot-y 由 CaptchaShowcase 写入）。
+ * 五张卡片的示意图按 --art-delay 错开（6 秒一轮均分），同一时刻只有一两张在动
+ */
 .showcase-card {
+  --art-delay: 0s;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 20px;
   min-width: 0;
-  padding: 20px;
+  padding: 18px;
   border: 1px solid var(--hairline);
   border-radius: var(--r);
-  background: var(--canvas);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+  animation: guest-rise 0.7s var(--ease-out) both;
   transition:
-    box-shadow 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.showcase-card:nth-child(2) {
+  --art-delay: 1.2s;
+
+  animation-delay: 0.06s;
+}
+
+.showcase-card:nth-child(3) {
+  --art-delay: 2.4s;
+
+  animation-delay: 0.12s;
+}
+
+.showcase-card:nth-child(4) {
+  --art-delay: 3.6s;
+
+  animation-delay: 0.18s;
+}
+
+.showcase-card:nth-child(5) {
+  --art-delay: 4.8s;
+
+  animation-delay: 0.24s;
+}
+
+/* 支持滚动驱动动画的浏览器里，卡片滚进视口时才浮起，而不是在首屏外悄悄播完；错开改用滚动区间 */
+@supports (animation-timeline: view()) {
+  .showcase-card,
+  .showcase-card:nth-child(n) {
+    animation-duration: auto;
+    animation-delay: 0s;
+    animation-timeline: view();
+    animation-range: entry 0% entry 70%;
+  }
+
+  .showcase-card:nth-child(2) {
+    animation-range: entry 6% entry 76%;
+  }
+
+  .showcase-card:nth-child(3) {
+    animation-range: entry 12% entry 82%;
+  }
+
+  .showcase-card:nth-child(4) {
+    animation-range: entry 18% entry 88%;
+  }
+
+  .showcase-card:nth-child(5) {
+    animation-range: entry 24% entry 94%;
+  }
+}
+
+.showcase-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    260px circle at var(--spot-x, 50%) var(--spot-y, 0%),
+    rgba(143, 132, 255, 0.16),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
 }
 
 .showcase-card:hover {
+  border-color: var(--primary-tint-dim);
+  box-shadow: 0 18px 40px -20px var(--glow);
+  transform: translateY(-2px);
+}
+
+.showcase-card:hover::before {
+  opacity: 1;
+}
+
+/* 体验结果：通过时一道绿光扫过卡片，失败时边框泛红，播完即隐去 */
+.showcase-card__flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.showcase-card__flash--ok {
+  background:
+    linear-gradient(105deg, transparent 30%, rgba(52, 211, 153, 0.22) 50%, transparent 70%) 0 0 /
+    250% 100%;
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.65);
+  animation: guest-sweep 1.1s ease-out;
+}
+
+.showcase-card__flash--fail {
   box-shadow:
-    0 4px 6px -1px rgba(13, 37, 61, 0.08),
-    0 2px 4px -2px rgba(13, 37, 61, 0.06);
+    inset 0 0 0 1px rgba(248, 113, 113, 0.7),
+    inset 0 0 40px rgba(248, 113, 113, 0.18);
+  animation: guest-fade 1.2s ease-out;
 }
 
 .showcase-card__main {
@@ -717,6 +1119,7 @@
 
 .showcase-card__top > .icon {
   color: var(--ink-mute);
+  transition: color 0.2s ease;
 }
 
 .showcase-card__tag {
@@ -755,10 +1158,7 @@
 }
 
 .showcase-card__actions {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  gap: 8px;
+  display: flex;
 }
 
 .showcase-card__foot {
@@ -775,8 +1175,14 @@
   min-width: 0;
 }
 
+/* 结果标签按 seq 重新挂载：通过弹出，未完成左右晃一下 */
 .showcase-card__result .chip {
   font-weight: 500;
+  animation: guest-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.showcase-card__result .chip--warn {
+  animation: guest-shake 0.45s ease;
 }
 
 .showcase-card__none {
@@ -792,19 +1198,8 @@
   font-weight: 500;
 }
 
-.btn.showcase__try--tint {
-  border-color: var(--primary-tint-dim);
-  background: var(--primary-faint);
-  color: var(--primary-hover);
-}
-
-.btn.showcase__try--tint:hover:not(:disabled) {
-  border-color: var(--primary-tint-dim);
-  background: var(--primary-tint);
-}
-
-.btn.showcase__try--tint .icon {
-  color: inherit;
+.showcase-card:hover .showcase-card__top > .icon {
+  color: var(--accent);
 }
 
 /* 紧凑版（初始化页）：没有示意图，结果在右上角，按钮为胶囊次要样式 */
@@ -812,12 +1207,10 @@
   gap: 16px;
   padding: 16px 20px 20px;
   border-radius: var(--r-lg);
-  box-shadow: none;
 }
 
 .showcase-card--compact:hover {
   border-color: var(--primary-soft);
-  box-shadow: none;
 }
 
 .showcase-card--compact .showcase-card__main {
@@ -825,7 +1218,8 @@
 }
 
 .showcase-card__num {
-  color: var(--primary-container);
+  color: var(--primary);
+  font-family: var(--mono);
   font-size: 13px;
   font-weight: 600;
 }
@@ -860,6 +1254,7 @@
 
 /* ---------- 题型示意图（纯装饰） ---------- */
 
+/* 示意图像一块小屏幕：深色底 + 细网格 + 底部主色光 */
 .showcase-art {
   display: flex;
   flex-direction: column;
@@ -871,7 +1266,11 @@
   overflow: hidden;
   border: 1px solid var(--hairline);
   border-radius: 12px;
-  background: linear-gradient(45deg, #f1f5f9, var(--primary-faint));
+  background:
+    radial-gradient(circle at 50% 130%, rgba(83, 58, 253, 0.25), transparent 60%),
+    linear-gradient(rgba(148, 163, 200, 0.05) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, rgba(148, 163, 200, 0.05) 1px, transparent 1px) 0 0 / 16px 16px,
+    #0a0f1d;
   user-select: none;
 }
 
@@ -879,7 +1278,7 @@
   padding: 2px 8px;
   border: 1px solid var(--hairline);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(5, 7, 15, 0.7);
   color: var(--ink-secondary);
   font-size: 10px;
 }
@@ -888,7 +1287,7 @@
   color: var(--primary);
 }
 
-/* 点选：文字格里已点过的字被序号圆点盖住，下一个目标字颜色稍深 */
+/* 点选：目标字被序号圆点依次盖住，圆点落下时荡开一圈涟漪；三个点完后边框亮绿 */
 .showcase-art__board {
   display: flex;
   align-items: center;
@@ -897,66 +1296,109 @@
   height: 64px;
   border: 1px dashed var(--primary-tint-dim);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(5, 7, 15, 0.45);
+  animation: art-click-board 6s var(--art-delay) infinite;
 }
 
-.showcase-art__glyph {
-  color: #cbd5e1;
-  font-size: 12px;
-}
-
-.showcase-art__glyph--next {
-  color: var(--ink-mute);
-}
-
-.showcase-art__mark {
+.showcase-art__cell {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+}
+
+.showcase-art__glyph {
+  display: inline-flex;
+  color: #5b6782;
+  font-size: 13px;
+}
+
+/* 图形点选的图形：线框，颜色跟随所在文字 */
+.showcase-art__shape {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.showcase-art__prompt .showcase-art__shape {
+  vertical-align: -1px;
+}
+
+.showcase-art__mark {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--primary-container);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 0 12px var(--glow);
+  animation: art-mark 6s var(--art-delay) infinite both;
+}
+
+.showcase-art__mark::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: art-ripple 6s infinite both;
+  animation-delay: inherit;
+}
+
+.showcase-art__mark--2 {
+  animation-delay: calc(var(--art-delay) + 0.7s);
+}
+
+.showcase-art__mark--3 {
+  animation-delay: calc(var(--art-delay) + 1.4s);
 }
 
 /* 拼图块与缺口：滑块拼图、空间拼图共用 */
 .showcase-art__piece {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   width: 28px;
   height: 28px;
-  border: 1px solid #fff;
+  border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 6px;
-  background: rgba(102, 94, 253, 0.85);
+  background: rgba(124, 107, 255, 0.9);
   color: #fff;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 0 14px var(--glow);
 }
 
 .showcase-art__slot {
   flex-shrink: 0;
   width: 28px;
   height: 28px;
-  border: 2px dashed #94a3b8;
+  border: 2px dashed rgba(148, 163, 200, 0.5);
   border-radius: 6px;
-  background: rgba(226, 232, 240, 0.9);
+  background: rgba(148, 163, 200, 0.08);
+  animation: art-slot-ok 6s var(--art-delay) infinite;
 }
 
+/* 滑块拼图：滑块与拼图块同步右移，略冲过缺口后回正 */
 .showcase-art__strip {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 176px;
+  width: 160px;
   height: 56px;
   padding: 0 12px;
   border: 1px solid var(--hairline);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(5, 7, 15, 0.45);
 }
 
 .showcase-art__dash {
@@ -964,32 +1406,52 @@
   border-bottom: 1px dashed var(--primary-tint-dim);
 }
 
+.showcase-art--slide .showcase-art__piece {
+  animation: art-slide-piece 6s var(--art-delay) infinite both;
+}
+
 .showcase-art__track {
+  position: relative;
   display: flex;
   align-items: center;
-  width: 176px;
+  width: 160px;
   height: 20px;
   padding: 0 2px;
   border-radius: 999px;
-  background: rgba(226, 232, 240, 0.7);
+  background: rgba(148, 163, 200, 0.12);
+}
+
+.showcase-art__fill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  right: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(83, 58, 253, 0.55), rgba(34, 211, 238, 0.55));
+  transform-origin: left center;
+  scale: 0 1;
+  animation: art-slide-fill 6s var(--art-delay) infinite both;
 }
 
 .showcase-art__knob {
+  position: relative;
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--primary);
-  box-shadow: var(--shadow-sm);
+  background: #fff;
+  box-shadow: 0 0 10px var(--glow);
+  animation: art-slide-knob 6s var(--art-delay) infinite both;
 }
 
-/* 空间拼图：图块沿虚线轨迹拖进右下角的缺口 */
+/* 空间拼图：图块被拿起（放大）、沿虚线轨迹飞进右下角的缺口；虚线持续流动 */
 .showcase-art__panel {
   position: relative;
-  width: 176px;
+  width: 160px;
   height: 96px;
   border: 1px solid var(--hairline);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(5, 7, 15, 0.45);
 }
 
 .showcase-art__path {
@@ -1001,6 +1463,7 @@
   stroke: var(--primary-soft);
   stroke-width: 1.5;
   stroke-dasharray: 3 3;
+  animation: art-dash 1.2s linear infinite;
 }
 
 .showcase-art__panel .showcase-art__piece {
@@ -1009,6 +1472,7 @@
   left: 12px;
   width: 24px;
   height: 24px;
+  animation: art-region-piece 6s var(--art-delay) infinite both;
 }
 
 .showcase-art__panel .showcase-art__slot {
@@ -1019,7 +1483,7 @@
   height: 24px;
 }
 
-/* 旋转：刻度环 + 倾斜的圆盘，顶部圆点是正向基准 */
+/* 旋转：刻度环 + 倾斜的圆盘，指针转回正向时顶部基准点与圆盘描边亮绿 */
 .showcase-art__dial {
   position: relative;
   width: 88px;
@@ -1042,36 +1506,505 @@
 }
 
 .showcase-art__face {
-  fill: rgba(255, 255, 255, 0.8);
+  fill: rgba(5, 7, 15, 0.5);
 }
 
 .showcase-art__disc {
-  fill: #eef2ff;
+  fill: rgba(83, 58, 253, 0.14);
   stroke: var(--primary-tint-dim);
+  animation: art-disc-ok 6s var(--art-delay) infinite;
 }
 
 .showcase-art__zero {
   fill: var(--primary);
+  animation: art-zero-ok 6s var(--art-delay) infinite;
 }
 
 .showcase-art__needle {
   position: absolute;
   top: 50%;
   left: 50%;
-  color: var(--primary);
+  color: var(--primary-hover);
   transform: translate(-50%, -50%) rotate(-45deg);
+  animation: art-rotate-needle 6s var(--art-delay) infinite both;
+}
+
+/* ---------- 关键帧 ---------- */
+
+@keyframes guest-rise {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+}
+
+@keyframes guest-grid-drift {
+  to {
+    translate: 0 48px;
+  }
+}
+
+@keyframes guest-breathe {
+  from {
+    opacity: 0.7;
+    scale: 1;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1.15;
+    translate: 3vw 2vh;
+  }
+}
+
+@keyframes guest-scan {
+  from {
+    translate: 0 -31vh;
+  }
+
+  70%,
+  to {
+    translate: 0 100vh;
+  }
+}
+
+@keyframes guest-orbit {
+  to {
+    --guest-angle: 360deg;
+  }
+}
+
+@keyframes guest-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes guest-sheen {
+  to {
+    translate: 100% 0;
+  }
+}
+
+@keyframes guest-pulse {
+  50% {
+    opacity: 0.55;
+    scale: 0.85;
+  }
+}
+
+@keyframes guest-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes guest-ring {
+  from {
+    box-shadow: 0 0 0 0 rgba(124, 107, 255, 0.55);
+  }
+
+  70%,
+  to {
+    box-shadow: 0 0 0 8px rgba(124, 107, 255, 0);
+  }
+}
+
+@keyframes guest-sweep {
+  from {
+    opacity: 1;
+    background-position: 100% 0;
+  }
+
+  60% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    background-position: 0 0;
+  }
+}
+
+@keyframes guest-fade {
+  from {
+    opacity: 1;
+  }
+}
+
+@keyframes guest-pop {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
+}
+
+@keyframes guest-shake {
+  20% {
+    translate: -4px 0;
+  }
+
+  40% {
+    translate: 4px 0;
+  }
+
+  60% {
+    translate: -3px 0;
+  }
+
+  80% {
+    translate: 2px 0;
+  }
+}
+
+/* 示意图：一轮 6 秒，约 0.5–4.5 秒是交互演示，之后淡出复位 */
+
+@keyframes art-mark {
+  0%,
+  8% {
+    opacity: 0;
+    scale: 0.3;
+  }
+
+  12% {
+    opacity: 1;
+    scale: 1.15;
+  }
+
+  15%,
+  62% {
+    opacity: 1;
+    scale: 1;
+  }
+
+  68%,
+  to {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+@keyframes art-ripple {
+  0%,
+  10% {
+    opacity: 0;
+    scale: 1;
+  }
+
+  12% {
+    opacity: 0.9;
+    scale: 1;
+  }
+
+  24%,
+  to {
+    opacity: 0;
+    scale: 2.2;
+  }
+}
+
+@keyframes art-click-board {
+  0%,
+  38%,
+  64%,
+  to {
+    border-color: var(--primary-tint-dim);
+    box-shadow: none;
+  }
+
+  44%,
+  58% {
+    border-color: rgba(52, 211, 153, 0.7);
+    box-shadow:
+      0 0 0 3px rgba(52, 211, 153, 0.12),
+      0 0 18px rgba(52, 211, 153, 0.2);
+  }
+}
+
+@keyframes art-slot-ok {
+  0%,
+  48%,
+  80%,
+  to {
+    border-color: rgba(148, 163, 200, 0.5);
+    box-shadow: none;
+  }
+
+  52%,
+  74% {
+    border-color: var(--good);
+    box-shadow: 0 0 14px rgba(52, 211, 153, 0.5);
+  }
+}
+
+/* 拼图块行程 108px（到缺口），冲过 4px 再回正；滑块（行程 140px）与进度条按比例同步 */
+@keyframes art-slide-piece {
+  0%,
+  12% {
+    translate: 0 0;
+    opacity: 1;
+  }
+
+  20% {
+    translate: 17px 0;
+  }
+
+  30% {
+    translate: 61px 0;
+  }
+
+  40% {
+    translate: 103px 0;
+  }
+
+  44% {
+    translate: 112px 0;
+    animation-timing-function: ease-out;
+  }
+
+  50%,
+  76% {
+    translate: 108px 0;
+    opacity: 1;
+  }
+
+  82% {
+    translate: 108px 0;
+    opacity: 0;
+  }
+
+  83%,
+  90% {
+    translate: 0 0;
+    opacity: 0;
+  }
+
+  to {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+
+@keyframes art-slide-knob {
+  0%,
+  12% {
+    translate: 0 0;
+    opacity: 1;
+  }
+
+  20% {
+    translate: 21px 0;
+  }
+
+  30% {
+    translate: 76px 0;
+  }
+
+  40% {
+    translate: 129px 0;
+  }
+
+  44% {
+    translate: 140px 0;
+    animation-timing-function: ease-out;
+  }
+
+  50%,
+  76% {
+    translate: 135px 0;
+    opacity: 1;
+  }
+
+  82% {
+    translate: 135px 0;
+    opacity: 0;
+  }
+
+  83%,
+  90% {
+    translate: 0 0;
+    opacity: 0;
+  }
+
+  to {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+
+@keyframes art-slide-fill {
+  0%,
+  12% {
+    scale: 0.1 1;
+    opacity: 1;
+  }
+
+  20% {
+    scale: 0.23 1;
+  }
+
+  30% {
+    scale: 0.59 1;
+  }
+
+  40% {
+    scale: 0.93 1;
+  }
+
+  44% {
+    scale: 1 1;
+    animation-timing-function: ease-out;
+  }
+
+  50%,
+  76% {
+    scale: 0.97 1;
+    opacity: 1;
+  }
+
+  82%,
+  90% {
+    scale: 0.97 1;
+    opacity: 0;
+  }
+
+  to {
+    scale: 0 1;
+    opacity: 0;
+  }
+}
+
+/* 轨迹点取自虚线的二次贝塞尔曲线（起点为图块中心，终点为缺口中心） */
+@keyframes art-region-piece {
+  0%,
+  12% {
+    translate: 0 0;
+    scale: 1;
+    opacity: 1;
+  }
+
+  16% {
+    translate: 0 0;
+    scale: 1.15;
+  }
+
+  22% {
+    translate: 29px -3px;
+  }
+
+  28% {
+    translate: 54px 1px;
+  }
+
+  34% {
+    translate: 75px 12px;
+  }
+
+  40% {
+    translate: 93px 31px;
+  }
+
+  46% {
+    translate: 108px 56px;
+    scale: 1.15;
+  }
+
+  50%,
+  76% {
+    translate: 108px 56px;
+    scale: 1;
+    opacity: 1;
+  }
+
+  82% {
+    translate: 108px 56px;
+    opacity: 0;
+  }
+
+  83%,
+  90% {
+    translate: 0 0;
+    opacity: 0;
+  }
+
+  to {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+
+@keyframes art-dash {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+@keyframes art-rotate-needle {
+  0%,
+  12% {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+
+  30% {
+    transform: translate(-50%, -50%) rotate(-10deg);
+  }
+
+  40% {
+    transform: translate(-50%, -50%) rotate(7deg);
+  }
+
+  48%,
+  76% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  92%,
+  to {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+}
+
+@keyframes art-zero-ok {
+  0%,
+  44%,
+  80%,
+  to {
+    fill: var(--primary);
+  }
+
+  50%,
+  74% {
+    fill: var(--good);
+  }
+}
+
+@keyframes art-disc-ok {
+  0%,
+  44%,
+  80%,
+  to {
+    stroke: var(--primary-tint-dim);
+  }
+
+  50%,
+  74% {
+    stroke: var(--good);
+  }
 }
 
 /* ---------- 响应式 ---------- */
+
+/* 五列需要视口 ≥ 1240px，示意图才放得下 160px 的内容；再窄改三列 */
+@media (max-width: 1239px) {
+  .showcase__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 
 @media (max-width: 1023px) {
   .guest__hero,
   .guest--setup .guest__hero {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .showcase__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1103,6 +2036,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .trail-meter__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .login-card {
     padding: 24px;
   }
@@ -1110,5 +2047,44 @@
   .setup-card {
     padding: 24px 20px;
     border-radius: var(--r);
+  }
+}
+
+/* ---------- 减少动态效果 ---------- */
+
+/* 只关本文件加的动效；SDK 弹窗与按钮里的加载转圈不受影响。关掉后示意图停在静态示意 */
+@media (prefers-reduced-motion: reduce) {
+  .guest-backdrop *,
+  .guest-backdrop *::before,
+  .login-intro > *,
+  .setup-intro > *,
+  .login-intro__accent,
+  .login-card,
+  .setup-card,
+  .login-form__pulse,
+  .btn.login-form__submit::after,
+  .login-recover__cmd code::after,
+  .setup-step__num--1,
+  .showcase-card,
+  .showcase-card__flash,
+  .showcase-card__result .chip,
+  .showcase-art *,
+  .showcase-art *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: 要压过各处选择器更具体的动画声明 */
+    animation: none !important;
+  }
+
+  .guest-backdrop__scan {
+    display: none;
+  }
+
+  .login-fact,
+  .showcase-card {
+    transition: none;
+  }
+
+  .login-fact:hover,
+  .showcase-card:hover {
+    transform: none;
   }
 }

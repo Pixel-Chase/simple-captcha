@@ -32,6 +32,8 @@ export function ConsoleShell({
   children,
 }: ConsoleShellProps) {
   const authed = auth.status === 'authed' ? auth : null;
+  // 初始化 / 登录页用暗色主题；恢复登录态期间与演示站的接入文档页仍是浅色
+  const darkGuest = (auth.status === 'setup' || auth.status === 'anonymous') && !docs?.active;
 
   // 切换分区、登录或退出时页面内容整体换掉，但 hash 路由不会重置滚动位置，手动回到顶部；首次渲染不处理
   const view = `${auth.status}/${section ?? ''}`;
@@ -45,7 +47,7 @@ export function ConsoleShell({
 
   return (
     <ToastProvider>
-      <div className={authed ? 'app' : 'app app--guest'}>
+      <div className={authed ? 'app' : darkGuest ? 'app app--guest app--dark' : 'app app--guest'}>
         <header className="topbar">
           <div className="topbar__inner">
             <div className="topbar__start">

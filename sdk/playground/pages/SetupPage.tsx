@@ -5,6 +5,7 @@ import type { LoginResponse } from '../api';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { CaptchaShowcase } from './CaptchaShowcase';
+import { GuestBackdrop } from './GuestBackdrop';
 import './GuestPages.css';
 
 /** 与服务端一致：用户名 1-64 个字符；密码至少 10 个字符、不超过 72 字节（bcrypt 上限） */
@@ -83,6 +84,7 @@ interface SetupPageProps {
 export function SetupPage({ onSetup, onAlreadyInitialized }: SetupPageProps) {
   return (
     <div className="guest guest--setup">
+      <GuestBackdrop />
       <section className="guest__hero">
         <div className="setup-intro">
           <div className="setup-intro__head">

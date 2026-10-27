@@ -1110,6 +1110,95 @@ code {
 
 /* ---------- 响应式 ---------- */
 
+/* ---------- 暗色主题（未登录页） ---------- */
+
+/*
+ * 暗色主题：只用于未登录的初始化 / 登录页（ConsoleShell 加 app--dark）。
+ * 在外壳上重定义令牌，表单、按钮、提示、标签等通用组件自动跟随；页面自己的暗色样式与动效见 pages/GuestPages.css
+ */
+.app--dark {
+  --canvas: #0b1120;
+  --canvas-soft: #111a2e;
+  --ink: #e6ebf5;
+  --ink-secondary: #b4bfd4;
+  --ink-mute: #8794ad;
+  --ink-mute-2: #8d9ab3;
+  --hairline: #1d2740;
+  --hairline-input: #2b3856;
+
+  --primary: #8f84ff;
+  --primary-hover: #aaa2ff;
+  --primary-press: #7a6dff;
+  --primary-container: #533afd;
+  --primary-soft: #8f84ff;
+  --primary-tint: rgba(124, 107, 255, 0.2);
+  --primary-tint-dim: rgba(124, 107, 255, 0.38);
+  --primary-faint: rgba(124, 107, 255, 0.1);
+  --brand-dark: #d4d0ff;
+
+  --good: #34d399;
+  --good-dot: #34d399;
+  --good-bg: rgba(16, 185, 129, 0.12);
+  --good-line: rgba(52, 211, 153, 0.32);
+  --warn: #fbbf24;
+  --warn-dot: #f59e0b;
+  --warn-bg: rgba(245, 158, 11, 0.12);
+  --warn-line: rgba(251, 191, 36, 0.32);
+  --danger: #f87171;
+  --danger-ink: #fca5a5;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --danger-line: rgba(248, 113, 113, 0.32);
+
+  /* 暗色专用：扫描 / 数据类点缀色、主色光晕 */
+  --accent: #22d3ee;
+  --glow: rgba(124, 107, 255, 0.35);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 24px 64px -16px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
+  /* body 的文字色是按 :root 令牌算好再继承的，这里要重新取一次 */
+  color: var(--ink);
+}
+
+/* 根背景与窗口滚动条也换成暗色，滚动回弹时不露白 */
+html:has(.app--dark) {
+  color-scheme: dark;
+}
+
+body:has(.app--dark) {
+  background: #05070f;
+}
+
+.app--dark .topbar {
+  border-bottom-color: rgba(148, 163, 200, 0.12);
+  background: rgba(5, 7, 15, 0.72);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+
+.app--dark .brand__logo {
+  background: linear-gradient(135deg, #533afd, #22d3ee);
+  box-shadow: 0 6px 20px -6px var(--glow);
+}
+
+.app--dark .footer {
+  border-top-color: rgba(148, 163, 200, 0.12);
+  background: rgba(5, 7, 15, 0.6);
+}
+
+.app--dark .btn--primary {
+  background: linear-gradient(135deg, #533afd, #6d4bff);
+}
+
+.app--dark .btn--primary:hover {
+  background: linear-gradient(135deg, #5f48ff, #7a5cff);
+}
+
+.app--dark .btn--primary:active:not(:disabled) {
+  background: #4630e0;
+}
+
 @media (max-width: 960px) {
   .brand__chip {
     display: none;
