@@ -2,8 +2,8 @@ package tests
 
 import (
 	"fmt"
-	"net/http"
 	"simple-captcha/cache"
+	"simple-captcha/config"
 	"simple-captcha/services"
 	"testing"
 	"time"
@@ -16,17 +16,14 @@ import (
 func issueWithFingerprint(t *testing.T, ua, fp string) map[string]interface{} {
 	env := cleanIssueEnvFor(ua)
 	env.Fingerprint = fp
-	req := withBrowserHeaders(rawIssueRequest(t, http.MethodPost, "slide-text", map[string]interface{}{"dpr": 2, "env": env}), ua)
+	req := withBrowserHeaders(rawIssueRequest(t, "slide-text", map[string]interface{}{"dpr": 2, "env": env}), ua)
 	req.RemoteAddr = remoteAddrFor(ua)
 	return issueBody(t, serve(req))
 }
 
 func TestFingerprintReplay_DistinctClientsEscalate(t *testing.T) {
-	rt := skipWithoutRisk(t)
+	rt := config.Runtime()
 	threshold := rt.Risk.FPReplayThreshold
-	if threshold <= 0 {
-		t.Skip("RISK_FP_REPLAY_THRESHOLD=0")
-	}
 	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	fp := fmt.Sprintf("replay%026d", time.Now().UnixNano()%1_000_000_000)
 	t.Cleanup(func() { cache.Shared().Del(cache.KindFingerprint, fp) })
@@ -40,9 +37,7 @@ func TestFingerprintReplay_DistinctClientsEscalate(t *testing.T) {
 	// 第 threshold+1 个客户端起视为重放：加 1 级并记录原因
 	body := issueWithFingerprint(t, uniqueUA("replay-over"), fp)
 	assert.Equal(t, services.ClampDifficulty(base+1), int(body["difficulty"].(float64)), "超过阈值的客户端应加 1 级")
-	if rt.Risk.TelemetryRetention > 0 {
-		assert.Contains(t, fmt.Sprint(telemetryEntryFor(t, body["key"].(string))["reasons"]), "fp_replayed(+30)")
-	}
+	assert.Contains(t, fmt.Sprint(telemetryEntryFor(t, body["key"].(string))["reasons"]), "fp_replayed(+30)")
 
 	// 饱和截断：集合里最多保留 threshold+1 个成员，再多客户端也不写入
 	for i := 0; i < 5; i++ {
@@ -52,10 +47,7 @@ func TestFingerprintReplay_DistinctClientsEscalate(t *testing.T) {
 }
 
 func TestFingerprintReplay_SameClientRepeatsStayDefault(t *testing.T) {
-	rt := skipWithoutRisk(t)
-	if rt.Risk.FPReplayThreshold <= 0 {
-		t.Skip("RISK_FP_REPLAY_THRESHOLD=0")
-	}
+	rt := config.Runtime()
 	base := services.ClampDifficulty(rt.Captcha.DefaultDifficulty)
 	fp := fmt.Sprintf("same%028d", time.Now().UnixNano()%1_000_000_000)
 	t.Cleanup(func() { cache.Shared().Del(cache.KindFingerprint, fp) })
@@ -73,15 +65,11 @@ func TestFingerprintReplay_SameClientRepeatsStayDefault(t *testing.T) {
 }
 
 func TestFingerprintReplay_NotCountedWithoutFingerprint(t *testing.T) {
-	rt := skipWithoutRisk(t)
-	if rt.Risk.FPReplayThreshold <= 0 {
-		t.Skip("RISK_FP_REPLAY_THRESHOLD=0")
-	}
 	ua := uniqueUA("replay-nofp")
 	env := cleanIssueEnvFor(ua)
 	env.Fingerprint = ""
 	before := cache.Shared().Len(cache.KindFingerprint)
-	issueBody(t, issueRequest(t, http.MethodPost, "slide-text", map[string]interface{}{"dpr": 2, "env": env}, ua))
+	issueBody(t, issueRequest(t, "slide-text", map[string]interface{}{"dpr": 2, "env": env}, ua))
 	after := cache.Shared().Len(cache.KindFingerprint)
 	assert.Equal(t, before, after, "没有 fp 的出题不应新增指纹集合")
 }

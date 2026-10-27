@@ -92,13 +92,10 @@ func TestSettings_HotReload(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	ua := uniqueUA("settings-hot-reload")
-	body := issueBody(t, issueRequest(t, http.MethodPost, "slide-text", map[string]interface{}{"dpr": 2, "env": cleanIssueEnvFor(ua)}, ua))
+	body := issueBody(t, issueRequest(t, "slide-text", map[string]interface{}{"dpr": 2, "env": cleanIssueEnvFor(ua)}, ua))
 	assert.Equal(t, 4, int(body["difficulty"].(float64)), "下一次出题使用新的默认难度")
 
 	// enforce 模式下机器特征 + 正确答案被拦截；切到 log 后同样的提交通过
-	if !config.Runtime().Risk.Enabled {
-		t.Skip("风控评分关闭")
-	}
 	submitBot := func() int {
 		service, _ := services.GetServiceManager().GetCaptchaService("slide-text")
 		data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text", AppID: services.ConsoleAppID})

@@ -44,7 +44,7 @@ func (ctrl *AdminController) RiskTelemetryHandler(c *gin.Context) {
 	items, err := ctrl.clientRisk.RecentTelemetry(limit)
 	if err != nil {
 		log.Printf("读取遥测记录失败: error=%v", err)
-		helper.ErrorResponse(c, helper.NewCaptchaError(helper.ErrCodeCacheError, "读取遥测记录失败", err.Error()))
+		helper.ErrorResponse(c, helper.NewCaptchaError(helper.ErrCodeInternalError, "读取遥测记录失败", err.Error()))
 		return
 	}
 	masked := make([]map[string]interface{}, 0, len(items))

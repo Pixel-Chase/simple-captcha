@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,9 +108,6 @@ func LoadConfig() *Config {
 	if err := validateConfig(AppConfig); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
-	for _, warning := range removedEnvWarnings() {
-		log.Print(warning)
-	}
 
 	log.Printf("Configuration loaded successfully (Environment: %s)", AppConfig.Server.Environment)
 	return AppConfig
@@ -172,73 +168,6 @@ func loadFromEnv() *Config {
 			IPLimitPerMin:  getIntEnv("ADMIN_IP_LIMIT_PER_MINUTE", 30),
 		},
 	}
-}
-
-// removedEnvVars 已移除且曾经生效的环境变量及替代方式。部署环境里还设着它们时启动打印警告，避免旧配置被静默忽略
-var removedEnvVars = map[string]string{
-	"CAPTCHA_IP_RATE_LIMIT":          "验证码改为管理后台「策略配置」中的单 IP 加难阈值（只加难不拒绝），管理员登录与改密改用 ADMIN_IP_LIMIT_PER_MINUTE",
-	"CAPTCHA_RATE_LIMIT_WINDOW":      "单 IP 计数窗口固定为 1 分钟，阈值按每分钟配置",
-	"ENABLE_RATE_LIMIT":              "把「策略配置」中的单 IP 加难阈值或 ADMIN_IP_LIMIT_PER_MINUTE 设为 0 即可关闭对应功能",
-	"RATE_LIMIT_BACKEND":             "单 IP 计数固定存放在进程内存",
-	"ADMIN_DATA_DIR":                 "数据目录固定为工作目录下的 data（镜像内 /app/data）；原先指向别处时把卷挂到该路径或迁移 admin.json 与 apps.json，否则会重新生成管理员密码，全部应用密钥失效",
-	"CONSOLE_PATH":                   "管理后台固定挂在 /console/",
-	"CORS_ENABLED":                   "跨域改为在管理后台为每个应用配置允许来源",
-	"CORS_ALLOW_ORIGINS":             "跨域改为在管理后台为每个应用配置允许来源",
-	"CORS_ALLOW_METHODS":             "跨域改为在管理后台为每个应用配置允许来源",
-	"CORS_ALLOW_HEADERS":             "跨域改为在管理后台为每个应用配置允许来源",
-	"CORS_EXPOSE_HEADERS":            "跨域改为在管理后台为每个应用配置允许来源",
-	"CORS_ALLOW_CREDENTIALS":         "跨域改为在管理后台为每个应用配置允许来源",
-	"CORS_MAX_AGE":                   "跨域改为在管理后台为每个应用配置允许来源",
-	"API_PREFIX":                     "API 路径固定为 /api/v1，请为验证码服务分配独立域名",
-	"ADMIN_USERNAME":                 "管理员用户名改在首次初始化时设置（控制台初始化页面）",
-	"REDIS_HOST":                     "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_PORT":                     "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_PASSWORD":                 "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_DB":                       "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_MAX_RETRIES":              "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_POOL_SIZE":                "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_MIN_IDLE":                 "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_DIAL_TIMEOUT":             "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_READ_TIMEOUT":             "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_WRITE_TIMEOUT":            "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_POOL_TIMEOUT":             "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_IDLE_TIMEOUT":             "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"REDIS_MAX_CONN_AGE":             "已不再使用 Redis：短期数据存进程内存，持久数据存 data/captcha.db",
-	"CAPTCHA_EXPIRE_TIME":            "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_SECOND_VERIFY_EXPIRE":   "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_MAX_ATTEMPTS":           "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_IP_ESCALATE_PER_MINUTE": "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_DEFAULT_DIFFICULTY":     "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_MIN_SOLVE_TIME":         "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_BIND_CLIENT":            "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_IMAGE_QUALITY":          "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_MAX_SCALE":              "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_POW_ENABLED":            "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_POW_REQUIRED":           "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_POW_DIFFICULTY":         "已改为管理后台「策略配置」实时修改",
-	"CAPTCHA_POW_MAX_DIFFICULTY":     "已改为管理后台「策略配置」实时修改",
-	"RISK_ENABLED":                   "已改为管理后台「策略配置」实时修改",
-	"RISK_MODE":                      "已改为管理后台「策略配置」实时修改",
-	"RISK_ESCALATE_THRESHOLD":        "已改为管理后台「策略配置」实时修改",
-	"RISK_BLOCK_THRESHOLD":           "已改为管理后台「策略配置」实时修改",
-	"RISK_STATE_TTL":                 "已改为管理后台「策略配置」实时修改",
-	"RISK_TELEMETRY_LOG_SIZE":        "已改为管理后台「策略配置」实时修改",
-	"RISK_ENV_SCORE_CAP":             "已改为管理后台「策略配置」实时修改",
-	"RISK_BLOCK_MIN_BEHAVIOR":        "已改为管理后台「策略配置」实时修改",
-	"RISK_FP_REPLAY_THRESHOLD":       "已改为管理后台「策略配置」实时修改",
-	"RISK_FP_REPLAY_WINDOW":          "已改为管理后台「策略配置」实时修改",
-}
-
-// removedEnvWarnings 返回当前环境中仍在设置的已移除变量的警告，按变量名排序
-func removedEnvWarnings() []string {
-	var warnings []string
-	for key, hint := range removedEnvVars {
-		if os.Getenv(key) != "" {
-			warnings = append(warnings, fmt.Sprintf("环境变量 %s 已移除，当前设置被忽略：%s", key, hint))
-		}
-	}
-	sort.Strings(warnings)
-	return warnings
 }
 
 // validateConfig 验证配置

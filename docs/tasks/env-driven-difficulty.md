@@ -703,7 +703,9 @@ Phase 3、4、5、6、8；Phase 7 若执行也需完成。
 Current Phase: All phases completed
 
 Current Objective:
-无。全部 9 个阶段已完成；代码尚未提交，由用户审阅后决定提交方式。后续若要做降级（真人更易）见 Q7；Q8 的两个背景图测试已于 v0.12 修复。
+无。全部 9 个阶段已完成，代码已提交到 main。后续若要做降级（真人更易）见 Q7；Q8 的两个背景图测试已于 v0.12 修复。
+
+本台账中的以下内容已被 `docs/tasks/config-center-app-binding.md` 取代，正文作为历史记录保留、不再修改：GET 出题接口已删除（只保留 POST）；指纹集合与遥测由 Redis 改为进程内存与 SQLite；`RISK_*` / `CAPTCHA_*` 策略变量改为管理后台「策略配置」；`reset-admin-password` 改名为 `reset-admin`。
 
 Current Restrictions:
 - 不得自动提交代码。
@@ -755,6 +757,7 @@ Current Restrictions:
 | Version | Date | Change |
 |---|---|---|
 | v0.1 | 2026-10-26 | Initial ledger created：基于项目现状分析（已有 env / trace / PoW / 规则评分 / 难度分级）与用户确认的四项决策（POST 出题、TLS 读头 + 部署示例、单测 + 手工端到端、最小观察页）拆为 9 个阶段 |
+| v0.13 | 2026-10-27 | 执行指针更新：代码已提交；注明被 config-center-app-binding 取代的内容 |
 | v0.12 | 2026-10-27 | Q8 RESOLVED：仅改 `backend/tests/admin_test.go` 两个用例，不再依赖仓库素材尺寸（素材现为 1536x1024）。`go test -count=1 ./...` 全部 ok，Q8 两项不再排除 |
 | v0.11 | 2026-10-26 | Phase 9 COMPLETED，全部阶段完成：改动 `README.md`、`AGENTS.md`、`services/risk_engine.go`（遥测写入即脱敏）、`services/telemetry_mask.go`（幂等）、`services/telemetry_mask_test.go`、`tests/issue_endpoint_test.go`。端到端核对（最终代码、开发后端 3321）：① Playwright Chromium（无自动化标记）出题 `POST`，`difficulty 3`，`webdriver false`，无 `anomalies`，通过滑块后再出题仍 3（Phase 3 记录）；② `curl GET` 默认 UA → 4，原因 `non_browser_ua(+20) accept_language_missing(+15)`；③ `curl POST` 复制浏览器 env + curl 请求头 → 5，原因含 `ua_mismatch(+30)`；④ 同一 fp 换 6 个 UA 重放 → 前 5 次 3、第 6 次 4，原因 `fp_replayed(+30)`；⑤ VDI 环境（llvmpipe + 无媒体设备 + 完整浏览器请求头）→ 3，原因仅 `software_renderer(+25)`；⑥ 答错两次后再出题 → 4，原因 `client_history(+1)`；⑦ 内嵌控制台「风控观察」100 行，含上述记录，IP 显示 `127.0.*.*`、UA 显示 `Chrome 130 / Windows`，页面文本不含完整 UA；⑧ fingerproxy 实跑见 Phase 7；⑨ CDP 开启 `navigator.webdriver` 后出题 → 5（Phase 6 记录）。指针置为 All phases completed |
 | v0.10 | 2026-10-26 | Phase 8 COMPLETED：新增 `services/telemetry_mask.go`、`services/telemetry_mask_test.go`、`tests/admin_risk_test.go`、`sdk/playground/pages/RiskPage.tsx`；改动 `services/client_risk.go`、`models/admin.go`、`controllers/admin_controller.go`、`routes/router.go`、`sdk/playground/api.ts`、`sdk/playground/console/ConsoleView.tsx`、`sdk/playground/styles.css`。指针移到 Phase 9 |

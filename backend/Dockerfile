@@ -62,7 +62,7 @@ WORKDIR /app
 COPY --from=builder /app/simple-captcha .
 COPY --from=builder /app/images ./images
 
-# 设置文件权限；/app/data 保存管理员凭据与接入应用，预先创建以便具名卷继承属主
+# 设置文件权限；/app/data 存放 captcha.db（管理员账号、接入应用、策略配置、风控观察），预先创建以便具名卷继承属主
 RUN chmod +x simple-captcha && \
     mkdir -p /app/data && chmod 700 /app/data && \
     chown -R appuser:appgroup /app

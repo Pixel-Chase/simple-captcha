@@ -60,7 +60,7 @@ func TestEvaluateRequest_BrowserIsConsistent(t *testing.T) {
 		t.Fatalf("real browser headers with matching env should be consistent, got %+v", r)
 	}
 	if r := EvaluateRequest(chromeSignals(), nil); r.Score != 0 || !r.Consistent {
-		t.Errorf("legacy GET (no env) with browser headers should be consistent, got %+v", r)
+		t.Errorf("browser headers without env (telemetry off) should be consistent, got %+v", r)
 	}
 	if r := EvaluateRequest(nil, chromeEnv()); r.Score != 0 || r.Consistent {
 		t.Errorf("nil signals must be neutral and not consistent, got %+v", r)

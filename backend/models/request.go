@@ -73,7 +73,7 @@ type VerifyRequest struct {
 	Angle string `json:"angle" binding:"omitempty,max=16"` // 旋转验证码的参数
 	Point string `json:"point" binding:"omitempty,max=64"` // 滑动验证码的参数
 
-	// 行为与环境遥测（可选，旧版 SDK 不携带）
+	// 行为与环境遥测（可选，telemetry='off' 时不携带）
 	Trace *risk.Trace       `json:"trace,omitempty"`
 	Env   *risk.Env         `json:"env,omitempty"`
 	Pow   *risk.PowSolution `json:"pow,omitempty"`

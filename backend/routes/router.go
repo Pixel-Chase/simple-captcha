@@ -217,7 +217,7 @@ func metricsHandler(c *gin.Context) {
 
 	// 添加服务指标
 	serviceManager := services.GetServiceManager()
-	if stats := serviceManager.GetStats(); stats != nil {
+	if stats := serviceManager.GetServiceStatistics(); stats != nil {
 		metrics["services"] = stats
 	}
 
@@ -252,7 +252,7 @@ func statsHandler(c *gin.Context) {
 	}
 
 	// 添加服务统计
-	if serviceStats := serviceManager.GetStats(); serviceStats != nil {
+	if serviceStats := serviceManager.GetServiceStatistics(); serviceStats != nil {
 		stats["services"] = serviceStats
 	}
 

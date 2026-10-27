@@ -3,7 +3,6 @@ package tests
 import (
 	"fmt"
 	"net/http"
-	"simple-captcha/config"
 	"simple-captcha/services"
 	"testing"
 	"time"
@@ -26,10 +25,6 @@ func TestAdmin_RiskTelemetryRequiresSession(t *testing.T) {
 }
 
 func TestAdmin_RiskTelemetryReturnsMaskedEntries(t *testing.T) {
-	rt := config.Runtime()
-	if !rt.Risk.Enabled || rt.Risk.TelemetryRetention <= 0 {
-		t.Skip("风控评分或遥测日志已关闭")
-	}
 	h := newAdminHarness(t, 1)
 	token := h.login(t)
 

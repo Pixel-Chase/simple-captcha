@@ -84,7 +84,7 @@ func TestEvaluate_LinearBotScoresHigh(t *testing.T) {
 }
 
 func TestEvaluate_MissingTelemetryIsOnlyModeratelySuspicious(t *testing.T) {
-	// 旧版 SDK：没有任何遥测，不应直接触发拦截阈值，但应留下明显痕迹
+	// telemetry=off：没有任何遥测，不应直接触发拦截阈值，但应留下明显痕迹
 	result := Evaluate(Input{Type: "click-text", PowExpected: true, PowProvided: false})
 	if result.Score < 30 || result.Score >= 85 {
 		t.Errorf("missing telemetry scored %d (%v), expected within [30, 85)", result.Score, result.Reasons)

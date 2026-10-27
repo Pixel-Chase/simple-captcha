@@ -7,7 +7,7 @@ import (
 )
 
 // TestMain 把全局服务管理器使用的控制台数据目录指向临时目录，
-// 避免测试在仓库里生成 data/admin.json 并打印初始密码
+// 避免测试在仓库里生成 data/captcha.db 并打印初始化口令
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "simple-captcha-data-*")
 	if err != nil {

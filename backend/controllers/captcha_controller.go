@@ -278,9 +278,9 @@ func (ctrl *CaptchaController) extractVerifyData(req *models.VerifyRequest) stri
 	}
 }
 
-// 为了保持向后兼容，保留原有的函数签名。
+// 路由注册用的全局处理函数共用一个默认控制器。
 // 默认控制器在首个请求时才创建：包初始化阶段不触发服务管理器（加载素材、打开数据库、生成初始化口令），
-// reset-admin-password 等子命令与测试的 TestMain 才能在此之前完成各自的准备
+// reset-admin 子命令与测试的 TestMain 才能在此之前完成各自的准备
 var (
 	captchaControllerOnce sync.Once
 	captchaController     *CaptchaController
@@ -298,12 +298,12 @@ func IssueCaptchaHandler(c *gin.Context) {
 	defaultCaptchaController().IssueCaptchaHandler(c)
 }
 
-// VerifyCaptchaHandler 全局函数（向后兼容）
+// VerifyCaptchaHandler 全局函数（提交答案）
 func VerifyCaptchaHandler(c *gin.Context) {
 	defaultCaptchaController().VerifyCaptchaHandler(c)
 }
 
-// ValidateCaptchaHandler 全局函数（向后兼容）
+// ValidateCaptchaHandler 全局函数（S2S 状态查询）
 func ValidateCaptchaHandler(c *gin.Context) {
 	defaultCaptchaController().ValidateCaptchaHandler(c)
 }

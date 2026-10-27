@@ -24,7 +24,7 @@ services:
       FORWARD_URL: ${FORWARD_URL:-http://captcha:8080}
       CERT_FILENAME: /certs/tls.crt
       CERTKEY_FILENAME: /certs/tls.key
-      # 把客户端的 Host 原样转给后端，后端的 CORS / 日志看到的才是真实域名
+      # 把客户端的 Host 原样转给后端：管理后台的同源判定要用浏览器访问的真实地址
       PRESERVE_HOST: "true"
       ENABLE_KUBERNETES_PROBE: "false"
     extra_hosts:
@@ -38,7 +38,6 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       PORT: "8080"
-      REDIS_HOST: redis
       # 由 fingerproxy 注入的指纹头；只有直连来源命中 TRUSTED_PROXIES 时才采信。
       # compose 默认网段落在 172.16.0.0/12，已被 TRUSTED_PROXIES 的默认值覆盖；自定义网段时同步调整
       RISK_TLS_FINGERPRINT_HEADER: X-JA4-Fingerprint
@@ -48,13 +47,6 @@ services:
     volumes:
       - captcha-data:/app/data
       - ../../backend/images:/app/images
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  redis:
-    profiles: ["full"]
-    image: redis:7-alpine
     restart: unless-stopped
 
 volumes:

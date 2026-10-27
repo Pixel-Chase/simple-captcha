@@ -10,7 +10,7 @@ const (
 	ErrCodeInvalidParam     = 400
 	ErrCodeTooManyRequests  = 429
 	ErrCodeInternalError    = 500
-	ErrCodeCacheError       = 1001
+	ErrCodeCaptchaDataError = 1001 // 题目或二次验证数据（进程内存）序列化、解析失败
 	ErrCodeCaptchaGenError  = 1002
 	ErrCodeVerifyFailed     = 1003
 	ErrCodeExpired          = 1004
@@ -101,7 +101,7 @@ func HTTPStatusFromError(err *CaptchaError) int {
 		return http.StatusBadRequest
 	case ErrCodeTooManyRequests:
 		return http.StatusTooManyRequests
-	case ErrCodeInternalError, ErrCodeCacheError, ErrCodeCaptchaGenError:
+	case ErrCodeInternalError, ErrCodeCaptchaDataError, ErrCodeCaptchaGenError:
 		return http.StatusInternalServerError
 	case ErrCodeUnauthorized, ErrCodeLoginFailed:
 		return http.StatusUnauthorized

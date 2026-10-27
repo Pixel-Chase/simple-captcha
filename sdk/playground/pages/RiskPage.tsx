@@ -31,13 +31,12 @@ type ResultFilter = 'all' | 'pass' | 'fail';
 interface Filters {
   stage: StageFilter;
   result: ResultFilter;
-  /** 应用 ID；ALL 表示全部，NO_APP 表示早期没有 app 字段的记录 */
+  /** 应用 ID；ALL 表示全部 */
   app: string;
   type: string;
 }
 
 const ALL = '';
-const NO_APP = '__none__';
 const DEFAULT_FILTERS: Filters = { stage: 'all', result: 'all', app: ALL, type: ALL };
 
 const STAGE_OPTIONS: ReadonlyArray<{ value: StageFilter; label: string }> = [
@@ -87,16 +86,7 @@ const EXTRA_LABELS: Record<string, string> = {
   untrusted: '脚本合成事件数',
   webdriver: 'navigator.webdriver',
   automation: '自动化框架痕迹',
-  viaPost: '是否 POST 出题（旧记录）',
 };
-
-/** 出题评估（有 level）还是校验评分；早期记录没有 kind，按校验记录展示 */
-const kindOf = (item: RiskTelemetryItem): Kind =>
-  item.kind === 'issue' || (item.kind === undefined && typeof item.level === 'number')
-    ? 'issue'
-    : 'verify';
-
-const appKeyOf = (item: RiskTelemetryItem) => item.app || NO_APP;
 
 const parseTime = (value?: string) => {
   if (!value) {
@@ -158,23 +148,17 @@ const resultText = (value: unknown) => (value === true ? '通过' : value === fa
 
 interface AppLabel {
   name: string | null;
-  id: string | null;
+  id: string;
   deleted: boolean;
 }
 
 /** 应用名称映射；记录里的应用已不在列表中说明已被删除，只能显示 ID */
-function appLabelOf(app: string | undefined, appNames: Record<string, string>): AppLabel {
-  if (!app) {
-    return { name: null, id: null, deleted: false };
-  }
+function appLabelOf(app: string, appNames: Record<string, string>): AppLabel {
   const name = appNames[app];
   return { name: name ?? null, id: app, deleted: name === undefined };
 }
 
 const appOptionLabel = (key: string, appNames: Record<string, string>) => {
-  if (key === NO_APP) {
-    return '未记录应用';
-  }
   const name = appNames[key];
   return name ? `${name}（${key}）` : `${key}（已删除）`;
 };
@@ -259,7 +243,7 @@ function StageChip({ item }: { item: RiskTelemetryItem }) {
   let tone = 'chip--primary';
   let icon: IconName = 'sliders';
   let label = '出题评估';
-  if (kindOf(item) === 'verify') {
+  if (item.kind === 'verify') {
     if (item.success === true) {
       tone = 'chip--good';
       icon = 'check-circle';
@@ -283,9 +267,6 @@ function StageChip({ item }: { item: RiskTelemetryItem }) {
 }
 
 function AppCell({ label }: { label: AppLabel }) {
-  if (!label.id) {
-    return <span className="muted">{EMPTY}</span>;
-  }
   if (label.deleted) {
     return (
       <div className="risk-app risk-app--deleted">
@@ -768,7 +749,7 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
   const rows = useMemo(() => {
     const seen = new Map<string, number>();
     return items.map((item) => {
-      const kind = kindOf(item);
+      const kind = item.kind;
       const base = `${item.key ?? 'row'}-${kind}-${item.time ?? ''}`;
       const count = (seen.get(base) ?? 0) + 1;
       seen.set(base, count);
@@ -778,7 +759,7 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
 
   // 筛选选项来自已加载的记录；当前选中的值即使刷新后不在记录里也保留，避免下拉框与筛选状态不一致
   const appOptions = useMemo(() => {
-    const keys = new Set(rows.map(({ item }) => appKeyOf(item)));
+    const keys = new Set(rows.map(({ item }) => item.app));
     if (filters.app !== ALL) {
       keys.add(filters.app);
     }
@@ -802,7 +783,7 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
     () =>
       rows.filter(
         ({ item }) =>
-          (filters.app === ALL || appKeyOf(item) === filters.app) &&
+          (filters.app === ALL || item.app === filters.app) &&
           (filters.type === ALL || item.type === filters.type),
       ),
     [rows, filters.app, filters.type],

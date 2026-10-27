@@ -1191,10 +1191,10 @@ Phase 1～12。
 Current Phase: All phases completed
 
 Current Objective:
-全部阶段已完成。后续由用户审阅改动并自行提交；用户本机 8000 的演示站需要重启才能加载新的 Vite 代理配置（`VITE_API_PROXY_TARGET`）。
+全部阶段已完成，改动已提交到 main（c20d473）。v0.8 清理了重构遗留的旧表述与死分支；v0.9 按用户决定删除全部升级兼容与提示，PoW 默认改为强制。
 
 Current Restrictions:
-- Phase 1～4 的测试仍需要本机 docker 容器 `simple-captcha-redis` 处于运行状态。
+- 后端运行与测试都不再需要 Redis。
 - 不得自动提交；不得使用 `git stash`。
 
 ---
@@ -1264,3 +1264,5 @@ Current Restrictions:
 | v0.5 | 2026-10-27 | Phase 1、2 完成。Phase 2 删除或改写了依赖随机密码与强制改密的测试（明细见 Phase 2 Notes） |
 | v0.6 | 2026-10-27 | 全部 13 个阶段完成（连续执行）。Phase 13 额外同步了 sdk/README.md；端到端 7 项通过 |
 | v0.7 | 2026-10-27 | 复核修复 3 处问题：① 同一道题的尝试次数上限统一为出题时的值（`base_verify_service.go` 的 `failResult` 不再读最新策略，新增 `TestVerify_MaxAttemptsFixedAtIssue`，覆盖上调与下调）；② `storage.Open` 对已存在的数据目录也收紧到 0700，目录不属于运行用户时拒绝启动（新增 `TestOpenTightensExistingDirMode`，README「数据目录」补充说明）；③ README 反向代理说明改正：在代理上终结 HTTPS 时，代理的直连地址必须命中 `TRUSTED_PROXIES`（默认值不含 127.0.0.1），nginx 用 `$http_host` 保留端口，`.env.example` 与环境变量表同步。已用 nginx 1.28 + 自签证书在 8443 实测 4 种组合，只有新示例 + 信任 127.0.0.1 时返回 200 |
+| v0.8 | 2026-10-27 | 收尾清理重构遗留：① `Makefile` 的 `reset-admin-password` 目标改为 `reset-admin`（旧目标把参数传给程序后不会重置，而是直接启动服务）；② `deploy/fingerproxy` 删除 Redis 服务与 `REDIS_HOST`，README 的 curl 示例改为 `POST ?appId=app_console` 并带同源 `Origin`（已用 fingerproxy 实测：旧 GET 示例 404、缺少 Origin 返回 403/1011、新示例 200 且日志带 tls / h2）；③ 更新 `ADMIN_DATA_DIR` 移除提示、`run-dev.sh`、`Dockerfile`、`.env.example`、`captcha_controller.go` 等处的旧注释与文案；④ `ErrCodeCacheError` 改名为 `ErrCodeCaptchaDataError`（编号 1001 不变），读取风控观察失败改用 `ErrCodeInternalError`；⑤ 测试删除按策略值跳过或条件断言的分支（`skipWithoutRisk` 等）：`TestMain` 使用临时库，策略恒为默认值，这些分支永远不会触发，删除后相关断言无条件执行；⑥ 控制台风控观察删除旧记录兼容（`viaPost` 标签、缺少 `kind` 的兜底），`RiskTelemetryItem.kind` 改为必填 |
+| v0.9 | 2026-10-27 | 用户决定：3.0 的 SDK 与后端必须同时上线，不再保留任何升级兼容与提示（推翻 Global Constraints 中「删除环境变量时登记到 `config.removedEnvVars`」与 Q5 的做法）。① 删除 `config.removedEnvVars` / `removedEnvWarnings`（55 个已删除变量的启动告警）及其 5 个告警用例；② 删除 `services/datafile.go`（旧 `admin.json` / `apps.json` 告警）及其测试，`apps_test` 去掉「不生成 apps.json」断言；③ README 删除「已删除的变量」小节与「从 2.x 升级到 3.0」段落，`sdk/README.md` 删除升级说明；④ 策略「强制要求 PoW」默认值改为开启（SDK 3.0 只要下发挑战就会求解；只影响从未保存过策略的库），新增 `TestVerify_PowMissingRejectedByDefault`，`TestVerify_PowOptionalWhenNotRequired` 改为显式关闭强制，README 默认值表与提交字段说明同步；⑤ 清理 GET 出题与旧版 SDK 的残留：测试辅助 `issueRequest` / `rawIssueRequest` 去掉 method 参数，删除 GET 404 断言，「旧版 SDK 不带 env」改为 telemetry=off 的说明，删除 `GetStats` 兼容别名、控制台测试的占位符断言、风控观察页对缺少 `app` 字段记录的兼容（`app` 改为必填） |

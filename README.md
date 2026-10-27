@@ -187,7 +187,6 @@ API 路径固定为 `/api/v1`。用户侧接口（出题、提交）在查询参
 | `GET` | `/api/v1/admin/risk/telemetry` | 最近的风控观察记录（已脱敏，`limit` 默认 100、上限 500） | 会话令牌 |
 
 - 跨域：出题与提交接口的预检（`OPTIONS`）对任意来源都返回 204，真实请求才校验应用与来源，被拒绝时返回 HTTP 403 并同样带上 `Access-Control-Allow-Origin`，SDK 才能读到错误码。`/admin/*` 与 S2S 接口不返回任何跨域响应头。
-- 旧版 `GET /api/v1/captchas/:type` 出题接口已删除。
 
 **验证码类型 (`:type`)**
 
@@ -246,7 +245,7 @@ API 路径固定为 `/api/v1`。用户侧接口（出题、提交）在查询参
 }
 ```
 
-答案字段按题型取其一：点选 `dots`（`"x1,y1,x2,y2"`）、滑块 `point`（`"x,y"`）、旋转 `angle`。`trace` / `env` / `pow` 由 SDK 自动填充；不携带也能验证，但会计入风险分。`appId` 必须与出题时一致，否则按题目不存在处理（`1004`）。
+答案字段按题型取其一：点选 `dots`（`"x1,y1,x2,y2"`）、滑块 `point`（`"x,y"`）、旋转 `angle`。`trace` / `env` / `pow` 由 SDK 自动填充：缺少 `pow` 直接返回 `1009`（「策略配置」关闭“强制要求 PoW”后改为只计入风险分）；缺少 `trace` / `env` 仍能验证，但会计入风险分。`appId` 必须与出题时一致，否则按题目不存在处理（`1004`）。
 
 **业务错误码**（HTTP 200 或 4xx，响应体为 `{ "code": …, "error": "…" }`）
 
@@ -326,8 +325,6 @@ function App() {
   );
 }
 ```
-
-**从 2.x 升级到 3.0**：`api` 由 `{ basePath, prefix }` 改为 `{ baseURL, appId }`。`baseURL` 只能是验证码服务的 origin（不带路径，不传表示与页面同源），API 路径固定为 `/api/v1`；`appId` 必填，缺少时出题直接失败（`LOAD_FAILED`）。升级前先在管理后台创建应用并配置允许来源，否则请求会被拒绝（`APP_REJECTED`）。
 
 ---
 
@@ -490,7 +487,7 @@ function App() {
 
 - `telemetry='full'`（默认）：轨迹 + 环境信号 + 无头 / 篡改痕迹标记 + WebGL 渲染器 + 设备指纹哈希
 - `telemetry='basic'`：轨迹 + 基础环境信号（UA、语言、屏幕、时区、触控能力）+ 无头 / 篡改痕迹标记
-- `telemetry='off'`：不采集，仅计算 PoW；出题仍走 `POST`，服务端按无环境信号处理
+- `telemetry='off'`：不采集，仅计算 PoW；服务端按无环境信号处理
 
 采集内容不含可直接识别个人的信息；风控观察记录（`captcha.db` 的 `telemetry` 表）里的 IP 只保留前两段、UA 只保留浏览器家族与主版本摘要，客户端以 IP + UA 的哈希标识，TLS / HTTP2 指纹与设备指纹哈希原样保存供运维整理规则。建议在隐私政策中声明验证码会采集交互行为与运行环境特征用于人机判别。上线初期可在「策略配置」把运行模式设为 `log`，只记分不拦截，确认误报率后再切回 `enforce`。
 
@@ -583,7 +580,7 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 | 分组 | 参数（默认值） |
 |---|---|
 | 验证码 | 基础难度（3 级）、题目有效期（300 秒）、二次验证有效期（120 秒）、最大尝试次数（5）、最短作答时间（500 毫秒）、单 IP 加难阈值（30 次/分钟，0 关闭）、绑定客户端（开启）、主图质量（80）、最大出图倍率（3） |
-| 工作量证明 | 下发 PoW（开启）、强制要求 PoW（关闭）、基础难度（14 位）、难度上限（20 位） |
+| 工作量证明 | 下发 PoW（开启）、强制要求 PoW（开启）、基础难度（14 位）、难度上限（20 位） |
 | 风控评分 | 启用（开启）、运行模式（`enforce` / `log`）、加难阈值（55）、拦截阈值（85）、拦截所需最低行为分（20）、环境分上限（60）、指纹重放阈值（5）、指纹重放时间窗（600 秒）、客户端状态保留时长（1800 秒）、风控观察保留条数（10000，0 不记录） |
 
 对应接口：`GET /api/v1/admin/settings` 返回 `{ settings, defaults }`；`PUT` 提交完整对象，校验失败返回 400，错误信息逐条列出字段名与取值范围，失败时不保存。
@@ -627,7 +624,7 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 
 ## 环境变量参考
 
-环境变量只保留部署相关的 29 项，全部有默认值，**不配置也能启动**。验证码与风控策略在管理后台「策略配置」修改，管理员账号在初始化页面设置，应用密钥与允许来源在「接入应用」里配置。开发默认值见 [`backend/.env.development`](backend/.env.development)，生产模板见 [`backend/.env.example`](backend/.env.example)。
+环境变量只有部署相关的 29 项，全部有默认值，**不配置也能启动**。验证码与风控策略在管理后台「策略配置」修改，管理员账号在初始化页面设置，应用密钥与允许来源在「接入应用」里配置。开发默认值见 [`backend/.env.development`](backend/.env.development)，生产模板见 [`backend/.env.example`](backend/.env.example)。
 
 ### 基础
 
@@ -669,20 +666,6 @@ curl https://captcha.yourdomain.com/api/v1/captchas/states/{second_key} \
 | `ADMIN_MAX_UPLOAD_SIZE` | 单张背景图上传体积上限（字节），不能超过 `MAX_REQUEST_SIZE` | `5242880` |
 | `ADMIN_MAX_IMAGE_PIXELS` | 单张背景图像素总数上限，防止解压炸弹 | `24000000` |
 | `ADMIN_IP_LIMIT_PER_MINUTE` | 登录、初始化与改密接口的单 IP 每分钟上限，超出返回 `429`；与验证码请求分开计数，`0` 不限 | `30` |
-
-### 已删除的变量
-
-以下变量已删除，留在 `.env` 里不再生效，启动时会逐个打印警告：
-
-| 变量 | 去向 |
-|---|---|
-| `REDIS_*`（13 个） | 不再使用 Redis：短期数据存进程内存，持久数据存 `data/captcha.db` |
-| `CORS_*`（7 个） | 跨域改为在「接入应用」里为每个应用配置允许来源 |
-| `API_PREFIX` | API 路径固定为 `/api/v1`，请为验证码服务分配独立域名 |
-| `ADMIN_USERNAME` | 用户名在控制台初始化页面设置 |
-| `CAPTCHA_EXPIRE_TIME`、`CAPTCHA_SECOND_VERIFY_EXPIRE`、`CAPTCHA_MAX_ATTEMPTS`、`CAPTCHA_IP_ESCALATE_PER_MINUTE`、`CAPTCHA_DEFAULT_DIFFICULTY`、`CAPTCHA_MIN_SOLVE_TIME`、`CAPTCHA_BIND_CLIENT`、`CAPTCHA_IMAGE_QUALITY`、`CAPTCHA_MAX_SCALE`、`CAPTCHA_POW_*`（4 个）、`RISK_ENABLED`、`RISK_MODE`、`RISK_ESCALATE_THRESHOLD`、`RISK_BLOCK_THRESHOLD`、`RISK_STATE_TTL`、`RISK_TELEMETRY_LOG_SIZE`、`RISK_ENV_SCORE_CAP`、`RISK_BLOCK_MIN_BEHAVIOR`、`RISK_FP_REPLAY_THRESHOLD`、`RISK_FP_REPLAY_WINDOW` | 改为管理后台「策略配置」实时修改 |
-| `CAPTCHA_IP_RATE_LIMIT`、`CAPTCHA_RATE_LIMIT_WINDOW`、`ENABLE_RATE_LIMIT`、`RATE_LIMIT_BACKEND` | 验证码接口不按 IP 拒绝，只按「单 IP 加难阈值」加难；管理员接口限流用 `ADMIN_IP_LIMIT_PER_MINUTE` |
-| `ADMIN_DATA_DIR`、`CONSOLE_PATH` | 数据目录固定为工作目录下的 `data`（镜像内 `/app/data`），管理后台固定为 `/console/` |
 
 ---
 

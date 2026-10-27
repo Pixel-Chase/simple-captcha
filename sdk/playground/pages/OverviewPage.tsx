@@ -93,12 +93,6 @@ function summarizeBackgrounds({ items, constraints }: BackgroundListResponse) {
   return { total: items.length, ...counts, constraints };
 }
 
-/** 出题评估（有 level）还是校验评分；早期记录没有 kind，按校验记录统计（与风控观察页一致） */
-const kindOf = (item: RiskTelemetryItem): 'issue' | 'verify' =>
-  item.kind === 'issue' || (item.kind === undefined && typeof item.level === 'number')
-    ? 'issue'
-    : 'verify';
-
 /** 原因形如 webdriver(+60)，去掉括号里的分值只留原因码 */
 const reasonCode = (reason: unknown) =>
   typeof reason === 'string' ? reason.replace(/\(.*\)\s*$/, '').trim() : '';
@@ -116,7 +110,7 @@ function summarizeTelemetry(items: RiskTelemetryItem[]) {
     if (!Number.isNaN(time) && (earliest === null || time < earliest)) {
       earliest = time;
     }
-    if (kindOf(item) === 'issue') {
+    if (item.kind === 'issue') {
       issued += 1;
       continue;
     }

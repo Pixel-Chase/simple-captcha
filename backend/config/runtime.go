@@ -88,7 +88,7 @@ func DefaultRuntimeSettings() RuntimeSettings {
 		},
 		Pow: PowSettings{
 			Enabled:       true,
-			Required:      false,
+			Required:      true,
 			Difficulty:    14,
 			MaxDifficulty: 20,
 		},

@@ -103,7 +103,6 @@ func (sm *ServiceManagerImpl) initializeDefaultServices() {
 	// 管理后台：管理员账号、会话与接入应用存于 captcha.db；登录前置验证码由风控服务消费，素材增删作用于同一个仓库
 	sm.admin = NewAdminService(cfg.Admin, sm.db, backgrounds, sm.riskControl)
 	sm.apps = NewAppService(sm.db)
-	warnLegacyDataFiles(cfg.Admin.DataDir)
 	// 尚未初始化时每次启动都换一个新的初始化口令并打印，有效口令总在最近一次启动日志里
 	if code, err := PrepareSetup(context.Background(), sm.db); err != nil {
 		log.Fatalln("准备管理后台初始化口令失败:", err)
@@ -402,9 +401,4 @@ func GetServiceManager() *ServiceManagerImpl {
 		globalServiceManager = NewServiceManagerImpl()
 	})
 	return globalServiceManager
-}
-
-// GetStats 获取服务统计信息（兼容接口）
-func (sm *ServiceManagerImpl) GetStats() map[string]interface{} {
-	return sm.GetServiceStatistics()
 }

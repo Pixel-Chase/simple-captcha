@@ -78,7 +78,7 @@ func (s *scorer) addHard(points int, reason string) {
 }
 
 // EvaluateEnv 对环境与请求侧信号打分。env、req 均可为 nil，两者都为 nil 时返回零值。
-// 这里不计 env_missing：出题阶段旧版 SDK 不带 env 是正常情况，只有校验阶段才把缺失视为疑点。
+// 这里不计 env_missing：telemetry=off 时出题不带 env 是正常情况，只有校验阶段才把缺失视为疑点。
 func EvaluateEnv(env *Env, req *RequestSignals) EnvResult {
 	s := &scorer{}
 	softwareRenderer := false

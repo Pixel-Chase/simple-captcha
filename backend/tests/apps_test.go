@@ -98,13 +98,11 @@ func TestApps_CreateAndList(t *testing.T) {
 	assert.NotContains(t, listed, "secret")
 	assert.NotContains(t, listed, "secretHash")
 
-	// 库中只有哈希，数据库文件权限仅属主可读写；不再生成 apps.json
+	// 库中只有哈希，数据库文件权限仅属主可读写
 	assertFileLacks(t, h.dataDir, secret)
 	info, err := os.Stat(filepath.Join(h.dataDir, storage.FileName))
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
-	_, err = os.Stat(filepath.Join(h.dataDir, "apps.json"))
-	assert.True(t, os.IsNotExist(err))
 
 	// 另开一个连接读取同一个库：应用仍在，原密钥仍可鉴权
 	db, err := storage.Open(h.dataDir)

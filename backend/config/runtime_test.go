@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"sync"
 	"testing"
 
@@ -12,10 +11,11 @@ import (
 func TestDefaultRuntimeSettingsValid(t *testing.T) {
 	d := DefaultRuntimeSettings()
 	require.NoError(t, d.Validate())
-	// 与原环境变量的默认值一致，风控观察保留条数改为 10000
+	// 风控观察保留 10000 条；SDK 3.0 只要下发挑战就会求解 PoW，默认强制提交
 	assert.Equal(t, 300, d.Captcha.ExpireSeconds)
 	assert.Equal(t, 3, d.Captcha.DefaultDifficulty)
 	assert.Equal(t, 500, d.Captcha.MinSolveTimeMs)
+	assert.True(t, d.Pow.Required)
 	assert.Equal(t, 14, d.Pow.Difficulty)
 	assert.Equal(t, "enforce", d.Risk.Mode)
 	assert.Equal(t, 10000, d.Risk.TelemetryRetention)
@@ -176,14 +176,4 @@ func TestApplyRuntimeReplacesSnapshot(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-}
-
-func TestRemovedStrategyEnvWarns(t *testing.T) {
-	t.Setenv("CAPTCHA_DEFAULT_DIFFICULTY", "5")
-	t.Setenv("RISK_MODE", "log")
-	warnings := strings.Join(removedEnvWarnings(), "\n")
-	assert.Contains(t, warnings, "CAPTCHA_DEFAULT_DIFFICULTY")
-	assert.Contains(t, warnings, "RISK_MODE")
-	assert.Contains(t, warnings, "策略配置")
-	assert.NoError(t, validateConfig(loadFromEnv()), "旧变量只告警，不影响启动")
 }

@@ -61,8 +61,6 @@ export default () => {
 
 API 路径固定为 `/api/v1`。缺少 `appId` 或 `baseURL` 带路径时，出题直接以 `LOAD_FAILED` 失败；服务端拒绝本应用（应用不存在或已停用、来源不在允许名单内）时以 `APP_REJECTED` 通知。
 
-**从 2.x 升级**：`api={{ basePath, prefix }}` 改为 `api={{ baseURL, appId }}`，并先在管理后台创建应用、填写允许来源。
-
 SDK 会自动完成以下工作，无需业务侧干预：
 
 1. 按 `devicePixelRatio` 请求 1x/2x/3x 高清题图，并把点击/拖动坐标换算回位图像素再提交

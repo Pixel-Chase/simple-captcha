@@ -53,9 +53,9 @@ console:
 dev:
 	./run-dev.sh
 
-# 重置管理员密码：重新随机生成并打印，下次登录后必须修改（读取与 dev 相同的 env 文件）
-reset-admin-password:
-	./run-dev.sh reset-admin-password
+# 重置管理员账号：删除账号与全部会话并打印新的初始化口令，回到控制台初始化页面（读取与 dev 相同的 env 文件）
+reset-admin:
+	./run-dev.sh reset-admin
 
 # Format code
 fmt:
@@ -94,7 +94,7 @@ help:
 	@echo "  run           - Build and run the application"
 	@echo "  console       - Build the admin console frontend into console/dist (embedded on next build)"
 	@echo "  dev           - Run locally with .env.development + .env (run-dev.sh)"
-	@echo "  reset-admin-password - Regenerate the admin password (must be changed on next login)"
+	@echo "  reset-admin   - Reset the admin account and print a new setup code"
 	@echo "  fmt           - Format code"
 	@echo "  lint          - Lint code"
 	@echo "  security      - Run security checks"
@@ -103,4 +103,4 @@ help:
 	@echo "  docker-run    - Run Docker container"
 	@echo "  help          - Show this help"
 
-.PHONY: build clean test test-coverage benchmark build-linux deps run console dev reset-admin-password fmt lint security docs docker-build docker-run help
+.PHONY: build clean test test-coverage benchmark build-linux deps run console dev reset-admin fmt lint security docs docker-build docker-run help

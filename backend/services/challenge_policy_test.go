@@ -50,7 +50,7 @@ func TestDecide_DefaultStaysForCleanEnv(t *testing.T) {
 		t.Errorf("success history must not lower difficulty, got %+v", d)
 	}
 	if d := policy.Decide(IssueInput{State: fresh}); d.Level != 3 || len(d.Reasons) != 0 {
-		t.Errorf("nil env (legacy GET) should stay at default without reasons, got %+v", d)
+		t.Errorf("nil env (telemetry off) should stay at default without reasons, got %+v", d)
 	}
 }
 

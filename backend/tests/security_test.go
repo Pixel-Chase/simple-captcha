@@ -186,11 +186,30 @@ func TestVerify_PowInvalidRejected(t *testing.T) {
 	assert.Equal(t, helper.ErrCodePowInvalid, verifyErr.Code)
 }
 
+// 默认策略强制 PoW：答案正确但不提交 PoW 直接判失败
+func TestVerify_PowMissingRejectedByDefault(t *testing.T) {
+	require.True(t, config.Runtime().Pow.Required)
+	manager := services.GetServiceManager()
+	service, _ := manager.GetCaptchaService("slide-text")
+	verifier, _ := manager.GetVerifyService("slide-text")
+
+	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text"})
+	require.Nil(t, err)
+	answer, _ := slideAnswer(t, data.Key)
+	waitMinSolveTime()
+
+	ok, _, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer})
+	assert.False(t, ok)
+	require.NotNil(t, verifyErr)
+	assert.Equal(t, helper.ErrCodePowInvalid, verifyErr.Code)
+}
+
+// 默认强制 PoW；在「策略配置」关闭强制后，不提交 PoW 只计入风险分，不直接判失败
 func TestVerify_PowOptionalWhenNotRequired(t *testing.T) {
-	rt := config.Runtime()
-	if rt.Pow.Required {
-		t.Skip("CAPTCHA_POW_REQUIRED=true，跳过可选 PoW 用例")
-	}
+	restoreRuntime(t)
+	next := *config.Runtime()
+	next.Pow.Required = false
+	require.NoError(t, config.ApplyRuntime(next))
 
 	manager := services.GetServiceManager()
 	service, _ := manager.GetCaptchaService("slide-text")
@@ -203,7 +222,7 @@ func TestVerify_PowOptionalWhenNotRequired(t *testing.T) {
 
 	ok, _, verifyErr := verifier.VerifyData(&services.VerifyInput{Key: data.Key, Answer: answer})
 	assert.Nil(t, verifyErr)
-	assert.True(t, ok, "未强制 PoW 时旧版 SDK 仍可通过")
+	assert.True(t, ok, "未强制 PoW 时不提交 PoW 也能通过")
 }
 
 func TestVerify_WrongAnswerConsumesAttempts(t *testing.T) {
@@ -344,9 +363,6 @@ func TestRateLimiter_SlidingWindow(t *testing.T) {
 func TestRouter_SharedEgressEscalatesInsteadOfBlocking(t *testing.T) {
 	rt := config.Runtime()
 	threshold := rt.Captcha.IPEscalatePerMinute
-	if threshold <= 0 {
-		t.Skip("CAPTCHA_IP_ESCALATE_PER_MINUTE 为 0，按 IP 加难已关闭")
-	}
 
 	const egressIP = "198.51.100.77"
 	bucket := services.CaptchaRateLimitKey(egressIP)
@@ -436,9 +452,6 @@ func TestClientRiskStore_EscalatesDifficulty(t *testing.T) {
 func TestRiskEngine_BlocksObviousBot(t *testing.T) {
 	rt := config.Runtime()
 	engine := services.NewRiskEngine(nil)
-	if !engine.Enabled() {
-		t.Skip("RISK_ENABLED=false")
-	}
 
 	result := engine.Evaluate(&services.EvaluationContext{
 		Type: "slide-text",
@@ -452,9 +465,7 @@ func TestRiskEngine_BlocksObviousBot(t *testing.T) {
 	})
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, result.Score, rt.Risk.BlockThreshold)
-	if rt.Risk.Mode == "enforce" {
-		assert.True(t, engine.ShouldBlock(result))
-	}
+	assert.True(t, engine.ShouldBlock(result))
 }
 
 func TestClientRiskStore_ConcurrentRecordsAreAtomic(t *testing.T) {
@@ -519,7 +530,6 @@ func TestVerify_RiskBlockedFailsOnlyAtAnswerComparison(t *testing.T) {
 // TestVerify_RiskBlockedMatchesNormalPathErrors 被拦截的请求在答案比对之前的每个阶段，
 // 返回值都必须与未拦截时完全一致，否则攻击者可以故意触发前置错误来探测自己是否被拦截
 func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
-	rt := config.Runtime()
 	manager := services.GetServiceManager()
 	service, _ := manager.GetCaptchaService("slide-text")
 	verifier, _ := manager.GetVerifyService("slide-text")
@@ -546,7 +556,6 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 
 	cases := []struct {
 		name  string
-		skip  bool
 		build func(t *testing.T) *services.VerifyInput
 		want  int
 	}{
@@ -559,7 +568,6 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 		},
 		{
 			name: "提交过快",
-			skip: rt.Captcha.MinSolveTime() <= 0,
 			build: func(t *testing.T) *services.VerifyInput {
 				key, answer, pow := fresh(t, "")
 				return &services.VerifyInput{Key: key, Answer: answer, Pow: pow}
@@ -568,7 +576,6 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 		},
 		{
 			name: "客户端不匹配",
-			skip: !rt.Captcha.BindClient,
 			build: func(t *testing.T) *services.VerifyInput {
 				key, answer, pow := fresh(t, "client-a")
 				waitMinSolveTime()
@@ -599,9 +606,6 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.skip {
-				t.Skip("当前配置未启用该检查")
-			}
 			normal := tc.build(t)
 			blocked := tc.build(t)
 			blocked.RiskBlocked = true
@@ -615,11 +619,6 @@ func TestVerify_RiskBlockedMatchesNormalPathErrors(t *testing.T) {
 }
 
 func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
-	rt := config.Runtime()
-	if !rt.Risk.Enabled || rt.Risk.Mode != "enforce" {
-		t.Skip("RISK_MODE != enforce")
-	}
-
 	manager := services.GetServiceManager()
 	service, _ := manager.GetCaptchaService("slide-text")
 	data, err := service.GenerateCaptcha(&services.ChallengeRequest{Type: "slide-text", AppID: services.ConsoleAppID})
@@ -651,21 +650,16 @@ func TestVerifyEndpoint_RiskBlockLooksLikeNormalFailure(t *testing.T) {
 	}
 
 	// 被拦截的请求若提交过快，仍应得到与正常路径一致的"提交过快"，而不是提前暴露 1003
-	expectAttempts := float64(0)
-	if rt.Captcha.MinSolveTime() > 0 {
-		code, _ := post(t)
-		assert.Equal(t, helper.ErrCodeTooFast, code, "拦截路径上的前置检查响应必须与正常路径一致")
-		expectAttempts++
-		assert.Equal(t, expectAttempts, attempts(t))
-	}
+	code, _ := post(t)
+	assert.Equal(t, helper.ErrCodeTooFast, code, "拦截路径上的前置检查响应必须与正常路径一致")
+	assert.Equal(t, float64(1), attempts(t))
 
 	// 正确答案 + 机器特征：对外与答案错误无法区分，并消耗一次尝试机会
 	waitMinSolveTime()
 	code, msg := post(t)
 	assert.Equal(t, helper.ErrCodeVerifyFailed, code, "风控拦截对外应与答案错误无法区分")
 	assert.Equal(t, helper.ErrVerifyFailed.Message, msg)
-	expectAttempts++
-	assert.Equal(t, expectAttempts, attempts(t), "拦截应消耗一次尝试机会")
+	assert.Equal(t, float64(2), attempts(t), "拦截应消耗一次尝试机会")
 }
 
 func TestVerifyEndpoint_RejectsOversizedBody(t *testing.T) {

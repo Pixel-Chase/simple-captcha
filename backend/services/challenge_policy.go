@@ -21,7 +21,7 @@ type IssueInput struct {
 	ClientHash string
 	// IPRequests 出口 IP 最近一分钟的请求数
 	IPRequests int
-	// Env 客户端自报的环境信号，旧版 SDK 或 telemetry=off 时为 nil
+	// Env 客户端自报的环境信号，telemetry=off 时为 nil
 	Env *risk.Env
 	// Request 服务端从请求头提取的信号，可为 nil
 	Request *risk.RequestSignals

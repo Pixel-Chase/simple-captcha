@@ -114,7 +114,7 @@ func (bs *BaseService) saveCaptchaData(rt *config.RuntimeSettings, key string, d
 
 	verifyDataBytes, err := json.Marshal(verifyData)
 	if err != nil {
-		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
+		return helper.NewCaptchaError(helper.ErrCodeCaptchaDataError, "序列化验证数据失败", err.Error())
 	}
 
 	cache.Shared().Set(cache.KindChallenge, key, verifyDataBytes, rt.Captcha.Expire())
@@ -131,7 +131,7 @@ func (bs *BaseService) GetCaptchaData(key string) (map[string]interface{}, *help
 	var verifyData map[string]interface{}
 	if err := json.Unmarshal(raw, &verifyData); err != nil {
 		cache.Shared().Del(cache.KindChallenge, key)
-		return nil, helper.NewCaptchaError(helper.ErrCodeCacheError, "验证码数据格式错误")
+		return nil, helper.NewCaptchaError(helper.ErrCodeCaptchaDataError, "验证码数据格式错误")
 	}
 
 	if expireAt, ok := verifyData["expireAt"].(float64); ok {
@@ -177,7 +177,7 @@ func CreatedAt(verifyData map[string]interface{}) time.Time {
 func (bs *BaseService) UpdateCaptchaData(key string, verifyData map[string]interface{}) *helper.CaptchaError {
 	verifyDataBytes, err := json.Marshal(verifyData)
 	if err != nil {
-		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
+		return helper.NewCaptchaError(helper.ErrCodeCaptchaDataError, "序列化验证数据失败", err.Error())
 	}
 
 	existed := false
@@ -217,7 +217,7 @@ func (bs *BaseService) IncrementAttempts(key string) (int, *helper.CaptchaError)
 		}
 		var verifyData map[string]interface{}
 		if err := json.Unmarshal(old, &verifyData); err != nil {
-			cerr = helper.NewCaptchaError(helper.ErrCodeCacheError, "验证码数据格式错误")
+			cerr = helper.NewCaptchaError(helper.ErrCodeCaptchaDataError, "验证码数据格式错误")
 			return nil, false
 		}
 		count, _ := verifyData["attempts"].(float64)
@@ -225,7 +225,7 @@ func (bs *BaseService) IncrementAttempts(key string) (int, *helper.CaptchaError)
 		verifyData["attempts"] = count
 		next, err := json.Marshal(verifyData)
 		if err != nil {
-			cerr = helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化验证数据失败", err.Error())
+			cerr = helper.NewCaptchaError(helper.ErrCodeCaptchaDataError, "序列化验证数据失败", err.Error())
 			return old, true
 		}
 		attempts = int(count)
@@ -271,7 +271,7 @@ func (bs *BaseService) MarkAsVerified(key string) *helper.CaptchaError {
 func (bs *BaseService) SaveSecondVerifyData(key string, data map[string]interface{}) *helper.CaptchaError {
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
-		return helper.NewCaptchaError(helper.ErrCodeCacheError, "序列化二次验证数据失败", err.Error())
+		return helper.NewCaptchaError(helper.ErrCodeCaptchaDataError, "序列化二次验证数据失败", err.Error())
 	}
 
 	cache.Shared().Set(cache.KindChallenge, key, dataBytes, config.Runtime().Captcha.SecondVerifyExpire())

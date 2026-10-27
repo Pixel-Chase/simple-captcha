@@ -104,7 +104,7 @@ func (bvs *BaseVerifyService) VerifyDataTemplate(
 	correctData, ok := verifyData["data"]
 	if !ok {
 		bvs.DeleteCaptchaData(key)
-		return false, "验证码数据异常", helper.NewCaptchaError(helper.ErrCodeCacheError, "验证码数据异常")
+		return false, "验证码数据异常", helper.NewCaptchaError(helper.ErrCodeCaptchaDataError, "验证码数据异常")
 	}
 
 	// 风控拦截下沉到这一步：前面的尝试次数、客户端绑定、时间窗口、PoW、答案解析全部照常执行，

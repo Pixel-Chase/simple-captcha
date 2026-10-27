@@ -142,14 +142,13 @@ export interface SettingsResponse {
 
 /**
  * 风控观察：一条遥测记录（已由服务端脱敏）。
- * kind=issue 为出题评估（level / base / boost / envScore），kind=verify 为校验评分（score / success）；
- * 早期记录没有 kind 字段，按校验记录展示
+ * kind=issue 为出题评估（level / base / boost / envScore），kind=verify 为校验评分（score / success）
  */
 export interface RiskTelemetryItem {
-  kind?: 'issue' | 'verify';
+  kind: 'issue' | 'verify';
   time?: string;
-  /** 请求所属的接入应用 ID；早期记录没有该字段 */
-  app?: string;
+  /** 请求所属的接入应用 ID */
+  app: string;
   type?: string;
   key?: string;
   client?: string;

@@ -36,12 +36,16 @@ X-HTTP2-Fingerprint: 1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p
 
    ```bash
    FINGERPROXY_USER=$(id -u) FORWARD_URL=http://host.docker.internal:3321 docker compose up -d --build fingerproxy
-   curl -k https://127.0.0.1:8443/api/v1/captchas/slide-text -o /dev/null -w "%{http_code}\n"
+   # 以内置的管理后台应用出题：它只接受同源请求，Origin 要与代理地址一致
+   curl -k -X POST "https://127.0.0.1:8443/api/v1/captchas/slide-text?appId=app_console" \
+     -H "Origin: https://127.0.0.1:8443" -o /dev/null -w "%{http_code}\n"
    ```
+
+   出题接口只接受 POST，并按应用校验 `Origin`：不带 `Origin` 返回 403（错误码 1011）。
 
 4. 后端日志里这次出题的 `出题评估:` 记录会带 `tls` / `h2` 字段（管理后台「风控观察」同样可见）。curl 没有浏览器请求头，还会命中 `non_browser_ua`、`accept_language_missing` 被加难。
 
-代理 + 后端 + Redis 一起起：`docker compose --profile full up -d --build`，然后访问 `https://127.0.0.1:8443/console/`。
+代理 + 后端一起起：`docker compose --profile full up -d --build`，然后访问 `https://127.0.0.1:8443/console/`，首次使用时用 `docker compose logs captcha | grep -A4 初始化口令` 查到口令并完成初始化。
 
 ## 可信代理
 

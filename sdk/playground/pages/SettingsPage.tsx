@@ -33,7 +33,7 @@ interface GroupMeta {
   fields: Field[];
 }
 
-/** 字段说明取自 README「环境变量参考」原有的描述；取值范围与服务端校验一致，仅用于提示 */
+/** 各分组的字段名称、说明与单位；取值范围与服务端校验（backend/config/runtime.go）一致，仅用于提示 */
 const GROUPS: GroupMeta[] = [
   {
     id: 'captcha',

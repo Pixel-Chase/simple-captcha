@@ -159,10 +159,6 @@ func TestAppBinding_AdminLoginOnlyAcceptsConsoleKeys(t *testing.T) {
 }
 
 func TestAppBinding_TelemetryRecordsApp(t *testing.T) {
-	rt := skipWithoutRisk(t)
-	if rt.Risk.TelemetryRetention <= 0 {
-		t.Skip("风控观察保留条数为 0")
-	}
 	a := newBoundApp(t, "A", "https://a.example.com")
 	ua := uniqueUA("binding-telemetry")
 	key, attempt := issueAs(t, a, ua)

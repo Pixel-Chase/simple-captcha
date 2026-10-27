@@ -48,7 +48,7 @@ func TestConsole_RedirectsToTrailingSlash(t *testing.T) {
 	}
 }
 
-// API 路径固定为同源的 /api/v1：index.html 原样返回，不再注入任何配置
+// index.html 原样返回，不注入任何配置
 func TestConsole_ServesIndexUnchanged(t *testing.T) {
 	r := newRouter(builtAssets())
 
@@ -56,7 +56,6 @@ func TestConsole_ServesIndexUnchanged(t *testing.T) {
 		w := get(r, http.MethodGet, target)
 		require.Equal(t, http.StatusOK, w.Code, target)
 		assert.Equal(t, testIndex, w.Body.String())
-		assert.NotContains(t, w.Body.String(), "__CAPTCHA_API_PREFIX__")
 		assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
 		assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
 		assert.Contains(t, w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
