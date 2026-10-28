@@ -59,6 +59,8 @@ func SetupRouter() *gin.Engine {
 
 	// 健康检查和监控路由（不需要限流）
 	r.GET(cfg.Monitoring.HealthPath, healthCheckHandler)
+	// 容器健康检查用 wget --spider，发的是 HEAD；Gin 不会把 HEAD 自动映射到 GET
+	r.HEAD(cfg.Monitoring.HealthPath, healthCheckHandler)
 	if cfg.Monitoring.Enabled {
 		r.GET(cfg.Monitoring.MetricsPath, metricsHandler)
 	}
