@@ -10,7 +10,7 @@ WORKDIR /src/sdk
 RUN npm install -g pnpm@11.21.0
 
 # 先只复制依赖清单，源码变化时依赖层仍可复用缓存
-COPY sdk/package.json sdk/pnpm-lock.yaml sdk/pnpm-workspace.yaml ./
+COPY sdk/package.json sdk/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY sdk/ ./
