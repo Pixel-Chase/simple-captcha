@@ -37,6 +37,7 @@ vendor/
 /es
 /lib
 .svn
+node_modules/
 sdk/node_modules
 sdk/dist
 sdk/playground-dist

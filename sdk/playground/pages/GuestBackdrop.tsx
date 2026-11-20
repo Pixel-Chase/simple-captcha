@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { Icon } from '../components/Icon';
 import './GuestPages.css';
 
 /** 只有鼠标 / 触控板这类能悬停的精确指针才有连续轨迹；触屏只在拖动时产生事件，不展示 */
 const FINE_POINTER = '(hover: hover) and (pointer: fine)';
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 /** 两次移动的间隔超过这个值（毫秒），视为在上一个位置停顿过 */
 const PAUSE_GAP = 160;
@@ -33,148 +32,18 @@ interface TrailPoint {
 }
 
 /**
- * 未登录页的背景氛围层：网格、光晕、扫描线都是纯 CSS；鼠标轨迹层只在精确指针且未要求减少动态效果时启用。
+ * 未登录页的背景氛围层：网格、光晕、扫描线都是纯 CSS。
  * 整层 fixed 铺满视口、不参与布局，也不接收指针事件
  */
 export function GuestBackdrop() {
-  const finePointer = useMediaQuery(FINE_POINTER);
-  const reducedMotion = useMediaQuery(REDUCED_MOTION);
-
   return (
-    <>
-      <div className="guest-backdrop" aria-hidden="true">
-        <div className="guest-backdrop__grid" />
-        <div className="guest-backdrop__glow guest-backdrop__glow--violet" />
-        <div className="guest-backdrop__glow guest-backdrop__glow--cyan" />
-        <div className="guest-backdrop__scan" />
-      </div>
-      {finePointer && !reducedMotion && <TrailCanvas />}
-    </>
+    <div className="guest-backdrop" aria-hidden="true">
+      <div className="guest-backdrop__grid" />
+      <div className="guest-backdrop__glow guest-backdrop__glow--violet" />
+      <div className="guest-backdrop__glow guest-backdrop__glow--cyan" />
+      <div className="guest-backdrop__scan" />
+    </div>
   );
-}
-
-/** 轨迹点与停顿标记的存活时间（毫秒） */
-const TRAIL_LIFE = 900;
-const PAUSE_LIFE = 1600;
-/** 高回报率鼠标下限制点数，避免一帧里画太多段 */
-const TRAIL_MAX_POINTS = 240;
-
-/**
- * 鼠标轨迹层：连线 + 采样点 + 停顿标记，随时间淡出。
- * 监听器是 passive 的、不拦截也不阻止冒泡，canvas 不接收指针事件，不影响 SDK 自己的轨迹采集；
- * 没有存活的点时不排下一帧，鼠标不动就不占 CPU
- */
-function TrailCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) {
-      return;
-    }
-
-    const points: TrailPoint[] = [];
-    const pauses: TrailPoint[] = [];
-    let lastMove: TrailPoint | null = null;
-    let frame = 0;
-
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.round(window.innerWidth * dpr);
-      canvas.height = Math.round(window.innerHeight * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-
-    const draw = () => {
-      const now = performance.now();
-      while (points.length > 0 && now - points[0].t > TRAIL_LIFE) {
-        points.shift();
-      }
-      while (pauses.length > 0 && now - pauses[0].t > PAUSE_LIFE) {
-        pauses.shift();
-      }
-
-      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-      ctx.lineWidth = 1.5;
-      ctx.lineCap = 'round';
-
-      // 连线：越早的段越淡
-      for (let i = 1; i < points.length; i++) {
-        const from = points[i - 1];
-        const to = points[i];
-        const life = 1 - (now - to.t) / TRAIL_LIFE;
-        ctx.strokeStyle = `rgba(143, 132, 255, ${(life * 0.7).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.stroke();
-      }
-
-      // 采样点：每个 pointermove 一个
-      for (const point of points) {
-        const life = 1 - (now - point.t) / TRAIL_LIFE;
-        ctx.fillStyle = `rgba(34, 211, 238, ${(life * 0.85).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 1.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 停顿：在停留过的位置画一个菱形
-      for (const pause of pauses) {
-        const life = 1 - (now - pause.t) / PAUSE_LIFE;
-        ctx.strokeStyle = `rgba(251, 191, 36, ${(life * 0.9).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.moveTo(pause.x, pause.y - 5);
-        ctx.lineTo(pause.x + 5, pause.y);
-        ctx.lineTo(pause.x, pause.y + 5);
-        ctx.lineTo(pause.x - 5, pause.y);
-        ctx.closePath();
-        ctx.stroke();
-      }
-
-      // 当前位置：一圈光环
-      const head = points[points.length - 1];
-      if (head) {
-        const life = 1 - (now - head.t) / TRAIL_LIFE;
-        ctx.strokeStyle = `rgba(34, 211, 238, ${(life * 0.6).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.arc(head.x, head.y, 7, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      frame = points.length > 0 || pauses.length > 0 ? requestAnimationFrame(draw) : 0;
-    };
-
-    const onMove = (event: PointerEvent) => {
-      if (!isTrackedPointer(event)) {
-        return;
-      }
-      const now = performance.now();
-      if (lastMove && now - lastMove.t > PAUSE_GAP) {
-        pauses.push({ x: lastMove.x, y: lastMove.y, t: now });
-      }
-      lastMove = { x: event.clientX, y: event.clientY, t: now };
-      points.push(lastMove);
-      if (points.length > TRAIL_MAX_POINTS) {
-        points.shift();
-      }
-      if (!frame) {
-        frame = requestAnimationFrame(draw);
-      }
-    };
-
-    resize();
-    window.addEventListener('resize', resize);
-    window.addEventListener('pointermove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('resize', resize);
-      window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} className="guest-trail" />;
 }
 
 /** 读数刷新间隔与速度曲线长度：48 × 100ms ≈ 最近 5 秒 */
