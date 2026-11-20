@@ -146,6 +146,11 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const previewsRef = useRef<Record<string, string>>({});
   const pendingPreviews = useRef(new Set<string>());
@@ -217,8 +222,15 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
       const data = await adminApi.listBackgrounds(token);
       setItems(data.items);
       setConstraints(data.constraints);
-      // 已不在列表里的素材（例如在别的窗口删除）释放预览
       const names = new Set(data.items.map((item) => item.name));
+      setSelected((prev) => {
+        if (prev.size === 0) {
+          return prev;
+        }
+        const next = new Set([...prev].filter((name) => names.has(name)));
+        return next.size === prev.size ? prev : next;
+      });
+      // 已不在列表里的素材（例如在别的窗口删除）释放预览
       for (const name of Object.keys(previewsRef.current)) {
         if (!names.has(name)) {
           releasePreview(name);
@@ -352,6 +364,14 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
     try {
       await adminApi.deleteBackground(token, name);
       setItems((prev) => prev.filter((item) => item.name !== name));
+      setSelected((prev) => {
+        if (!prev.has(name)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
       releasePreview(name);
       setConfirmName(null);
       toast(`已删除 ${name}`);
@@ -387,6 +407,127 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
 
   const ready = constraints !== null;
   const onlyOneLeft = items.length <= 1;
+  const maxSelectable = Math.max(0, items.length - 1);
+
+  const toggleSelect = (name: string) => {
+    if (onlyOneLeft) {
+      toast(LAST_ONE_HINT);
+      return;
+    }
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+        return next;
+      }
+      if (next.size >= maxSelectable) {
+        toast(LAST_ONE_HINT);
+        return prev;
+      }
+      next.add(name);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    if (onlyOneLeft) {
+      toast(LAST_ONE_HINT);
+      return;
+    }
+    const next = new Set(selected);
+    let capped = false;
+    for (const item of visibleItems) {
+      if (next.has(item.name)) {
+        continue;
+      }
+      if (next.size >= maxSelectable) {
+        capped = true;
+        break;
+      }
+      next.add(item.name);
+    }
+    setSelected(next);
+    if (capped) {
+      toast('已选中最多可删素材（至少保留 1 张背景图）');
+    }
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+  };
+
+  const selectedNames = useMemo(
+    () => items.filter((item) => selected.has(item.name)).map((item) => item.name),
+    [items, selected],
+  );
+
+  const openBatchDelete = () => {
+    if (selectedNames.length === 0) {
+      return;
+    }
+    setBatchError(null);
+    setBatchConfirmOpen(true);
+  };
+
+  const closeBatchDelete = () => {
+    if (!batchDeleting) {
+      setBatchConfirmOpen(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedNames.length === 0) {
+      return;
+    }
+    const targets = selectedNames.slice(0, maxSelectable);
+    setBatchDeleting(true);
+    setBatchError(null);
+    const deleted: string[] = [];
+    let failedMessage: string | null = null;
+
+    for (const name of targets) {
+      try {
+        await adminApi.deleteBackground(token, name);
+        deleted.push(name);
+        releasePreview(name);
+      } catch (err) {
+        const message = handleApiError(err, `删除 ${name} 失败`);
+        if (!message) {
+          setBatchDeleting(false);
+          return;
+        }
+        failedMessage = message;
+        break;
+      }
+    }
+
+    if (deleted.length > 0) {
+      const deletedSet = new Set(deleted);
+      setItems((prev) => prev.filter((item) => !deletedSet.has(item.name)));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const name of deleted) {
+          next.delete(name);
+        }
+        return next;
+      });
+    }
+
+    setBatchDeleting(false);
+
+    if (failedMessage) {
+      setBatchError(
+        deleted.length > 0
+          ? `已删除 ${deleted.length} 张，其余失败：${failedMessage}`
+          : failedMessage,
+      );
+      return;
+    }
+
+    setBatchConfirmOpen(false);
+    toast(`已批量删除 ${deleted.length} 张背景图`);
+  };
+
   const hasFinishedTasks = tasks.some((task) => task.status !== 'uploading');
   const accept = formats
     .flatMap((format) => [
@@ -498,30 +639,47 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
         {visibleItems.map((item) => {
           const tier = tiers.get(item.name) ?? 'ok';
           const meta = TIERS[tier];
+          const isSelected = selected.has(item.name);
+          const cardClasses = [
+            'images-card',
+            tier === 'low' ? 'images-card--low' : '',
+            isSelected ? 'images-card--selected' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
           return (
-            <li
-              key={item.name}
-              className={`images-card${tier === 'low' ? ' images-card--low' : ''}`}
-            >
-              <button
-                type="button"
-                className="images-card__media"
-                onClick={() => setPreviewName(item.name)}
-                aria-label={`预览 ${item.name}`}
-              >
-                {renderThumb(item, 'images-card__img', '')}
-                <span className={`chip chip--${meta.tone} images-card__badge`}>
-                  {tier === 'low' ? (
-                    <Icon name="warning" size={12} />
-                  ) : (
-                    <span className="chip__dot" />
-                  )}
-                  {meta.badge}
-                </span>
-                <span className="images-card__zoom">
-                  <Icon name="zoom-in" size={16} />
-                </span>
-              </button>
+            <li key={item.name} className={cardClasses}>
+              <div className="images-card__stage">
+                <button
+                  type="button"
+                  className="images-card__media"
+                  onClick={() => setPreviewName(item.name)}
+                  aria-label={`预览 ${item.name}`}
+                >
+                  {renderThumb(item, 'images-card__img', '')}
+                  <span className={`chip chip--${meta.tone} images-card__badge`}>
+                    {tier === 'low' ? (
+                      <Icon name="warning" size={12} />
+                    ) : (
+                      <span className="chip__dot" />
+                    )}
+                    {meta.badge}
+                  </span>
+                  <span className="images-card__zoom">
+                    <Icon name="zoom-in" size={16} />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`images-card__select${isSelected ? ' images-card__select--checked' : ''}`}
+                  aria-pressed={isSelected}
+                  aria-label={isSelected ? `取消选中 ${item.name}` : `选中 ${item.name}`}
+                  title={onlyOneLeft ? LAST_ONE_HINT : isSelected ? '取消选中' : '选中'}
+                  onClick={() => toggleSelect(item.name)}
+                >
+                  {isSelected && <Icon name="check" size={14} />}
+                </button>
+              </div>
               <div className="images-card__body">
                 <div>
                   <div className="images-card__title">
@@ -601,11 +759,36 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
               <>
                 <span className="images__summary-sep" />
                 <div className="images__summary-tiers">
-                  <span className="chip chip--good">{counts.hd} 张高清</span>
-                  <span className="chip chip--primary">{counts.ok} 张达标</span>
-                  <span className={counts.low > 0 ? 'chip chip--warn' : 'chip'}>
+                  <button
+                    type="button"
+                    className={`chip chip--good images__summary-tier${
+                      filter === 'hd' ? ' images__summary-tier--active' : ''
+                    }`}
+                    aria-pressed={filter === 'hd'}
+                    onClick={() => setFilter((prev) => (prev === 'hd' ? 'all' : 'hd'))}
+                  >
+                    {counts.hd} 张高清
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip chip--primary images__summary-tier${
+                      filter === 'ok' ? ' images__summary-tier--active' : ''
+                    }`}
+                    aria-pressed={filter === 'ok'}
+                    onClick={() => setFilter((prev) => (prev === 'ok' ? 'all' : 'ok'))}
+                  >
+                    {counts.ok} 张达标
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip ${counts.low > 0 ? 'chip--warn' : ''} images__summary-tier${
+                      filter === 'low' ? ' images__summary-tier--active' : ''
+                    }`}
+                    aria-pressed={filter === 'low'}
+                    onClick={() => setFilter((prev) => (prev === 'low' ? 'all' : 'low'))}
+                  >
                     {counts.low} 张低于下限
-                  </span>
+                  </button>
                 </div>
               </>
             )}
@@ -796,6 +979,16 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
             </fieldset>
           </div>
           <div className="images__toolbar-end">
+            {ready && items.length > 1 && visibleItems.length > 0 && (
+              <button
+                type="button"
+                className="btn btn--sm images__refresh"
+                onClick={selectAllVisible}
+              >
+                <Icon name="check-square" size={15} />
+                全选当前
+              </button>
+            )}
             <button
               type="button"
               className="btn btn--sm images__refresh"
@@ -822,6 +1015,35 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
             </label>
           </div>
         </div>
+
+        {selectedNames.length > 0 && (
+          <section className="images__batch-bar" aria-label="批量操作栏">
+            <div className="images__batch-info">
+              <Icon name="check-square" size={16} />
+              <span>
+                已选中 <strong>{selectedNames.length}</strong> 张（删除后剩余{' '}
+                {items.length - selectedNames.length} 张）
+              </span>
+            </div>
+            <div className="images__batch-actions">
+              <button type="button" className="btn btn--sm" onClick={selectAllVisible}>
+                全选当前
+              </button>
+              <button type="button" className="btn btn--sm" onClick={clearSelection}>
+                取消选择
+              </button>
+              <button
+                type="button"
+                className="btn btn--sm btn--danger"
+                onClick={openBatchDelete}
+                disabled={onlyOneLeft}
+              >
+                <Icon name="trash" size={15} />
+                批量删除 {selectedNames.length} 张
+              </button>
+            </div>
+          </section>
+        )}
 
         {ready && error && (
           <div className="alert alert--error" role="alert">
@@ -911,6 +1133,58 @@ export function ImagesPage({ token, onSessionExpired }: ImagesPageProps) {
             <div className="alert alert--error images-delete__note" role="alert">
               <Icon name="error" size={16} />
               <span>{deleteError}</span>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {batchConfirmOpen && selectedNames.length > 0 && (
+        <Modal
+          open
+          onClose={closeBatchDelete}
+          size="sm"
+          icon="trash"
+          tone="danger"
+          title={`确认批量删除 ${selectedNames.length} 张素材？`}
+          dismissible={!batchDeleting}
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn"
+                onClick={closeBatchDelete}
+                disabled={batchDeleting}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={() => void handleBatchDelete()}
+                disabled={batchDeleting || items.length - selectedNames.length < 1}
+              >
+                {batchDeleting && <Icon name="spinner" size={16} className="spin" />}
+                {batchDeleting ? '删除中…' : `确认删除 ${selectedNames.length} 张`}
+              </button>
+            </>
+          }
+        >
+          <p className="images-delete__desc">
+            删除后不可恢复，所有题型下一次出题将不再使用以下 {selectedNames.length} 张图片：
+          </p>
+          <ul className="images-delete__list">
+            {selectedNames.map((name) => (
+              <li key={name}>{name}</li>
+            ))}
+          </ul>
+          <p className="images-delete__hint">
+            <Icon name="info" size={16} />
+            删除后素材库剩余 {items.length - selectedNames.length} 张（满足至少保留 1 张）。
+          </p>
+          {batchError && (
+            <div className="alert alert--error images-delete__note" role="alert">
+              <Icon name="error" size={16} />
+              <span>{batchError}</span>
             </div>
           )}
         </Modal>

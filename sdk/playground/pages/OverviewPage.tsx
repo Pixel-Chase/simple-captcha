@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { adminApi, formatDateTime, getErrorMessage, isAdminApiError } from '../api';
 import type {
@@ -12,6 +12,8 @@ import type {
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import type { ConsoleSection } from '../console/ConsoleView';
+import { bucketTelemetryTimeline, summarizeCaptchaTypes } from '../utils/analytics';
+import type { TimelineBucket, TypeBreakdownItem } from '../utils/analytics';
 import './OverviewPage.css';
 
 /** 「最近验证情况」统计的风控观察记录条数（接口上限 500） */
@@ -20,6 +22,8 @@ const TELEMETRY_LIMIT = 200;
 const TOP_REASONS = 5;
 /** 基础难度的等级数（策略配置里为 1-5） */
 const DIFFICULTY_LEVELS = [1, 2, 3, 4, 5] as const;
+const GUIDE_STORAGE_KEY = 'g-captcha-overview-guide-open';
+const TYPE_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6'] as const;
 
 interface OverviewPageProps {
   token: string;
@@ -60,6 +64,21 @@ function mapBlock<T, R>(block: Block<T>, fn: (data: T) => R): Block<R> {
 
 const isUnauthorized = (result: PromiseSettledResult<unknown>) =>
   result.status === 'rejected' && isAdminApiError(result.reason) && result.reason.status === 401;
+
+function readGuidePreference(): boolean | null {
+  try {
+    const raw = window.localStorage.getItem(GUIDE_STORAGE_KEY);
+    if (raw === '1') {
+      return true;
+    }
+    if (raw === '0') {
+      return false;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /** 自建应用统计：内置系统应用（管理后台）不计入 */
 function summarizeApps(apps: AppItem[]) {
@@ -198,6 +217,8 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
   const [data, setData] = useState<OverviewData>(INITIAL_DATA);
   const [loading, setLoading] = useState(true);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  const [guidePref, setGuidePref] = useState<boolean | null>(() => readGuidePreference());
+  const [guideOpen, setGuideOpen] = useState<boolean>(() => guidePref ?? true);
   /** 只采用最后一次加载的结果：连续刷新或卸载后，过期的响应直接丢弃 */
   const requestSeq = useRef(0);
 
@@ -247,6 +268,37 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
     () => mapBlock(data.telemetry, summarizeTelemetry),
     [data.telemetry],
   );
+  const timeline = useMemo(
+    () => (data.telemetry.data ? bucketTelemetryTimeline(data.telemetry.data, 12) : []),
+    [data.telemetry.data],
+  );
+  const typeBreakdown = useMemo(
+    () => (data.telemetry.data ? summarizeCaptchaTypes(data.telemetry.data) : []),
+    [data.telemetry.data],
+  );
+
+  // 已接入应用且有验证样本时默认折叠接入指引，留出更多首屏给核心监控指标
+  useEffect(() => {
+    if (guidePref !== null) {
+      return;
+    }
+    if (appStats.data && telemetryStats.data) {
+      setGuideOpen(!(appStats.data.total > 0 && telemetryStats.data.total > 0));
+    }
+  }, [guidePref, appStats.data, telemetryStats.data]);
+
+  const toggleGuide = () => {
+    setGuideOpen((prev) => {
+      const next = !prev;
+      setGuidePref(next);
+      try {
+        window.localStorage.setItem(GUIDE_STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // 忽略本地存储写入失败
+      }
+      return next;
+    });
+  };
 
   const settings = data.settings.data;
   /** 风控关闭或保留条数为 0 时，出题与校验都不写入风控观察 */
@@ -296,8 +348,8 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
         <div className="overview__head-text">
           <div className="overview__title-row">
             <h1 className="overview__title">系统概览</h1>
-            <span className="chip">
-              <Icon name="clock" size={12} />
+            <span className="overview__updated tabular">
+              <Icon name="clock" size={13} />
               {loadedAt ? `更新于 ${formatDateTime(loadedAt.toISOString())}` : '正在加载…'}
             </span>
           </div>
@@ -331,30 +383,50 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
       )}
 
       <section className="overview__panel overview-guide">
-        <div className="overview-guide__head">
+        <div
+          className={
+            guideOpen
+              ? 'overview-guide__head'
+              : 'overview-guide__head overview-guide__head--collapsed'
+          }
+        >
           <div>
             <h2 className="overview-guide__title">接入指引</h2>
-            <p className="overview-guide__desc">从创建应用到业务后端二次校验的完整接入路径</p>
+            <p className="overview-guide__desc">
+              {guideOpen
+                ? '从创建应用到业务后端二次校验的完整接入路径'
+                : '四步完成接入：创建应用 → 填写允许来源 → 前端传入 appId → 后端二次校验'}
+            </p>
           </div>
-          <span className="overview-guide__badge">四步完成接入</span>
+          <button
+            type="button"
+            className="btn btn--sm overview-guide__toggle"
+            aria-expanded={guideOpen}
+            onClick={toggleGuide}
+          >
+            {guideOpen ? '收起指引' : '展开四步指引'}
+            <Icon name={guideOpen ? 'chevron-up' : 'chevron-down'} size={14} />
+          </button>
         </div>
-        <ol className="overview-guide__steps">
-          {GUIDE_STEPS.map((step, index) => (
-            <li key={step.title} className="overview-step">
-              <div className="overview-step__body">
-                <div className="overview-step__top">
-                  <span className="overview-step__num">{index + 1}</span>
-                  <Icon name={step.icon} size={18} className="overview-step__icon" />
+        {guideOpen && (
+          <ol className="overview-guide__steps">
+            {GUIDE_STEPS.map((step, index) => (
+              <li key={step.title} className="overview-step">
+                <div className="overview-step__body">
+                  <div className="overview-step__top">
+                    <span className="overview-step__num">{index + 1}</span>
+                    <Icon name={step.icon} size={18} className="overview-step__icon" />
+                  </div>
+                  <h3 className="overview-step__title">{step.title}</h3>
+                  <p className="overview-step__desc">{step.desc}</p>
                 </div>
-                <h3 className="overview-step__title">{step.title}</h3>
-                <p className="overview-step__desc">{step.desc}</p>
-              </div>
-              <span className={step.mono ? 'overview-step__tag mono' : 'overview-step__tag'}>
-                {step.tag}
-              </span>
-            </li>
-          ))}
-        </ol>
+                <span className={step.mono ? 'overview-step__tag mono' : 'overview-step__tag'}>
+                  {step.tag}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
 
       <section className="overview__cards" aria-label="服务状态">
@@ -365,12 +437,12 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
           href={hrefFor('apps')}
           action="管理接入应用"
         >
-          <BlockBody block={appStats}>
+          <BlockBody block={appStats} skeleton="card">
             {(stats) => (
               <>
                 <div>
                   <div className="overview-card__metric">
-                    <span className="overview-card__value">{stats.total}</span>
+                    <span className="overview-card__value tabular">{stats.total}</span>
                     <span className="overview-card__unit">个自建应用</span>
                   </div>
                   <p className="overview-card__note">内置「管理后台」系统应用不计入统计</p>
@@ -397,7 +469,7 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
           href={hrefFor('settings')}
           action="修改策略配置"
         >
-          <BlockBody block={data.settings}>
+          <BlockBody block={data.settings} skeleton="card">
             {({ captcha, pow, risk }) => (
               <>
                 <dl className="overview-card__rows overview-card__rows--plain">
@@ -454,7 +526,7 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
           title="背景图"
           tag={
             imageStats.data && (
-              <span className="chip">
+              <span className="overview-card__spec tabular">
                 下限 {imageStats.data.constraints.minWidth}×{imageStats.data.constraints.minHeight}
               </span>
             )
@@ -462,15 +534,15 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
           href={hrefFor('images')}
           action="查看背景图"
         >
-          <BlockBody block={imageStats}>
+          <BlockBody block={imageStats} skeleton="card">
             {(stats) => (
               <>
                 <div>
                   <div className="overview-card__metric">
-                    <span className="overview-card__value">{stats.total}</span>
+                    <span className="overview-card__value tabular">{stats.total}</span>
                     <span className="overview-card__unit">张背景图</span>
                   </div>
-                  <p className="overview-card__note">
+                  <p className="overview-card__note tabular">
                     所有题型共用，建议 {stats.constraints.recommendedWidth}×
                     {stats.constraints.recommendedHeight}（3:2）及以上
                   </p>
@@ -505,7 +577,7 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
           <div className="overview-recent__title-row">
             <h2 className="overview-recent__title">最近验证情况</h2>
             {telemetryStats.data && telemetryStats.data.total > 0 && (
-              <span className="overview-recent__count">
+              <span className="overview-recent__count tabular">
                 最近 {telemetryStats.data.total} 条记录
               </span>
             )}
@@ -533,7 +605,7 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
           </div>
         )}
 
-        <BlockBody block={telemetryStats}>
+        <BlockBody block={telemetryStats} skeleton="recent">
           {(stats) =>
             stats.total === 0 ? (
               notRecording ? null : (
@@ -544,7 +616,7 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
                 </div>
               )
             ) : (
-              <RecentStats stats={stats} />
+              <RecentStats stats={stats} timeline={timeline} typeBreakdown={typeBreakdown} />
             )
           }
         </BlockBody>
@@ -556,8 +628,16 @@ export function OverviewPage({ token, onSessionExpired, hrefFor }: OverviewPageP
 type AppStats = ReturnType<typeof summarizeApps>;
 type TelemetryStats = ReturnType<typeof summarizeTelemetry>;
 
-/** 区块的加载中 / 失败 / 正常三种状态 */
-function BlockBody<T>({ block, children }: { block: Block<T>; children: (data: T) => ReactNode }) {
+/** 区块的加载骨架 / 失败 / 正常三种状态 */
+function BlockBody<T>({
+  block,
+  skeleton,
+  children,
+}: {
+  block: Block<T>;
+  skeleton: 'card' | 'recent';
+  children: (data: T) => ReactNode;
+}) {
   if (block.error) {
     return (
       <div className="alert alert--error" role="alert">
@@ -567,7 +647,36 @@ function BlockBody<T>({ block, children }: { block: Block<T>; children: (data: T
     );
   }
   if (block.data === null) {
-    return <p className="overview__placeholder">正在加载…</p>;
+    if (skeleton === 'card') {
+      return (
+        <section className="overview-skeleton-card" aria-busy="true" aria-label="正在加载">
+          <span className="skeleton overview-skeleton__metric" />
+          <span className="skeleton overview-skeleton__line overview-skeleton__line--short" />
+          <div className="overview-skeleton__rows">
+            <span className="skeleton overview-skeleton__line" />
+            <span className="skeleton overview-skeleton__line" />
+            <span className="skeleton overview-skeleton__line" />
+          </div>
+        </section>
+      );
+    }
+    return (
+      <section className="overview-skeleton-recent" aria-busy="true" aria-label="正在加载统计">
+        <div className="overview-stats">
+          {['s1', 's2', 's3', 's4', 's5'].map((key) => (
+            <div key={key} className="overview-stat">
+              <span className="skeleton overview-skeleton__line overview-skeleton__line--short" />
+              <span className="skeleton overview-skeleton__metric" />
+              <span className="skeleton overview-skeleton__spark" />
+            </div>
+          ))}
+        </div>
+        <div className="overview-charts">
+          <span className="skeleton overview-skeleton__chart" />
+          <span className="skeleton overview-skeleton__chart" />
+        </div>
+      </section>
+    );
   }
   return <>{children(block.data)}</>;
 }
@@ -647,7 +756,7 @@ function CardRow({
   return (
     <div className="overview-card__row">
       <dt>{label}</dt>
-      <dd className={warn ? 'overview-card__row-value--warn' : undefined}>
+      <dd className={warn ? 'overview-card__row-value--warn tabular' : 'tabular'}>
         {warn && <Icon name="error" size={14} />}
         {children}
       </dd>
@@ -680,41 +789,375 @@ function RiskTag({ risk }: { risk: RuntimeSettings['risk'] }) {
   );
 }
 
-function RecentStats({ stats }: { stats: TelemetryStats }) {
+/** KPI 卡内联迷你趋势折线 */
+function MiniSparkline({
+  values,
+  tone,
+}: {
+  values: number[];
+  tone: 'primary' | 'good' | 'danger';
+}) {
+  const gradId = useId();
+  if (values.length < 2) {
+    return null;
+  }
+  const width = 120;
+  const height = 24;
+  const pad = 2;
+  const max = Math.max(1, ...values);
+  const points = values.map((val, idx) => {
+    const x = pad + (idx / (values.length - 1)) * (width - pad * 2);
+    const y = height - pad - (val / max) * (height - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const areaPoints = `${pad},${height - pad} ${points.join(' ')} ${width - pad},${height - pad}`;
+  const strokeColor =
+    tone === 'good' ? 'var(--good-dot)' : tone === 'danger' ? 'var(--danger)' : 'var(--primary)';
+
+  return (
+    <svg
+      className="overview-spark"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.24" />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#${gradId})`} />
+      <polyline
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points.join(' ')}
+      />
+    </svg>
+  );
+}
+
+/** 纯 SVG 时序趋势图：出题 / 校验柱状 + 通过率折线，支持悬停或键盘聚焦查看分桶详情 */
+function TelemetryTimelineChart({ timeline }: { timeline: TimelineBucket[] }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const width = 620;
+  const height = 186;
+  const padLeft = 30;
+  const padRight = 36;
+  const padTop = 14;
+  const padBottom = 26;
+  const innerW = width - padLeft - padRight;
+  const innerH = height - padTop - padBottom;
+
+  const maxCount = Math.max(
+    4,
+    ...timeline.map((bucket) => Math.max(bucket.issued, bucket.verified)),
+  );
+  const slotW = timeline.length > 0 ? innerW / timeline.length : innerW;
+  const barW = Math.max(4, Math.min(14, slotW * 0.28));
+
+  const ratePoints: string[] = [];
+  const rateDots: Array<{ x: number; y: number; index: number }> = [];
+  timeline.forEach((bucket, index) => {
+    if (bucket.passRate === null) {
+      return;
+    }
+    const cx = padLeft + (index + 0.5) * slotW;
+    const cy = padTop + (1 - bucket.passRate / 100) * innerH;
+    ratePoints.push(`${cx.toFixed(1)},${cy.toFixed(1)}`);
+    rateDots.push({ x: cx, y: cy, index });
+  });
+
+  const activeBucket = activeIndex !== null ? (timeline[activeIndex] ?? null) : null;
+  const axisIndices =
+    timeline.length <= 2
+      ? timeline.map((_, i) => i)
+      : [0, Math.floor((timeline.length - 1) / 2), timeline.length - 1];
+
+  return (
+    <div className="overview-chart-card">
+      <div className="overview-chart-card__head">
+        <div>
+          <h3 className="overview-chart-card__title">
+            <Icon name="chart" size={16} />
+            验证流量与通过率趋势
+          </h3>
+          <p className="overview-chart-card__meta tabular">
+            {activeBucket
+              ? `${activeBucket.fullLabel} · 出题 ${activeBucket.issued} · 校验 ${activeBucket.verified}${activeBucket.passRate === null ? '' : ` · 通过率 ${activeBucket.passRate}%`}`
+              : '悬停或聚焦柱状时段可查看明细'}
+          </p>
+        </div>
+        <div className="overview-chart-legend" aria-hidden="true">
+          <span className="overview-chart-legend__item">
+            <span className="overview-chart-legend__swatch overview-chart-legend__swatch--issue" />
+            出题
+          </span>
+          <span className="overview-chart-legend__item">
+            <span className="overview-chart-legend__swatch overview-chart-legend__swatch--verify" />
+            校验
+          </span>
+          <span className="overview-chart-legend__item">
+            <span className="overview-chart-legend__line" />
+            通过率
+          </span>
+        </div>
+      </div>
+
+      {timeline.length === 0 ? (
+        <p className="overview__placeholder">暂无带时间戳的验证记录。</p>
+      ) : (
+        <svg
+          className="overview-timeline-svg"
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label="最近验证出题、校验与通过率趋势图"
+        >
+          {[0, 0.5, 1].map((ratio) => {
+            const y = padTop + (1 - ratio) * innerH;
+            const countTick = Math.round(maxCount * ratio);
+            const pctTick = `${Math.round(ratio * 100)}%`;
+            return (
+              <g key={ratio}>
+                <line
+                  x1={padLeft}
+                  y1={y}
+                  x2={width - padRight}
+                  y2={y}
+                  className="overview-timeline__grid"
+                />
+                <text
+                  x={padLeft - 6}
+                  y={y + 4}
+                  textAnchor="end"
+                  className="overview-timeline__tick"
+                >
+                  {countTick}
+                </text>
+                <text
+                  x={width - padRight + 6}
+                  y={y + 4}
+                  textAnchor="start"
+                  className="overview-timeline__tick"
+                >
+                  {pctTick}
+                </text>
+              </g>
+            );
+          })}
+
+          {timeline.map((bucket, index) => {
+            const slotX = padLeft + index * slotW;
+            const cx = slotX + slotW / 2;
+            const issuedH = (bucket.issued / maxCount) * innerH;
+            const verifiedH = (bucket.verified / maxCount) * innerH;
+            const isActive = activeIndex === index;
+            return (
+              <g
+                key={bucket.key}
+                className={
+                  isActive
+                    ? 'overview-timeline__col overview-timeline__col--active'
+                    : 'overview-timeline__col'
+                }
+                tabIndex={0}
+                aria-label={`${bucket.fullLabel} 出题 ${bucket.issued} 校验 ${bucket.verified}`}
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseLeave={() => setActiveIndex(null)}
+                onFocus={() => setActiveIndex(index)}
+                onBlur={() => setActiveIndex(null)}
+              >
+                <rect
+                  x={slotX + 1}
+                  y={padTop}
+                  width={Math.max(4, slotW - 2)}
+                  height={innerH}
+                  rx={4}
+                  className="overview-timeline__hit"
+                />
+                {bucket.issued > 0 && (
+                  <rect
+                    x={cx - barW - 1}
+                    y={padTop + innerH - issuedH}
+                    width={barW}
+                    height={Math.max(2, issuedH)}
+                    rx={2}
+                    className="overview-timeline__bar-issue"
+                  />
+                )}
+                {bucket.verified > 0 && (
+                  <rect
+                    x={cx + 1}
+                    y={padTop + innerH - verifiedH}
+                    width={barW}
+                    height={Math.max(2, verifiedH)}
+                    rx={2}
+                    className="overview-timeline__bar-verify"
+                  />
+                )}
+              </g>
+            );
+          })}
+
+          {ratePoints.length >= 2 && (
+            <polyline
+              fill="none"
+              points={ratePoints.join(' ')}
+              className="overview-timeline__line"
+            />
+          )}
+
+          {rateDots.map((dot) => (
+            <circle
+              key={dot.index}
+              cx={dot.x}
+              cy={dot.y}
+              r={activeIndex === dot.index ? 4.5 : 3}
+              className="overview-timeline__dot"
+            />
+          ))}
+
+          {axisIndices.map((idx) => {
+            const bucket = timeline[idx];
+            if (!bucket) {
+              return null;
+            }
+            const x = padLeft + (idx + 0.5) * slotW;
+            const anchor = idx === 0 ? 'start' : idx === timeline.length - 1 ? 'end' : 'middle';
+            return (
+              <text
+                key={bucket.key}
+                x={x}
+                y={height - 6}
+                textAnchor={anchor}
+                className="overview-timeline__axis"
+              >
+                {bucket.label}
+              </text>
+            );
+          })}
+        </svg>
+      )}
+    </div>
+  );
+}
+
+/** 题型分布卡片：堆叠占比条 + 明细列表 */
+function CaptchaTypeBreakdown({ breakdown }: { breakdown: TypeBreakdownItem[] }) {
+  return (
+    <div className="overview-chart-card">
+      <div className="overview-chart-card__head">
+        <div>
+          <h3 className="overview-chart-card__title">
+            <Icon name="grid" size={16} />
+            题型分布
+          </h3>
+          <p className="overview-chart-card__meta">各验证模式在近期记录中的占比</p>
+        </div>
+      </div>
+
+      {breakdown.length === 0 ? (
+        <p className="overview__placeholder">暂无题型记录。</p>
+      ) : (
+        <div className="overview-types">
+          <div className="overview-types__bar" role="img" aria-label="验证码题型占比条">
+            {breakdown.map((entry, idx) => (
+              <span
+                key={entry.type}
+                className="overview-types__seg"
+                style={{
+                  width: `${Math.max(2, entry.share * 100)}%`,
+                  background: TYPE_COLORS[idx % TYPE_COLORS.length],
+                }}
+                title={`${entry.label}（${entry.type}）：${entry.total} 条`}
+              />
+            ))}
+          </div>
+          <ul className="overview-types__list">
+            {breakdown.map((entry, idx) => (
+              <li key={entry.type} className="overview-types__item">
+                <span
+                  className="overview-types__swatch"
+                  style={{ background: TYPE_COLORS[idx % TYPE_COLORS.length] }}
+                />
+                <span className="overview-types__name">
+                  {entry.label}
+                  <span className="overview-types__code mono">{entry.type}</span>
+                </span>
+                <span className="overview-types__counts tabular">
+                  出 {entry.issued} · 校 {entry.verified}
+                </span>
+                <span className="overview-types__share tabular">{formatPercent(entry.share)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecentStats({
+  stats,
+  timeline,
+  typeBreakdown,
+}: {
+  stats: TelemetryStats;
+  timeline: TimelineBucket[];
+  typeBreakdown: TypeBreakdownItem[];
+}) {
   const { issued, verified, passed, failed, topReasons, failedWithoutReason } = stats;
+  const issuedSeries = timeline.map((b) => b.issued);
+  const verifiedSeries = timeline.map((b) => b.verified);
+  const passedSeries = timeline.map((b) => b.passed);
+  const failedSeries = timeline.map((b) => b.failed);
+  const rateSeries = timeline.map((b) => b.passRate ?? 0);
 
   return (
     <>
       <div className="overview-stats">
         <div className="overview-stat">
           <div className="overview-stat__label">出题次数</div>
-          <div className="overview-stat__value">{issued}</div>
+          <div className="overview-stat__value tabular">{issued}</div>
           <div className="overview-stat__hint">前端发起的出题</div>
+          <MiniSparkline values={issuedSeries} tone="primary" />
         </div>
         <div className="overview-stat">
           <div className="overview-stat__label">校验次数</div>
-          <div className="overview-stat__value">{verified}</div>
+          <div className="overview-stat__value tabular">{verified}</div>
           <div className="overview-stat__hint">提交答案的次数</div>
+          <MiniSparkline values={verifiedSeries} tone="primary" />
         </div>
         <div className="overview-stat">
           <div className="overview-stat__label">校验通过</div>
-          <div className="overview-stat__value">{passed}</div>
+          <div className="overview-stat__value tabular">{passed}</div>
           <div className="overview-stat__hint overview-stat__hint--primary">已签发二次校验 key</div>
+          <MiniSparkline values={passedSeries} tone="good" />
         </div>
         <div className={failed > 0 ? 'overview-stat overview-stat--danger' : 'overview-stat'}>
           <div className="overview-stat__label">校验失败</div>
-          <div className="overview-stat__value">{failed}</div>
+          <div className="overview-stat__value tabular">{failed}</div>
           <div className="overview-stat__hint">含答案错误与风控拦截</div>
+          <MiniSparkline values={failedSeries} tone="danger" />
         </div>
         <div className="overview-stat overview-stat--rate">
           <div className="overview-stat__label">通过率（通过 / 校验）</div>
-          <div className="overview-stat__value">
+          <div className="overview-stat__value tabular">
             {verified > 0 ? formatPercent(passed / verified) : '—'}
           </div>
-          <div className="overview-stat__hint">
+          <div className="overview-stat__hint tabular">
             {verified > 0 ? `${passed} / ${verified}` : '暂无校验记录'}
           </div>
+          <MiniSparkline values={rateSeries} tone="primary" />
         </div>
+      </div>
+
+      <div className="overview-charts">
+        <TelemetryTimelineChart timeline={timeline} />
+        <CaptchaTypeBreakdown breakdown={typeBreakdown} />
       </div>
 
       <div className="overview-reasons">
@@ -757,7 +1200,7 @@ function RecentStats({ stats }: { stats: TelemetryStats }) {
                       style={{ width: `${share * 100}%` }}
                     />
                   </span>
-                  <span className="overview-reason__count">{count} 次</span>
+                  <span className="overview-reason__count tabular">{count} 次</span>
                 </li>
               );
             })}
@@ -771,7 +1214,7 @@ function RecentStats({ stats }: { stats: TelemetryStats }) {
         )}
       </div>
 
-      <p className="overview-recent__foot">
+      <p className="overview-recent__foot tabular">
         以上统计来自最近 {stats.total} 条风控观察记录
         {stats.earliest ? `（最早一条 ${formatDateTime(stats.earliest)}）` : ''}
         ，出题与校验合计，管理后台自身的登录验证也计入其中。

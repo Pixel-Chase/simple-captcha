@@ -1,3 +1,4 @@
+import type { IconName } from '../components/Icon';
 import { AccountPage } from '../pages/AccountPage';
 import { AppsPage } from '../pages/AppsPage';
 import { ImagesPage } from '../pages/ImagesPage';
@@ -12,12 +13,12 @@ import type { AuthState, useConsoleAuth } from './useConsoleAuth';
 export type ConsoleSection = 'overview' | 'apps' | 'risk' | 'settings' | 'images' | 'account';
 
 /** 顶栏导航的分区；账号与安全不在导航里，从管理员菜单进入 */
-export const NAV_SECTIONS: ReadonlyArray<{ id: ConsoleSection; label: string }> = [
-  { id: 'overview', label: '概览' },
-  { id: 'apps', label: '接入应用' },
-  { id: 'risk', label: '风控观察' },
-  { id: 'settings', label: '策略配置' },
-  { id: 'images', label: '背景图' },
+export const NAV_SECTIONS: ReadonlyArray<{ id: ConsoleSection; label: string; icon: IconName }> = [
+  { id: 'overview', label: '概览', icon: 'chart' },
+  { id: 'apps', label: '接入应用', icon: 'layers' },
+  { id: 'risk', label: '风控观察', icon: 'activity' },
+  { id: 'settings', label: '策略配置', icon: 'sliders' },
+  { id: 'images', label: '背景图', icon: 'image' },
 ];
 
 /** 从去掉入口前缀后的路径解析分区：'' → 概览，'/apps'、'/risk' 等 → 对应分区 */

@@ -15,7 +15,9 @@ export default defineConfig(({ mode }) => ({
     },
   },
   server: {
-    port: 8000,
+    host: '0.0.0.0',
+    port: 3000,
+    allowedHosts: true,
     // 接入文档页以 ?raw 读取仓库根目录的 README.md，该文件在 sdk 工作区之外，开发服务器需显式放行
     fs: {
       allow: [repoRoot],

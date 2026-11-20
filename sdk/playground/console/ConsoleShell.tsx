@@ -7,6 +7,17 @@ import { NAV_SECTIONS } from './ConsoleView';
 import type { ConsoleSection } from './ConsoleView';
 import type { AuthState } from './useConsoleAuth';
 
+const THEME_STORAGE_KEY = 'g-captcha-console-theme';
+type ThemeMode = 'light' | 'dark';
+
+function readStoredTheme(): ThemeMode {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 interface ConsoleShellProps {
   auth: AuthState;
   /** 当前分区；不在控制台（演示站的接入文档页）时为 null */
@@ -21,7 +32,7 @@ interface ConsoleShellProps {
   children: ReactNode;
 }
 
-/** 控制台外壳：顶栏（品牌、分区导航、管理员菜单）+ 主区域 + 页脚；未登录时只有品牌与页脚说明 */
+/** 控制台外壳：顶栏（品牌、分区导航、主题切换、管理员菜单）+ 移动端抽屉导航 + 主区域 + 页脚 */
 export function ConsoleShell({
   auth,
   section,
@@ -32,22 +43,61 @@ export function ConsoleShell({
   children,
 }: ConsoleShellProps) {
   const authed = auth.status === 'authed' ? auth : null;
-  // 初始化 / 登录页用暗色主题；恢复登录态期间与演示站的接入文档页仍是浅色
+  // 初始化 / 登录页始终保持暗色视觉；登录后控制台支持日间 / 夜间模式切换
   const darkGuest = (auth.status === 'setup' || auth.status === 'anonymous') && !docs?.active;
+  const [theme, setTheme] = useState<ThemeMode>(readStoredTheme);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // 切换分区、登录或退出时页面内容整体换掉，但 hash 路由不会重置滚动位置，手动回到顶部；首次渲染不处理
+  const isDark = darkGuest || (Boolean(authed) && theme === 'dark');
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [isDark]);
+
+  // 切换分区、登录或退出时重置滚动位置并收起移动端抽屉
   const view = `${auth.status}/${section ?? ''}`;
   const lastView = useRef(view);
   useEffect(() => {
     if (lastView.current !== view) {
       lastView.current = view;
+      setMobileNavOpen(false);
       window.scrollTo(0, 0);
     }
   }, [view]);
 
+  useEffect(() => {
+    if (!mobileNavOpen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileNavOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [mobileNavOpen]);
+
+  const toggleTheme = () => {
+    const next: ThemeMode = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // 隐私模式下忽略持久化失败
+    }
+  };
+
+  const appClass = ['app', !authed && 'app--guest', isDark && 'app--dark', authed && 'app--authed']
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <ToastProvider>
-      <div className={authed ? 'app' : darkGuest ? 'app app--guest app--dark' : 'app app--guest'}>
+      <div className={appClass}>
         <header className="topbar">
           <div className="topbar__inner">
             <div className="topbar__start">
@@ -68,7 +118,8 @@ export function ConsoleShell({
                       className={section === item.id ? 'nav__link nav__link--active' : 'nav__link'}
                       aria-current={section === item.id ? 'page' : undefined}
                     >
-                      {item.label}
+                      <Icon name={item.icon} size={15} />
+                      <span>{item.label}</span>
                     </a>
                   ))}
                 </nav>
@@ -89,12 +140,31 @@ export function ConsoleShell({
               {authed && (
                 <>
                   {docs && <span className="topbar__divider" aria-hidden="true" />}
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--icon theme-toggle"
+                    onClick={toggleTheme}
+                    aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}
+                    title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}
+                  >
+                    <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
+                  </button>
                   <UserMenu
                     username={authed.username}
                     expiresAt={authed.expiresAt}
                     accountHref={hrefFor('account')}
                     onLogout={onLogout}
                   />
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--icon topbar__menu-btn"
+                    aria-label={mobileNavOpen ? '收起导航菜单' : '展开导航菜单'}
+                    aria-expanded={mobileNavOpen}
+                    aria-controls="console-mobile-nav"
+                    onClick={() => setMobileNavOpen((open) => !open)}
+                  >
+                    <Icon name={mobileNavOpen ? 'close' : 'menu'} size={19} />
+                  </button>
                 </>
               )}
               {!authed && docs?.active && (
@@ -104,6 +174,41 @@ export function ConsoleShell({
               )}
             </div>
           </div>
+
+          {authed && mobileNavOpen && (
+            <nav id="console-mobile-nav" className="mobile-nav" aria-label="移动端控制台导航">
+              <div className="mobile-nav__links">
+                {NAV_SECTIONS.map((item) => (
+                  <a
+                    key={item.id}
+                    href={hrefFor(item.id)}
+                    className={
+                      section === item.id
+                        ? 'mobile-nav__link mobile-nav__link--active'
+                        : 'mobile-nav__link'
+                    }
+                    aria-current={section === item.id ? 'page' : undefined}
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    <Icon name={item.icon} size={17} />
+                    <span>{item.label}</span>
+                  </a>
+                ))}
+                {docs && (
+                  <a
+                    href={docs.href}
+                    className={
+                      docs.active ? 'mobile-nav__link mobile-nav__link--active' : 'mobile-nav__link'
+                    }
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    <Icon name="book" size={17} />
+                    <span>接入文档</span>
+                  </a>
+                )}
+              </div>
+            </nav>
+          )}
         </header>
 
         <main className={mainClassName ? `main ${mainClassName}` : 'main'}>{children}</main>
@@ -149,6 +254,7 @@ interface UserMenuProps {
 function UserMenu({ username, expiresAt, accountHref, onLogout }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const initial = (Array.from(username.trim())[0] ?? 'A').toUpperCase();
 
   useEffect(() => {
     if (!open) {
@@ -181,7 +287,9 @@ function UserMenu({ username, expiresAt, accountHref, onLogout }: UserMenuProps)
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="user-menu__dot" aria-hidden="true" />
+        <span className="user-menu__avatar" aria-hidden="true">
+          {initial}
+        </span>
         <span className="user-menu__name">{username}</span>
         <Icon name="chevron-down" size={16} className="user-menu__chevron" />
       </button>

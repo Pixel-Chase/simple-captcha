@@ -47,14 +47,15 @@ interface ConfirmState {
   error: string | null;
 }
 
+type StatusFilter = 'all' | 'enabled' | 'disabled' | 'no-origin';
+
 const NAME_MAX_LENGTH = 40;
 const ORIGINS_MAX = 20;
-/** 新建应用占用的 busy 标记；应用 ID 形如 app_xxx，不会冲突 */
 const CREATE_KEY = '#create';
-/** 页面底部调试命令里的密钥占位，不展示任何真实密钥 */
 const SECRET_PLACEHOLDER = '<应用密钥>';
+const GUIDE_STORAGE_KEY = 'g-captcha-apps-guide-open';
+const SKELETON_ROWS = ['a1', 'a2', 'a3', 'a4'] as const;
 
-/** 验证码服务的 origin：内嵌管理后台与服务同源，接入方的 baseURL 就是它 */
 const serviceOrigin = () => window.location.origin;
 
 const stateCurl = (secret: string) =>
@@ -70,10 +71,24 @@ const parseOrigins = (text: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-/** 名称首字，作为列表里的应用头像 */
 const initialOf = (name: string) => (Array.from(name.trim())[0] ?? '?').toUpperCase();
 
 const tooManyOrigins = `每个应用最多配置 ${ORIGINS_MAX} 个允许来源`;
+
+function readGuidePreference(): boolean | null {
+  try {
+    const raw = window.localStorage.getItem(GUIDE_STORAGE_KEY);
+    if (raw === '1') {
+      return true;
+    }
+    if (raw === '0') {
+      return false;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
   const toast = useToast();
@@ -82,6 +97,9 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [guidePref, setGuidePref] = useState<boolean | null>(() => readGuidePreference());
+  const [guideOpen, setGuideOpen] = useState<boolean>(() => guidePref ?? true);
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
   const [createForm, setCreateForm] = useState<CreateForm | null>(null);
   const [renameForm, setRenameForm] = useState<RenameForm | null>(null);
@@ -123,6 +141,29 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const userApps = useMemo(() => items.filter((app) => !app.isSystem), [items]);
+
+  // 已创建自建应用后默认收起说明区，除非用户手动切换过折叠状态
+  useEffect(() => {
+    if (guidePref !== null || loading) {
+      return;
+    }
+    setGuideOpen(userApps.length === 0);
+  }, [guidePref, loading, userApps.length]);
+
+  const toggleGuide = () => {
+    setGuideOpen((prev) => {
+      const next = !prev;
+      setGuidePref(next);
+      try {
+        window.localStorage.setItem(GUIDE_STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // 忽略存储写入错误
+      }
+      return next;
+    });
+  };
 
   const refresh = async () => {
     if (await load()) {
@@ -333,19 +374,39 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
   const openOrigins = (app: AppItem) =>
     setOriginsForm({ id: app.id, text: app.origins.join('\n'), error: null });
 
-  const userApps = items.filter((app) => !app.isSystem);
   const enabledCount = userApps.filter((app) => app.enabled).length;
+  const statusCounts = useMemo(
+    () => ({
+      all: items.length,
+      enabled: items.filter((app) => app.enabled).length,
+      disabled: items.filter((app) => !app.isSystem && !app.enabled).length,
+      'no-origin': items.filter((app) => !app.isSystem && app.origins.length === 0).length,
+    }),
+    [items],
+  );
+
   const keyword = query.trim().toLowerCase();
   const visible = useMemo(
     () =>
-      keyword
-        ? items.filter(
-            (app) =>
-              app.name.toLowerCase().includes(keyword) || app.id.toLowerCase().includes(keyword),
-          )
-        : items,
-    [items, keyword],
+      items.filter((app) => {
+        if (statusFilter === 'enabled' && !app.enabled) {
+          return false;
+        }
+        if (statusFilter === 'disabled' && (app.isSystem || app.enabled)) {
+          return false;
+        }
+        if (statusFilter === 'no-origin' && (app.isSystem || app.origins.length > 0)) {
+          return false;
+        }
+        if (!keyword) {
+          return true;
+        }
+        return app.name.toLowerCase().includes(keyword) || app.id.toLowerCase().includes(keyword);
+      }),
+    [items, statusFilter, keyword],
   );
+
+  const hasFilter = Boolean(keyword) || statusFilter !== 'all';
   const showInitialState = items.length === 0 && (loading || !!error);
   const debugCurl = stateCurl(SECRET_PLACEHOLDER);
 
@@ -356,7 +417,7 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
           <div className="page-head__title">
             <h1 className="page-title">接入应用</h1>
             {!showInitialState && (
-              <span className="chip apps__count">共 {userApps.length} 个应用</span>
+              <span className="chip apps__count tabular">共 {userApps.length} 个自建应用</span>
             )}
           </div>
           <p className="page-desc">
@@ -381,48 +442,62 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
 
       <section className="panel apps__guide" aria-labelledby="apps-guide-title">
         <div className="apps__guide-head">
-          <span className="apps__guide-icon" aria-hidden="true">
-            <Icon name="code" size={18} />
-          </span>
-          <div>
-            <h2 id="apps-guide-title" className="apps__guide-title">
-              接入方式与密钥安全
-            </h2>
-            <p className="apps__guide-desc">
-              前端凭应用 ID 出题，业务后端凭应用密钥做二次校验，两种凭据各司其职：
-            </p>
+          <div className="apps__guide-summary">
+            <span className="apps__guide-icon" aria-hidden="true">
+              <Icon name="code" size={18} />
+            </span>
+            <div>
+              <h2 id="apps-guide-title" className="apps__guide-title">
+                接入方式与密钥安全
+              </h2>
+              <p className="apps__guide-desc">
+                前端凭应用 ID 出题，业务后端凭应用密钥做二次校验，两种凭据各司其职
+              </p>
+            </div>
           </div>
+          <button
+            type="button"
+            className="btn btn--sm"
+            aria-expanded={guideOpen}
+            onClick={toggleGuide}
+          >
+            {guideOpen ? '收起说明' : '展开接入说明'}
+            <Icon name={guideOpen ? 'chevron-up' : 'chevron-down'} size={14} />
+          </button>
         </div>
-        <div className="apps__guide-grid">
-          <div className="apps__guide-item">
-            <div className="apps__guide-step">
-              <span className="apps__guide-num">1</span>
-              前端出题
+        {guideOpen && (
+          <div className="apps__guide-grid">
+            <div className="apps__guide-item">
+              <div className="apps__guide-step">
+                <span className="apps__guide-num">1</span>
+                前端出题
+              </div>
+              <p>
+                前端 <code>CaptchaProvider</code> 传入应用
+                ID，只有「允许来源」中的页面能出题与提交。
+              </p>
             </div>
-            <p>
-              前端 <code>CaptchaProvider</code> 传入应用 ID，只有「允许来源」中的页面能出题与提交。
-            </p>
-          </div>
-          <div className="apps__guide-item">
-            <div className="apps__guide-step">
-              <span className="apps__guide-num">2</span>
-              二次校验
+            <div className="apps__guide-item">
+              <div className="apps__guide-step">
+                <span className="apps__guide-num">2</span>
+                二次校验
+              </div>
+              <p>
+                业务后端携带 <code>Authorization: Bearer &lt;应用密钥&gt;</code> 调用{' '}
+                <code>GET {API_PREFIX}/captchas/states/:key</code> 确认验证结果。
+              </p>
             </div>
-            <p>
-              业务后端携带 <code>Authorization: Bearer &lt;应用密钥&gt;</code> 调用{' '}
-              <code>GET {API_PREFIX}/captchas/states/:key</code> 确认验证结果。
-            </p>
-          </div>
-          <div className="apps__guide-item">
-            <div className="apps__guide-step apps__guide-step--warn">
-              <span className="apps__guide-num">!</span>
-              密钥安全
+            <div className="apps__guide-item">
+              <div className="apps__guide-step apps__guide-step--warn">
+                <span className="apps__guide-num">!</span>
+                密钥安全
+              </div>
+              <p>
+                密钥只在创建或重置时完整显示一次，服务端只保存哈希；停用、重置或删除后旧密钥立即失效。
+              </p>
             </div>
-            <p>
-              密钥只在创建或重置时完整显示一次，服务端只保存哈希；停用、重置或删除后旧密钥立即失效。
-            </p>
           </div>
-        </div>
+        )}
       </section>
 
       {error && !showInitialState && (
@@ -434,12 +509,29 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
 
       <div className="panel panel--flush apps__list">
         <div className="apps__toolbar">
-          <div className="apps__toolbar-title">
+          <div className="apps__toolbar-start">
             <span className="apps__toolbar-name">接入列表</span>
-            <span className="apps__toolbar-sep" aria-hidden="true">
-              |
-            </span>
-            <span className="chip">系统应用在前，其余按创建时间排列</span>
+            <fieldset className="apps__tabs" aria-label="按应用状态筛选">
+              {(
+                [
+                  { id: 'all', label: '全部' },
+                  { id: 'enabled', label: '已启用' },
+                  { id: 'disabled', label: '已停用' },
+                  { id: 'no-origin', label: '待配置来源' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={statusFilter === tab.id ? 'apps__tab apps__tab--active' : 'apps__tab'}
+                  aria-pressed={statusFilter === tab.id}
+                  onClick={() => setStatusFilter(tab.id)}
+                >
+                  {tab.label}
+                  <span className="apps__tab-count tabular">{statusCounts[tab.id]}</span>
+                </button>
+              ))}
+            </fieldset>
           </div>
           <label className="apps__search">
             <Icon name="search" size={16} />
@@ -456,10 +548,16 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
 
         {showInitialState ? (
           loading ? (
-            <div className="apps__state">
-              <Icon name="spinner" size={20} className="spin" />
-              正在加载应用…
-            </div>
+            <section className="apps__skeleton" aria-busy="true" aria-label="正在加载应用列表">
+              {SKELETON_ROWS.map((key) => (
+                <div key={key} className="apps__skeleton-row">
+                  <span className="skeleton apps__skeleton-cell apps__skeleton-cell--lg" />
+                  <span className="skeleton apps__skeleton-cell apps__skeleton-cell--sm" />
+                  <span className="skeleton apps__skeleton-cell apps__skeleton-cell--md" />
+                  <span className="skeleton apps__skeleton-cell apps__skeleton-cell--sm" />
+                </div>
+              ))}
+            </section>
           ) : (
             <div className="apps__state apps__state--error" role="alert">
               <Icon name="error" size={20} />
@@ -476,15 +574,13 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
               <table className="table apps-table">
                 <thead>
                   <tr>
-                    <th scope="col">应用名称</th>
+                    <th scope="col">应用与 ID</th>
                     <th scope="col">状态</th>
-                    <th scope="col">应用 ID</th>
                     <th scope="col">密钥提示</th>
                     <th scope="col">允许来源</th>
-                    <th scope="col" title="业务后端最近一次用该应用密钥调用二次校验的时间">
-                      最近使用
+                    <th scope="col" title="业务后端最近使用时间及密钥更新时间">
+                      最近使用 / 密钥更新
                     </th>
-                    <th scope="col">密钥更新于</th>
                     <th scope="col" className="apps-table__actions-head">
                       操作
                     </th>
@@ -504,16 +600,19 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
                       onDelete={() => setConfirm({ id: app.id, action: 'delete', error: null })}
                     />
                   ))}
-                  {keyword && visible.length === 0 && (
+                  {hasFilter && visible.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="apps-table__no-match">
-                        没有名称或 ID 包含「{query.trim()}」的应用
+                      <td colSpan={6} className="apps-table__no-match">
+                        没有符合当前筛选条件的应用
                         <button
                           type="button"
                           className="btn btn--text"
-                          onClick={() => setQuery('')}
+                          onClick={() => {
+                            setQuery('');
+                            setStatusFilter('all');
+                          }}
                         >
-                          清除过滤
+                          清除筛选
                         </button>
                       </td>
                     </tr>
@@ -522,7 +621,7 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
               </table>
             </div>
 
-            {userApps.length === 0 && !keyword && (
+            {userApps.length === 0 && !hasFilter && (
               <div className="apps__empty">
                 <span className="apps__empty-icon" aria-hidden="true">
                   <Icon name="layers" size={22} />
@@ -546,7 +645,7 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
             <div className="apps__foot">
               <div className="apps__stats">
                 <span>
-                  共 <strong className="apps__stat">{userApps.length}</strong> 个应用
+                  共 <strong className="apps__stat">{userApps.length}</strong> 个自建应用
                 </span>
                 <span className="apps__stats-dot" aria-hidden="true" />
                 <span>
@@ -556,10 +655,10 @@ export function AppsPage({ token, onSessionExpired }: AppsPageProps) {
                 <span>
                   停用 <strong className="apps__stat">{userApps.length - enabledCount}</strong>
                 </span>
-                {keyword && (
+                {hasFilter && (
                   <>
                     <span className="apps__stats-dot" aria-hidden="true" />
-                    <span>当前显示 {visible.length} 个</span>
+                    <span className="tabular">当前显示 {visible.length} 个</span>
                   </>
                 )}
               </div>
@@ -783,10 +882,9 @@ interface AppRowProps {
   onDelete: () => void;
 }
 
-/** 来源超过这个数时先折叠，避免一行撑得过高 */
-const ORIGINS_PREVIEW = 4;
+const ORIGINS_PREVIEW = 3;
 
-/** 列表的一行：系统应用只读，普通应用主操作是编辑来源，其余放进「更多」菜单 */
+/** 列表的一行：应用名称与 ID 合并显示，适应 1280px 桌面宽度免横向滚动 */
 function AppRow({
   app,
   busy,
@@ -822,7 +920,19 @@ function AppRow({
                 <span className="chip chip--primary apps-row__system">系统应用</span>
               )}
             </div>
-            {app.isSystem && <span className="apps-row__sub">管理后台自己的验证码</span>}
+            <div className="apps-row__id">
+              <span className="apps-row__id-text">{app.id}</span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon apps-row__copy"
+                onClick={onCopyId}
+                title="复制应用 ID"
+                aria-label={`复制「${app.name}」的应用 ID`}
+              >
+                <Icon name="copy" size={13} />
+              </button>
+              {app.isSystem && <span className="apps-row__sub">· 管理后台自用</span>}
+            </div>
           </div>
         </div>
       </td>
@@ -842,21 +952,6 @@ function AppRow({
             <span className="apps-row__note">出题与校验均被拒绝</span>
           </>
         )}
-      </td>
-
-      <td>
-        <div className="apps-row__id">
-          <span className="apps-row__id-text">{app.id}</span>
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon apps-row__copy"
-            onClick={onCopyId}
-            title="复制应用 ID"
-            aria-label={`复制「${app.name}」的应用 ID`}
-          >
-            <Icon name="copy" size={14} />
-          </button>
-        </div>
       </td>
 
       <td>
@@ -886,19 +981,19 @@ function AppRow({
       <td className="apps-row__origins-cell">
         {app.isSystem ? (
           <span className="apps-row__origin apps-row__origin--locked">
-            <Icon name="lock" size={11} />
+            <Icon name="lock" size={12} />
             仅同源<span className="apps-row__origin-extra">（内置）</span>
           </span>
         ) : app.origins.length === 0 ? (
           <span className="apps-row__origins-empty">
-            <Icon name="warning" size={12} />
-            未配置允许来源（前端出题与提交会被拒绝）
+            <Icon name="warning" size={13} />
+            未配置允许来源
           </span>
         ) : (
           <div className="apps-row__origins">
             {shownOrigins.map((origin) => (
               <span key={origin} className="apps-row__origin">
-                <Icon name={origin.startsWith('https:') ? 'lock' : 'globe'} size={11} />
+                <Icon name={origin.startsWith('https:') ? 'lock' : 'globe'} size={12} />
                 {origin}
               </span>
             ))}
@@ -919,20 +1014,17 @@ function AppRow({
       <td className="apps-row__time">
         {app.isSystem ? (
           <span className="apps-row__muted">—</span>
-        ) : app.lastUsedAt ? (
-          formatDateTime(app.lastUsedAt)
         ) : (
-          <span className="apps-row__never">从未使用</span>
-        )}
-      </td>
-
-      <td className="apps-row__time">
-        {app.isSystem ? (
-          <span className="apps-row__muted" title="系统应用没有密钥">
-            —
-          </span>
-        ) : (
-          formatDateTime(app.secretRotatedAt)
+          <div className="apps-row__times">
+            <span>
+              {app.lastUsedAt ? (
+                formatDateTime(app.lastUsedAt)
+              ) : (
+                <span className="apps-row__never">从未使用</span>
+              )}
+            </span>
+            <span className="apps-row__sub">更新 {formatDateTime(app.secretRotatedAt)}</span>
+          </div>
         )}
       </td>
 
@@ -993,15 +1085,10 @@ interface RowMenuItem {
   onSelect: () => void;
 }
 
-/** 菜单的大致高度，用来判断向下展开是否会超出视口 */
 const MENU_HEIGHT = 190;
 
 type MenuPosition = { right: number; top?: number; bottom?: number };
 
-/**
- * 行内「更多」菜单：锚定在触发按钮旁。表格容器会横向滚动（overflow 会裁掉绝对定位的弹层），
- * 所以面板用 fixed 定位、打开时按按钮位置计算坐标；滚动、缩放窗口、点外部或按 Esc 时关闭
- */
 function RowMenu({ label, items, busy }: { label: string; items: RowMenuItem[]; busy: boolean }) {
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1054,7 +1141,6 @@ function RowMenu({ label, items, busy }: { label: string; items: RowMenuItem[]; 
         close(false);
       }
     };
-    // 面板是 fixed 定位，页面或表格滚动后会与按钮错位，直接关闭
     const onScroll = () => close(false);
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -1068,7 +1154,6 @@ function RowMenu({ label, items, busy }: { label: string; items: RowMenuItem[]; 
     };
   }, [open, close]);
 
-  /** 上下方向键在菜单项之间移动焦点 */
   const onPanelKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
       return;
@@ -1150,7 +1235,6 @@ interface OriginsDrawerProps {
   onClose: () => void;
 }
 
-/** 编辑允许来源：右侧抽屉，书写规则与服务端 NormalizeOrigin 一致 */
 function OriginsDrawer({ app, form, busy, onChange, onSubmit, onClose }: OriginsDrawerProps) {
   const empty = parseOrigins(form.text).length === 0;
   return (
@@ -1265,7 +1349,6 @@ interface ConfirmDialogProps {
   onClose: () => void;
 }
 
-/** 重置密钥 / 删除应用的危险确认 */
 function ConfirmDialog({ app, state, busy, onConfirm, onClose }: ConfirmDialogProps) {
   const rotate = state.action === 'rotate';
   return (
@@ -1332,7 +1415,6 @@ interface SecretDialogProps {
   onDone: () => void;
 }
 
-/** 一次性密钥：不能点遮罩或 Esc 关闭，必须点「我已保存」 */
 function SecretDialog({ revealed, onCopy, onDone }: SecretDialogProps) {
   const rotated = revealed.reason === 'rotated';
   const snippet = providerSnippet(revealed.appId);

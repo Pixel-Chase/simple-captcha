@@ -1,4 +1,4 @@
-/* 风控观察页：页头 / 筛选面板 / 记录表格与展开字段 / 分页 / 页底说明 */
+/* 风控观察页：页头 / 筛选与风险分直方图 / 固定表头表格 / 右侧详情抽屉 / 分页 / 页底说明 */
 
 /* ---------- 页头 ---------- */
 
@@ -17,7 +17,6 @@
 
 .risk .risk__refresh {
   padding: 7px 14px;
-  border-radius: 999px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -28,8 +27,8 @@
 .risk__meta {
   padding-left: 12px;
   border-left: 1px solid var(--hairline);
-  color: var(--ink-mute-2);
-  font-size: 11px;
+  color: var(--ink-mute);
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -42,7 +41,7 @@
   min-width: 0;
 }
 
-/* ---------- 胶囊分段选择 ---------- */
+/* ---------- 分段选择 ---------- */
 
 .risk-seg {
   display: inline-flex;
@@ -51,22 +50,22 @@
   margin: 0;
   padding: 2px;
   border: 1px solid var(--hairline);
-  border-radius: 999px;
+  border-radius: var(--r-md);
   background: var(--canvas);
   font-size: 13px;
 }
 
 .risk-seg__prefix {
   padding: 0 8px;
-  color: var(--ink-mute-2);
-  font-size: 11px;
+  color: var(--ink-mute);
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .risk-seg__btn {
-  padding: 4px 12px;
+  padding: 4px 11px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--ink-mute);
   line-height: 1.4;
@@ -100,7 +99,7 @@
 .risk-seg--dark .risk-seg__btn--active,
 .risk-seg--dark .risk-seg__btn--active:hover:not(:disabled) {
   background: var(--ink);
-  color: #fff;
+  color: var(--canvas);
 }
 
 .risk-seg--soft {
@@ -120,16 +119,16 @@
     var(--shadow-sm);
 }
 
-/* ---------- 筛选面板 ---------- */
+/* ---------- 筛选与直方图面板 ---------- */
 
 .risk-filter {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 24px;
+  gap: 14px;
+  padding: 16px 20px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-xl);
-  background: var(--canvas-soft);
+  border-radius: var(--r-lg);
+  background: var(--canvas);
 }
 
 .risk-filter__row {
@@ -148,16 +147,26 @@
   min-width: 0;
 }
 
+.risk-filter__hit-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .risk-filter__hit {
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .risk-filter__hit strong {
   color: var(--ink);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.risk-filter__reset {
+  padding: 3px 8px;
+  font-size: 12px;
 }
 
 .risk-select {
@@ -167,10 +176,10 @@
 }
 
 .risk-select select {
-  max-width: 260px;
-  padding: 6px 32px 6px 12px;
+  max-width: 240px;
+  padding: 6px 30px 6px 12px;
   border: 1px solid var(--hairline-input);
-  border-radius: 999px;
+  border-radius: var(--r-md);
   background: var(--canvas);
   color: var(--ink);
   font-size: 13px;
@@ -203,13 +212,51 @@
   pointer-events: none;
 }
 
+.risk-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 220px;
+}
+
+.risk-search__icon {
+  position: absolute;
+  left: 10px;
+  color: var(--ink-mute);
+  pointer-events: none;
+}
+
+.risk-search__input {
+  width: 100%;
+  padding: 6px 12px 6px 32px;
+  border: 1px solid var(--hairline-input);
+  border-radius: var(--r-md);
+  background: var(--canvas-soft);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.risk-search__input::placeholder {
+  color: var(--ink-mute);
+}
+
+.risk-search__input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--canvas);
+}
+
 .risk-summary {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 32px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(227, 232, 238, 0.8);
+  gap: 8px 28px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
 }
 
 .risk-summary__item {
@@ -234,7 +281,7 @@
 }
 
 .risk-summary__dot--verify {
-  background: var(--brand-dark);
+  background: var(--ink-mute-2);
 }
 
 .risk-summary__dot--pass {
@@ -249,7 +296,7 @@
 .risk-summary__value {
   color: var(--ink);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -267,17 +314,206 @@
   padding: 2px 8px;
   border: 1px solid var(--hairline);
   border-radius: 999px;
-  background: var(--canvas);
+  background: var(--canvas-soft);
   color: var(--ink);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .risk-rate--bad {
-  border-color: transparent;
-  background: var(--danger-line);
-  color: var(--danger-ink);
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* ---------- 10 档风险分直方图 ---------- */
+
+.risk-histogram {
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  background: var(--canvas-soft);
+}
+
+.risk-histogram__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.risk-histogram__title-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.risk-histogram__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.risk-histogram__title .icon {
+  color: var(--primary);
+}
+
+.risk-histogram__meta {
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
+.risk-histogram__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.risk-histogram__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
+.risk-histogram__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.risk-histogram__swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.risk-histogram__swatch--pass {
+  background: var(--good-dot);
+}
+
+.risk-histogram__swatch--fail {
+  background: var(--danger);
+}
+
+.risk-histogram__clear {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.risk-histogram__stage {
+  position: relative;
+  margin-top: 8px;
+}
+
+.risk-histogram__svg {
+  display: block;
+  width: 100%;
+  max-height: 118px;
+  overflow: visible;
+}
+
+.risk-histogram__buttons {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.risk-histogram__btn {
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.risk-histogram__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.risk-histogram__baseline {
+  stroke: var(--hairline-input);
+}
+
+.risk-histogram__col {
+  transition: opacity 0.15s ease;
+}
+
+.risk-histogram__col--dimmed {
+  opacity: 0.42;
+}
+
+.risk-histogram__hit {
+  fill: transparent;
+  transition: fill 0.15s ease;
+}
+
+.risk-histogram__col--hovered .risk-histogram__hit,
+.risk-histogram__col--selected .risk-histogram__hit {
+  fill: var(--primary-tint);
+}
+
+.risk-histogram__pass {
+  fill: var(--good-dot);
+}
+
+.risk-histogram__fail {
+  fill: var(--danger);
+}
+
+.risk-histogram__label {
+  fill: var(--ink-mute);
+  font-size: 10.5px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-histogram__col--selected .risk-histogram__label {
+  fill: var(--primary);
+  font-weight: 600;
+}
+
+/* ---------- 骨架占位 ---------- */
+
+.risk-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.risk-skeleton__filter {
+  width: 100%;
+  height: 112px;
+  border-radius: var(--r-lg);
+}
+
+.risk-skeleton__row {
+  display: grid;
+  grid-template-columns: 110px 90px 1fr 90px;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.risk-skeleton__row:last-child {
+  border-bottom: 0;
+}
+
+.risk-skeleton__cell {
+  height: 16px;
 }
 
 /* ---------- 记录区 ---------- */
@@ -302,13 +538,14 @@
   flex-wrap: wrap;
   gap: 4px;
   font-size: 18px;
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.4;
 }
 
 .risk__section-sub {
   color: var(--ink-mute);
   font-size: 13px;
+  font-weight: 400;
 }
 
 .risk__hint {
@@ -316,21 +553,20 @@
   align-items: center;
   gap: 4px;
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
-/* 表格容器：圆角卡片，表格在内部横向滚动；同时作为展开字段的尺寸容器 */
 .risk-board {
   border: 1px solid var(--hairline);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
   background: var(--canvas);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
 .risk-board__scroll {
-  overflow-x: auto;
-  container-type: inline-size;
+  max-height: min(68vh, 720px);
+  overflow: auto;
   transition: opacity 0.15s ease;
 }
 
@@ -339,7 +575,17 @@
 }
 
 .risk-table {
-  min-width: 1080px;
+  min-width: 1040px;
+}
+
+.risk-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.risk-row {
+  cursor: pointer;
 }
 
 .risk-row td {
@@ -347,7 +593,7 @@
 }
 
 .risk .risk-table td {
-  padding: 14px 16px;
+  padding: 13px 16px;
 }
 
 .risk-row td.risk-row__reasons {
@@ -358,18 +604,18 @@
   text-align: right;
 }
 
-.risk .risk-row--expanded,
-.risk .risk-row--expanded:hover {
-  background: rgba(57, 4, 231, 0.05);
+.risk .risk-row--selected,
+.risk .risk-row--selected:hover {
+  background: var(--primary-tint);
 }
 
-.risk-row--expanded td:first-child {
-  box-shadow: inset 4px 0 0 var(--primary);
+.risk-row--selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .risk-row__time {
   color: var(--ink);
-  font-size: 14px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -396,7 +642,7 @@
 
 .risk-app__id {
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-app--deleted .risk-app__name {
@@ -413,11 +659,11 @@
   display: inline-block;
   padding: 2px 8px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r);
-  background: var(--primary-faint);
+  border-radius: var(--r-sm);
+  background: var(--canvas-soft);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-score {
@@ -436,7 +682,7 @@
 }
 
 .risk-score__num {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .risk-score__num--primary {
@@ -453,7 +699,7 @@
 
 .risk-score__sub {
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-score__sep {
@@ -463,7 +709,7 @@
 
 .risk-score__note {
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-score__note .risk-score__plain {
@@ -490,17 +736,17 @@
 }
 
 .risk-reasons {
-  max-width: 300px;
+  max-width: 280px;
 }
 
 .risk-reason {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: var(--r-sm);
   font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.35;
   white-space: nowrap;
 }
 
@@ -510,7 +756,7 @@
 }
 
 .risk-reason--fail {
-  background: rgba(186, 26, 26, 0.1);
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -523,7 +769,7 @@
 .risk-reasons__more {
   align-self: center;
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-none {
@@ -531,7 +777,7 @@
   align-items: center;
   gap: 4px;
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-none__icon {
@@ -543,7 +789,7 @@
   flex-direction: column;
   gap: 2px;
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -555,107 +801,62 @@
 }
 
 .risk .risk-toggle {
-  gap: 2px;
   padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
-.risk .risk-toggle--active,
-.risk .risk-toggle--active:hover {
-  border-color: transparent;
-  background: var(--primary);
-  color: #fff;
+/* ---------- 右侧详情抽屉 ---------- */
+
+.risk-drawer__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.risk .risk-toggle--active:active:not(:disabled) {
-  background: var(--primary-press);
+.risk-drawer__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.risk .risk-toggle .icon {
-  color: inherit;
+.risk-drawer__pos {
+  color: var(--ink-mute);
+  font-size: 12px;
 }
 
-/* ---------- 展开行：完整字段 ---------- */
-
-.risk .risk-detail-row > td {
-  padding: 16px;
-  background: rgba(246, 242, 255, 0.6);
-}
-
-.risk .risk-detail-row:hover {
-  background: transparent;
-}
-
-/* 宽度跟随可见的滚动区域并贴住左侧，窄屏横向滚动表格时字段卡片不随之滑出视野 */
 .risk-detail {
-  position: sticky;
-  left: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: calc(100cqw - 32px);
-  padding: 16px 24px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-xl);
-  background: var(--canvas);
-  box-shadow: var(--shadow-sm);
-  white-space: normal;
+  gap: 14px;
 }
 
-.risk-detail__head {
+.risk-detail__top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--hairline);
-}
-
-.risk-detail__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ink);
-  font-size: 18px;
-}
-
-.risk-detail__icon {
-  color: var(--primary);
-}
-
-.risk-detail__actions {
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
-.risk .risk-detail__copy,
-.risk .risk-detail__close {
-  border-radius: 999px;
-}
-
-.risk-detail__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
+.risk-detail__hint {
+  color: var(--ink-mute);
+  font-size: 12px;
 }
 
 .risk-group {
   min-width: 0;
   padding: 14px 16px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: rgba(246, 249, 252, 0.8);
+  border-radius: var(--r);
+  background: var(--canvas-soft);
   font-size: 13px;
 }
 
 .risk-group__title {
   margin-bottom: 6px;
-  color: var(--ink-mute-2);
-  font-size: 11px;
-  font-weight: 500;
+  color: var(--ink-mute);
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.04em;
 }
 
@@ -663,35 +864,30 @@
   margin: 0;
 }
 
-.risk-group__list--grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  column-gap: 24px;
-}
-
 .risk-field {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(227, 232, 238, 0.6);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--hairline);
 }
 
-.risk-group__list:not(.risk-group__list--grid) .risk-field:last-child {
+.risk-group__list .risk-field:last-child {
   border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .risk-field__label {
   flex-shrink: 0;
-  max-width: 50%;
+  max-width: 48%;
   color: var(--ink-mute);
 }
 
 .risk-field__hint {
   display: block;
   color: var(--ink-mute-2);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-field__value {
@@ -712,16 +908,12 @@
 
 .risk-field__aside {
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-field--block {
   flex-direction: column;
   gap: 6px;
-}
-
-.risk-group__list--grid .risk-field--block {
-  grid-column: 1 / -1;
 }
 
 .risk-field--block .risk-field__label {
@@ -738,9 +930,9 @@
 }
 
 .risk-result {
-  padding: 1px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-sm);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -750,8 +942,8 @@
 }
 
 .risk-result--fail {
-  background: var(--danger-line);
-  color: var(--danger-ink);
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .risk-lines {
@@ -767,12 +959,12 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 4px 8px;
+  padding: 5px 8px;
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
   background: var(--canvas);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-lines__name {
@@ -798,17 +990,16 @@
 }
 
 .risk-json {
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
-/* 对象类额外字段（如轨迹特征）：键值网格 */
 .risk-kv {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 2px 16px;
+  gap: 4px 16px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-kv__item {
@@ -838,11 +1029,11 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 24px;
+  padding: 12px 20px;
   border-top: 1px solid var(--hairline);
   background: var(--canvas-soft);
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .risk-pager__pages {
@@ -853,13 +1044,13 @@
 }
 
 .risk-pager__btn {
-  min-width: 28px;
+  min-width: 30px;
   padding: 4px 8px;
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
   background: var(--canvas);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -936,7 +1127,6 @@
 
 .risk .risk-empty__action {
   margin-top: 8px;
-  border-radius: 999px;
 }
 
 /* ---------- 页底说明 ---------- */
@@ -945,10 +1135,10 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 16px 20px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-xl);
-  background: var(--canvas-soft);
+  border-radius: var(--r-lg);
+  background: var(--canvas);
   color: var(--ink-mute);
   font-size: 13px;
   line-height: 1.6;
@@ -966,7 +1156,7 @@
 
 .risk-notice__text strong {
   color: var(--ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .risk-notice__link {
@@ -990,15 +1180,12 @@
   }
 
   .risk-filter,
-  .risk-board,
-  .risk-notice,
-  .risk-detail {
-    border-radius: var(--r-lg);
-  }
-
-  .risk-filter,
   .risk-notice {
     padding: 16px;
+  }
+
+  .risk-search {
+    width: 100%;
   }
 
   .risk-summary {
@@ -1011,10 +1198,6 @@
 
   .risk-select select {
     max-width: 100%;
-  }
-
-  .risk-detail {
-    padding: 16px;
   }
 
   .risk-pager {

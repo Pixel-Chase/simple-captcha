@@ -5,6 +5,8 @@ import type { RuntimeSettings } from '../api';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toast';
 import type { ConsoleSection } from '../console/ConsoleView';
+import { buildSettingsPresets, describeDeviation, detectMatchingPreset } from '../utils/presets';
+import type { SettingsPreset } from '../utils/presets';
 import './SettingsPage.css';
 
 type Group = keyof RuntimeSettings;
@@ -374,6 +376,7 @@ function formatRange(field: Field): string {
 }
 
 interface Change {
+  group: Group;
   path: string;
   label: string;
   from: string;
@@ -389,6 +392,7 @@ function diffForms(form: FormState, base: FormState): Change[] {
       const before = base[group.id][field.key];
       if (normalize(field, value) !== normalize(field, before)) {
         changes.push({
+          group: group.id,
           path: fieldPath(group.id, field),
           label: DUPLICATE_LABELS.has(field.label)
             ? `${group.title} · ${field.label}`
@@ -486,11 +490,31 @@ export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageP
 
   const savedForm = useMemo(() => (saved ? toForm(saved) : null), [saved]);
   const defaultForm = useMemo(() => (defaults ? toForm(defaults) : null), [defaults]);
+  const presets = useMemo(() => (defaults ? buildSettingsPresets(defaults) : []), [defaults]);
+
+  const activePresetId = useMemo(() => {
+    if (!form || presets.length === 0) {
+      return null;
+    }
+    const parsed = fromForm(form);
+    if (typeof parsed === 'string') {
+      return null;
+    }
+    return detectMatchingPreset(parsed, presets);
+  }, [form, presets]);
 
   const changes = useMemo(
     () => (form && savedForm ? diffForms(form, savedForm) : []),
     [form, savedForm],
   );
+  const dirtyByGroup = useMemo(() => {
+    const map: Record<Group, number> = { captcha: 0, pow: 0, risk: 0 };
+    for (const change of changes) {
+      map[change.group] += 1;
+    }
+    return map;
+  }, [changes]);
+
   const dirty = changes.length > 0;
   const atDefaults = useMemo(
     () => !!form && !!defaultForm && diffForms(form, defaultForm).length === 0,
@@ -501,6 +525,12 @@ export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageP
   const update = (group: Group, key: string, value: FormValue) => {
     setSaveError(null);
     setForm((prev) => (prev ? { ...prev, [group]: { ...prev[group], [key]: value } } : prev));
+  };
+
+  const applyPreset = (preset: SettingsPreset) => {
+    setSaveError(null);
+    setForm(toForm(preset.settings));
+    toast(`已填入「${preset.name}」预设，确认无误后点击保存生效`, 'info');
   };
 
   const handleReset = () => {
@@ -545,14 +575,31 @@ export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageP
     }
   };
 
+  const scrollToGroup = (groupId: Group) => {
+    const el = document.getElementById(`settings-group-${groupId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   if (!form || !savedForm || !defaultForm) {
     return (
       <div className="page settings">
         <SettingsHead />
         {loading ? (
-          <div className="page-status">
-            <Icon name="spinner" className="spin" /> 正在加载策略配置…
-          </div>
+          <section className="settings-skeleton" aria-busy="true" aria-label="正在加载策略配置">
+            <div className="settings-skeleton__presets">
+              {['p1', 'p2', 'p3', 'p4'].map((key) => (
+                <span key={key} className="skeleton settings-skeleton__preset" />
+              ))}
+            </div>
+            <div className="settings-group">
+              {['r1', 'r2', 'r3', 'r4'].map((key) => (
+                <div key={key} className="settings-skeleton__row">
+                  <span className="skeleton settings-skeleton__title" />
+                  <span className="skeleton settings-skeleton__ctrl" />
+                </div>
+              ))}
+            </div>
+          </section>
         ) : (
           <div className="panel settings__failed">
             <div className="alert alert--error" role="alert">
@@ -587,6 +634,36 @@ export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageP
           保存并生效
         </button>
       </SettingsHead>
+
+      <section className="settings-presets" aria-label="典型场景预设">
+        <div className="settings-presets__head">
+          <h2 className="settings-presets__title">场景预设模板</h2>
+          <span className="settings-presets__sub">一键填入整套推荐参数，可继续微调后保存</span>
+        </div>
+        <div className="settings-presets__grid">
+          {presets.map((preset) => {
+            const active = activePresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={active ? 'settings-preset settings-preset--active' : 'settings-preset'}
+                aria-pressed={active}
+                disabled={saving}
+                onClick={() => applyPreset(preset)}
+              >
+                <div className="settings-preset__top">
+                  <span className="settings-preset__name">{preset.name}</span>
+                  <span className="settings-preset__badge">
+                    {active ? '当前匹配' : preset.badge}
+                  </span>
+                </div>
+                <p className="settings-preset__desc">{preset.desc}</p>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="settings__hints">
         <div className="settings-hint">
@@ -636,11 +713,35 @@ export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageP
         </div>
       </div>
 
+      <nav className="settings-tabs" aria-label="参数分组快速跳转">
+        {GROUPS.map((group, index) => {
+          const groupDirty = dirtyByGroup[group.id];
+          return (
+            <button
+              key={group.id}
+              type="button"
+              className="settings-tabs__btn"
+              onClick={() => scrollToGroup(group.id)}
+            >
+              <span className={`settings-group__dot settings-group__dot--${group.id}`} />
+              <span>
+                {GROUP_NUMERALS[index]}、{group.title}
+              </span>
+              <span className="settings-tabs__count tabular">{group.fields.length}</span>
+              {groupDirty > 0 && (
+                <span className="settings-tabs__dirty tabular">{groupDirty} 项改动</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
       {/* 保存期间整体禁用，避免提交中途改动 */}
       <fieldset className="settings__groups" disabled={saving}>
         {GROUPS.map((group, index) => (
           <section
             key={group.id}
+            id={`settings-group-${group.id}`}
             className="settings-group"
             aria-labelledby={`settings-${group.id}`}
           >
@@ -649,7 +750,7 @@ export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageP
               <h2 className="settings-group__title" id={`settings-${group.id}`}>
                 {GROUP_NUMERALS[index]}、{group.title}（{group.desc}）
               </h2>
-              <span className="settings-group__count">共 {group.fields.length} 项参数</span>
+              <span className="settings-group__count tabular">共 {group.fields.length} 项参数</span>
             </header>
             <div className="settings-group__rows">
               {group.fields.map((field) => {
@@ -696,7 +797,7 @@ export function SettingsPage({ token, onSessionExpired, hrefFor }: SettingsPageP
                 <Icon name="warning" size={16} />
               </span>
               <div className="settings-bar__text">
-                <p className="settings-bar__title">存在 {changes.length} 项未保存修改</p>
+                <p className="settings-bar__title tabular">存在 {changes.length} 项未保存修改</p>
                 <ul className="settings-bar__changes">
                   {changes.map((change) => (
                     <li key={change.path}>
@@ -746,7 +847,7 @@ function SettingsHead({ dirtyCount = 0, children }: SettingsHeadProps) {
           <h1 className="page-title">策略配置</h1>
           {dirtyCount > 0 && (
             <span className="chip chip--warn">
-              <span className="chip__dot settings__pulse" />
+              <span className="chip__dot" />
               有未保存的修改（{dirtyCount} 项）
             </span>
           )}
@@ -782,7 +883,7 @@ function SettingRow({
   serverError,
   onChange,
 }: SettingRowProps) {
-  const isDefault = normalize(field, value) === normalize(field, defaultValue);
+  const deviation = describeDeviation(field.kind, value, defaultValue);
   const labelId = `${id}-label`;
   const className = [
     'settings-row',
@@ -810,7 +911,7 @@ function SettingRow({
           {serverError && <span className="chip chip--danger">未通过校验</span>}
         </div>
         <p className="settings-row__desc">{field.desc}</p>
-        <p className="settings-row__meta">
+        <p className="settings-row__meta tabular">
           <span>
             默认值：<strong>{formatValue(field, defaultValue)}</strong>
           </span>
@@ -885,7 +986,13 @@ function SettingRow({
           </div>
         )}
         <span className="settings-row__default">
-          {isDefault && <span className="chip chip--good">默认</span>}
+          {deviation ? (
+            <span className={`settings-deviation settings-deviation--${deviation.kind}`}>
+              {deviation.label}
+            </span>
+          ) : (
+            <span className="chip chip--good">默认</span>
+          )}
         </span>
       </div>
     </div>
@@ -915,9 +1022,9 @@ function LevelStepper({ id, field, value, onChange }: LevelStepperProps) {
           disabled={level <= field.min}
           onClick={() => onChange(String(level - 1))}
         >
-          <MinusIcon />
+          <Icon name="minus" size={14} />
         </button>
-        <output id={id} className="settings-stepper__value" aria-live="polite">
+        <output id={id} className="settings-stepper__value tabular" aria-live="polite">
           <strong>{level}</strong> {field.unit}
         </output>
         <button
@@ -945,24 +1052,5 @@ function LevelStepper({ id, field, value, onChange }: LevelStepperProps) {
         ))}
       </span>
     </>
-  );
-}
-
-/** 共享图标里没有减号，步进器就地画一个，线宽与 Icon 一致 */
-function MinusIcon() {
-  return (
-    <svg
-      className="icon"
-      viewBox="0 0 24 24"
-      width={14}
-      height={14}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M5 12h14" />
-    </svg>
   );
 }

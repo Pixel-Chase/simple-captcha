@@ -13,7 +13,7 @@
   gap: 12px;
   padding: 14px 16px 14px 20px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-xl);
+  border-radius: var(--r);
   background: var(--canvas);
   animation: account-banner-in 0.2s ease;
 }
@@ -73,7 +73,7 @@
 .account-card {
   padding: 32px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
   background: var(--canvas);
 }
 
@@ -197,7 +197,7 @@
   display: block;
   margin-bottom: 8px;
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
 }
 
@@ -248,9 +248,9 @@
   padding: 11px 22px;
 }
 
-/* 设计稿里「重置输入」与主按钮同为胶囊形 */
+/* 与普通次按钮保持一致圆角 */
 .account-form__clear.btn {
-  border-radius: 999px;
+  border-radius: var(--r-md);
   color: var(--ink-mute);
 }
 
@@ -267,7 +267,7 @@
   gap: 14px;
   padding: 20px 24px;
   border: 1px solid var(--hairline);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
   background: var(--primary-faint);
 }
 
@@ -317,7 +317,7 @@
 
 .account-session__label {
   color: var(--ink-mute);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
 }
 
@@ -369,7 +369,7 @@
 }
 
 .account-session__facts code {
-  font-size: 11px;
+  font-size: 12px;
   word-break: break-all;
 }
 
@@ -377,10 +377,10 @@
 
 .account-recovery {
   padding: 24px 24px 28px;
-  border: 1px solid var(--ink-secondary);
-  border-radius: var(--r-xl);
-  background: var(--brand-dark);
-  color: #fff;
+  border: 1px solid var(--surface-code-border);
+  border-radius: var(--r-lg);
+  background: var(--surface-code);
+  color: var(--surface-code-ink);
 }
 
 .account-recovery__head {
@@ -388,28 +388,28 @@
   align-items: center;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--surface-code-border);
 }
 
 .account-recovery__head .icon {
-  color: var(--primary-tint);
+  color: #a5b4fc;
 }
 
 .account-recovery__title {
   font-size: 15px;
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .account-recovery__lead,
 .account-recovery__alt {
   margin-top: 14px;
-  color: var(--hairline);
+  color: var(--surface-code-ink);
   font-size: 13px;
 }
 
 .account-recovery__alt {
   margin-top: 12px;
-  color: rgba(227, 232, 238, 0.7);
+  color: var(--surface-code-mute);
   font-size: 12px;
 }
 
@@ -420,9 +420,9 @@
   gap: 8px;
   margin-top: 8px;
   padding: 8px 8px 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--surface-code-border);
   border-radius: var(--r);
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--surface-code-inner);
 }
 
 .account-recovery__cmd code {
@@ -430,7 +430,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--primary-tint-dim);
+  color: #a5b4fc;
   font-size: 13px;
   overflow-wrap: anywhere;
   user-select: all;
@@ -443,7 +443,7 @@
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--hairline);
+  color: var(--surface-code-mute);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -451,12 +451,12 @@
 }
 
 .account-recovery__copy:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--surface-code-ink);
 }
 
 .account-recovery__copy:focus-visible {
-  outline: 2px solid var(--primary-tint-dim);
+  outline: 2px solid #a5b4fc;
   outline-offset: 1px;
 }
 
@@ -466,9 +466,9 @@
   gap: 8px;
   margin: 16px 0 0;
   padding: 14px 0 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--surface-code-border);
   list-style: none;
-  color: rgba(227, 232, 238, 0.85);
+  color: var(--surface-code-mute);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -481,7 +481,7 @@
 
 .account-recovery__notes .icon {
   margin-top: 3px;
-  color: var(--primary-tint-dim);
+  color: #a5b4fc;
 }
 
 .account-recovery__notes .account-recovery__ok {

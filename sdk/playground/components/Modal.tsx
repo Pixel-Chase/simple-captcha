@@ -9,8 +9,10 @@ interface ModalProps {
   onClose: () => void;
   /** dialog 居中弹窗；drawer 右侧抽屉 */
   variant?: 'dialog' | 'drawer';
-  /** 弹窗宽度：sm 448px、md 560px、lg 720px（抽屉固定 512px） */
+  /** 弹窗宽度：sm 448px、md 560px、lg 720px */
   size?: 'sm' | 'md' | 'lg';
+  /** 抽屉宽度：md 512px（默认）、lg 640px */
+  drawerSize?: 'md' | 'lg';
   title: ReactNode;
   /** 标题下的一行说明 */
   subtitle?: ReactNode;
@@ -30,6 +32,7 @@ export function Modal({
   onClose,
   variant = 'dialog',
   size = 'md',
+  drawerSize = 'md',
   title,
   subtitle,
   icon,
@@ -71,6 +74,13 @@ export function Modal({
     return null;
   }
 
+  const modalClass =
+    variant === 'drawer'
+      ? drawerSize === 'lg'
+        ? 'modal modal--drawer modal--drawer-lg'
+        : 'modal modal--drawer'
+      : `modal modal--${size}`;
+
   return createPortal(
     <div
       className={`modal-backdrop modal-backdrop--${variant}`}
@@ -82,7 +92,7 @@ export function Modal({
     >
       <div
         ref={panelRef}
-        className={variant === 'drawer' ? 'modal modal--drawer' : `modal modal--${size}`}
+        className={modalClass}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

@@ -1,11 +1,14 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { adminApi, formatDateTime, getErrorMessage, isAdminApiError } from '../api';
 import type { RiskTelemetryItem } from '../api';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
+import { Modal } from '../components/Modal';
 import { useCopy } from '../components/Toast';
 import type { ConsoleSection } from '../console/ConsoleView';
+import { buildScoreHistogram, matchesRiskQuery } from '../utils/analytics';
+import type { ScoreHistogramBucket } from '../utils/analytics';
 import './RiskPage.css';
 
 interface RiskPageProps {
@@ -19,10 +22,11 @@ type LimitOption = (typeof LIMIT_OPTIONS)[number];
 
 /** 每页行数：筛选与分页都只在已加载的记录内进行 */
 const PAGE_SIZE = 20;
-/** 表格里每行直接展示的原因数，其余在展开的完整字段里查看 */
+/** 表格里每行直接展示的原因数，其余在右侧抽屉里查看 */
 const MAX_INLINE_REASONS = 4;
 /** 没有值的字段统一显示的占位 */
 const EMPTY = '—';
+const SKELETON_ROWS = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6'] as const;
 
 type Kind = 'issue' | 'verify';
 type StageFilter = 'all' | Kind;
@@ -34,10 +38,20 @@ interface Filters {
   /** 应用 ID；ALL 表示全部 */
   app: string;
   type: string;
+  query: string;
+  /** 点击分数直方图桶按 0-9 .. 90-100 过滤；null 表示不限分数段 */
+  scoreBucket: number | null;
 }
 
 const ALL = '';
-const DEFAULT_FILTERS: Filters = { stage: 'all', result: 'all', app: ALL, type: ALL };
+const DEFAULT_FILTERS: Filters = {
+  stage: 'all',
+  result: 'all',
+  app: ALL,
+  type: ALL,
+  query: '',
+  scoreBucket: null,
+};
 
 const STAGE_OPTIONS: ReadonlyArray<{ value: StageFilter; label: string }> = [
   { value: 'all', label: '全部阶段' },
@@ -202,7 +216,7 @@ interface SegmentedProps<T extends string | number> {
   title?: string;
 }
 
-/** 胶囊分段选择：条数、阶段、结果共用 */
+/** 分段选择：条数、阶段、结果共用 */
 function Segmented<T extends string | number>({
   label,
   value,
@@ -486,21 +500,186 @@ function Field({ label, hint, block, mono, children }: FieldProps) {
   );
 }
 
-interface RecordDetailProps {
-  id: string;
+/** 10 档风险分直方图（0–100）：支持点击分桶按区间筛选 */
+function ScoreHistogram({
+  buckets,
+  selectedBucket,
+  onSelectBucket,
+}: {
+  buckets: ScoreHistogramBucket[];
+  selectedBucket: number | null;
+  onSelectBucket: (bucketIndex: number | null) => void;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const totalVerify = buckets.reduce((sum, b) => sum + b.total, 0);
+  const maxTotal = Math.max(1, ...buckets.map((b) => b.total));
+  const activeBucket =
+    hovered !== null ? buckets[hovered] : selectedBucket !== null ? buckets[selectedBucket] : null;
+
+  const width = 620;
+  const height = 108;
+  const padLeft = 0;
+  const padRight = 0;
+  const padTop = 8;
+  const padBottom = 22;
+  const innerW = width - padLeft - padRight;
+  const innerH = height - padTop - padBottom;
+  const slotW = innerW / buckets.length;
+  const barW = Math.min(34, slotW * 0.62);
+
+  return (
+    <div className="risk-histogram">
+      <div className="risk-histogram__head">
+        <div className="risk-histogram__title-wrap">
+          <span className="risk-histogram__title">
+            <Icon name="chart" size={15} />
+            风险分分布（0–100）
+          </span>
+          <span className="risk-histogram__meta tabular">
+            {totalVerify === 0
+              ? '当前范围暂无校验打分记录'
+              : activeBucket
+                ? `${activeBucket.label} 分：共 ${activeBucket.total} 条（通过 ${activeBucket.pass} · 失败 ${activeBucket.fail}）`
+                : '点击柱条可按分数段过滤列表'}
+          </span>
+        </div>
+        <div className="risk-histogram__right">
+          <span className="risk-histogram__legend" aria-hidden="true">
+            <span className="risk-histogram__legend-item">
+              <span className="risk-histogram__swatch risk-histogram__swatch--pass" />
+              通过
+            </span>
+            <span className="risk-histogram__legend-item">
+              <span className="risk-histogram__swatch risk-histogram__swatch--fail" />
+              失败
+            </span>
+          </span>
+          {selectedBucket !== null && (
+            <button
+              type="button"
+              className="btn btn--text risk-histogram__clear"
+              onClick={() => onSelectBucket(null)}
+            >
+              取消分段（{buckets[selectedBucket]?.label}）
+            </button>
+          )}
+        </div>
+      </div>
+
+      {totalVerify > 0 && (
+        <div className="risk-histogram__stage">
+          <svg
+            className="risk-histogram__svg"
+            viewBox={`0 0 ${width} ${height}`}
+            aria-hidden="true"
+          >
+            <line
+              x1={padLeft}
+              y1={padTop + innerH}
+              x2={width - padRight}
+              y2={padTop + innerH}
+              className="risk-histogram__baseline"
+            />
+            {buckets.map((bucket) => {
+              const slotX = padLeft + bucket.index * slotW;
+              const barX = slotX + (slotW - barW) / 2;
+              const totalH =
+                bucket.total === 0 ? 0 : Math.max(3, (bucket.total / maxTotal) * innerH);
+              const failH = bucket.fail === 0 ? 0 : (bucket.fail / bucket.total) * totalH;
+              const passH = Math.max(0, totalH - failH);
+              const selected = selectedBucket === bucket.index;
+              const isHovered = hovered === bucket.index;
+              const dimmed = selectedBucket !== null && !selected;
+              const colClass = [
+                'risk-histogram__col',
+                selected ? 'risk-histogram__col--selected' : '',
+                isHovered ? 'risk-histogram__col--hovered' : '',
+                dimmed ? 'risk-histogram__col--dimmed' : '',
+              ]
+                .filter(Boolean)
+                .join(' ');
+              return (
+                <g key={bucket.label} className={colClass}>
+                  <rect
+                    x={slotX + 2}
+                    y={padTop}
+                    width={Math.max(4, slotW - 4)}
+                    height={innerH}
+                    rx={4}
+                    className="risk-histogram__hit"
+                  />
+                  {passH > 0 && (
+                    <rect
+                      x={barX}
+                      y={padTop + innerH - totalH}
+                      width={barW}
+                      height={passH}
+                      rx={2}
+                      className="risk-histogram__pass"
+                    />
+                  )}
+                  {failH > 0 && (
+                    <rect
+                      x={barX}
+                      y={padTop + innerH - failH}
+                      width={barW}
+                      height={failH}
+                      rx={2}
+                      className="risk-histogram__fail"
+                    />
+                  )}
+                  <text
+                    x={slotX + slotW / 2}
+                    y={height - 5}
+                    textAnchor="middle"
+                    className="risk-histogram__label"
+                  >
+                    {bucket.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          <fieldset className="risk-histogram__buttons" aria-label="按风险分数段筛选">
+            {buckets.map((bucket) => {
+              const selected = selectedBucket === bucket.index;
+              return (
+                <button
+                  key={bucket.label}
+                  type="button"
+                  className="risk-histogram__btn"
+                  aria-pressed={selected}
+                  aria-label={`${bucket.label} 分：共 ${bucket.total} 条，通过 ${bucket.pass}，失败 ${bucket.fail}`}
+                  onClick={() => onSelectBucket(selected ? null : bucket.index)}
+                  onMouseEnter={() => setHovered(bucket.index)}
+                  onMouseLeave={() => setHovered(null)}
+                  onFocus={() => setHovered(bucket.index)}
+                  onBlur={() => setHovered(null)}
+                />
+              );
+            })}
+          </fieldset>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 右侧抽屉内容：按基础 / 网络与指纹 / 评分三组列出全部字段 */
+function RecordDetail({
+  item,
+  kind,
+  app,
+  reasonTone,
+}: {
   item: RiskTelemetryItem;
   kind: Kind;
   app: AppLabel;
   reasonTone: string;
-  onClose: () => void;
-}
-
-/** 展开行：按基础 / 网络与指纹 / 评分三组列出全部字段，记录里其余字段列在最后 */
-function RecordDetail({ id, item, kind, app, reasonTone, onClose }: RecordDetailProps) {
+}) {
   const copy = useCopy();
   const reasons = stringList(item.reasons);
   const anomalies = stringList(item.anomalies);
-  // 对象类字段（如轨迹特征）占满一行，排在最后
   const extras = Object.keys(item)
     .filter((key) => !LISTED_KEYS.has(key))
     .sort((a, b) => Number(isPlainObject(item[a])) - Number(isPlainObject(item[b])));
@@ -509,124 +688,113 @@ function RecordDetail({ id, item, kind, app, reasonTone, onClose }: RecordDetail
   const result = resultText(item.success);
 
   return (
-    <div className="risk-detail" id={id}>
-      <div className="risk-detail__head">
-        <div className="risk-detail__title">
-          <Icon name="braces" size={18} className="risk-detail__icon" />
-          完整字段
-        </div>
-        <div className="risk-detail__actions">
-          <button
-            type="button"
-            className="btn btn--sm risk-detail__copy"
-            onClick={() => void copy(JSON.stringify(item, null, 2), '已复制整条记录')}
-          >
-            <Icon name="copy" size={14} />
-            复制整条 JSON
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon risk-detail__close"
-            aria-label="收起完整字段"
-            onClick={onClose}
-          >
-            <Icon name="close" size={16} />
-          </button>
-        </div>
+    <div className="risk-detail">
+      <div className="risk-detail__top">
+        <span className="risk-detail__hint">按 ↑ / ↓ 方向键可快速切换相邻记录</span>
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={() => void copy(JSON.stringify(item, null, 2), '已复制整条记录 JSON')}
+        >
+          <Icon name="copy" size={14} />
+          复制整条 JSON
+        </button>
       </div>
 
-      <div className="risk-detail__grid">
-        <section className="risk-group">
-          <h3 className="risk-group__title">基础字段</h3>
-          <dl className="risk-group__list">
-            <Field label="阶段">{kind === 'issue' ? '出题评估' : '校验评分'}</Field>
-            <Field label="时间">
-              {item.time ? <span title={item.time}>{formatTime(item.time)}</span> : null}
-            </Field>
-            <Field label="所属应用">
-              {app.id ? (
-                <span>
-                  {app.deleted ? '应用已删除' : app.name}{' '}
-                  <span className="mono risk-field__aside">{app.id}</span>
-                </span>
-              ) : null}
-            </Field>
-            <Field label="题目 key" mono>
-              {item.key}
-            </Field>
-            <Field label="题型" mono>
-              {item.type}
-            </Field>
-            <Field label="客户端标识" hint="IP 与 UA 的哈希前 8 位" mono>
-              {item.client}
-            </Field>
-          </dl>
-        </section>
+      <section className="risk-group">
+        <h3 className="risk-group__title">基础字段</h3>
+        <dl className="risk-group__list">
+          <Field label="阶段">{kind === 'issue' ? '出题评估' : '校验评分'}</Field>
+          <Field label="时间">
+            {item.time ? (
+              <span className="tabular" title={item.time}>
+                {formatTime(item.time)}
+              </span>
+            ) : null}
+          </Field>
+          <Field label="所属应用">
+            {app.id ? (
+              <span>
+                {app.deleted ? '应用已删除' : app.name}{' '}
+                <span className="mono risk-field__aside">{app.id}</span>
+              </span>
+            ) : null}
+          </Field>
+          <Field label="题目 key" mono>
+            {item.key}
+          </Field>
+          <Field label="题型" mono>
+            {item.type}
+          </Field>
+          <Field label="客户端标识" hint="IP 与 UA 的哈希前 8 位" mono>
+            {item.client}
+          </Field>
+        </dl>
+      </section>
 
-        <section className="risk-group">
-          <h3 className="risk-group__title">网络与环境指纹</h3>
-          <dl className="risk-group__list">
-            <Field label="IP" hint="已脱敏" mono>
-              {item.ip}
-            </Field>
-            <Field label="UA" hint="浏览器 / 系统摘要">
-              {item.ua}
-            </Field>
-            <Field label="TLS 指纹" hint="由可信指纹代理注入" mono>
-              {item.tls}
-            </Field>
-            <Field label="HTTP/2 指纹" hint="由可信指纹代理注入" mono>
-              {item.h2}
-            </Field>
-            <Field label="请求头一致性">{consistency}</Field>
-            <Field label="环境指纹" hint="SDK 上报的环境哈希" mono>
-              {typeof item.fp === 'string' ? item.fp : null}
-            </Field>
-          </dl>
-        </section>
+      <section className="risk-group">
+        <h3 className="risk-group__title">网络与环境指纹</h3>
+        <dl className="risk-group__list">
+          <Field label="IP" hint="已脱敏" mono>
+            {item.ip}
+          </Field>
+          <Field label="UA" hint="浏览器 / 系统摘要">
+            {item.ua}
+          </Field>
+          <Field label="TLS 指纹" hint="由可信指纹代理注入" mono>
+            {item.tls}
+          </Field>
+          <Field label="HTTP/2 指纹" hint="由可信指纹代理注入" mono>
+            {item.h2}
+          </Field>
+          <Field label="请求头一致性">{consistency}</Field>
+          <Field label="环境指纹" hint="SDK 上报的环境哈希" mono>
+            {typeof item.fp === 'string' ? item.fp : null}
+          </Field>
+        </dl>
+      </section>
 
-        <section className="risk-group">
-          <h3 className="risk-group__title">评分细节</h3>
-          <dl className="risk-group__list">
-            <Field label="风险分" hint="0–100，越高越像脚本">
-              {isNumber(item.score) ? <span className="risk-num">{item.score} / 100</span> : null}
-            </Field>
-            <Field label="行为分" hint="越高越像脚本，人类特征可为负">
-              {isNumber(item.behaviorScore) ? (
-                <span className="risk-num">{item.behaviorScore}</span>
-              ) : null}
-            </Field>
-            <Field label="环境分" hint="已按上限裁剪">
-              {isNumber(item.envScore) ? <span className="risk-num">{item.envScore}</span> : null}
-            </Field>
-            <Field label="难度构成">
-              {difficulty ? `最终 ${item.level} 级 = ${difficulty}` : null}
-            </Field>
-            <Field label="结果">
-              {result ? (
-                <span
-                  className={
-                    item.success ? 'risk-result risk-result--pass' : 'risk-result risk-result--fail'
-                  }
-                >
-                  {result}
-                </span>
-              ) : null}
-            </Field>
-            <Field label="原因" block>
-              <ReasonLines reasons={reasons} tone={reasonTone} />
-            </Field>
-            <Field label="异常项" hint="SDK 检测到的无头浏览器 / API 篡改痕迹" block>
-              <TagList values={anomalies} />
-            </Field>
-          </dl>
-        </section>
-      </div>
+      <section className="risk-group">
+        <h3 className="risk-group__title">评分细节</h3>
+        <dl className="risk-group__list">
+          <Field label="风险分" hint="0–100，越高越像脚本">
+            {isNumber(item.score) ? <span className="risk-num">{item.score} / 100</span> : null}
+          </Field>
+          <Field label="行为分" hint="越高越像脚本，人类特征可为负">
+            {isNumber(item.behaviorScore) ? (
+              <span className="risk-num">{item.behaviorScore}</span>
+            ) : null}
+          </Field>
+          <Field label="环境分" hint="已按上限裁剪">
+            {isNumber(item.envScore) ? <span className="risk-num">{item.envScore}</span> : null}
+          </Field>
+          <Field label="难度构成">
+            {difficulty ? `最终 ${item.level} 级 = ${difficulty}` : null}
+          </Field>
+          <Field label="结果">
+            {result ? (
+              <span
+                className={
+                  item.success ? 'risk-result risk-result--pass' : 'risk-result risk-result--fail'
+                }
+              >
+                {result}
+              </span>
+            ) : null}
+          </Field>
+          <Field label="原因" block>
+            <ReasonLines reasons={reasons} tone={reasonTone} />
+          </Field>
+          <Field label="异常项" hint="SDK 检测到的无头浏览器 / API 篡改痕迹" block>
+            <TagList values={anomalies} />
+          </Field>
+        </dl>
+      </section>
 
       {extras.length > 0 && (
-        <section className="risk-group risk-group--extra">
+        <section className="risk-group">
           <h3 className="risk-group__title">其他字段</h3>
-          <dl className="risk-group__list risk-group__list--grid">
+          <dl className="risk-group__list">
             {extras.map((key) => (
               <Field
                 key={key}
@@ -658,7 +826,7 @@ function Pager({
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, total);
   return (
-    <div className="risk-pager">
+    <div className="risk-pager tabular">
       <span>
         显示 {from} 至 {to} 条，共 {total} 条
       </span>
@@ -716,7 +884,7 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
   const [appNames, setAppNames] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -778,7 +946,7 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
     return [...types].sort();
   }, [rows, filters.type]);
 
-  // 应用与题型圈定统计范围；阶段与结果只决定表格里显示哪些行，不影响上方汇总
+  // 应用与题型圈定统计范围；阶段、结果、关键词与分数段过滤表格记录
   const scoped = useMemo(
     () =>
       rows.filter(
@@ -789,22 +957,41 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
     [rows, filters.app, filters.type],
   );
 
-  const filtered = useMemo(
-    () =>
-      scoped.filter(({ item, kind }) => {
-        if (filters.stage !== 'all' && kind !== filters.stage) {
+  const histogram = useMemo(() => buildScoreHistogram(scoped.map(({ item }) => item)), [scoped]);
+
+  const filtered = useMemo(() => {
+    const activeBucket =
+      filters.scoreBucket !== null ? (histogram[filters.scoreBucket] ?? null) : null;
+    return scoped.filter(({ item, kind }) => {
+      if (filters.stage !== 'all' && kind !== filters.stage) {
+        return false;
+      }
+      if (filters.result === 'pass' && !(kind === 'verify' && item.success === true)) {
+        return false;
+      }
+      if (filters.result === 'fail' && !(kind === 'verify' && item.success === false)) {
+        return false;
+      }
+      if (activeBucket) {
+        if (kind !== 'verify' || !isNumber(item.score)) {
           return false;
         }
-        if (filters.result === 'pass') {
-          return kind === 'verify' && item.success === true;
+        const clamped = Math.min(100, Math.max(0, Math.round(item.score)));
+        if (clamped < activeBucket.min || clamped > activeBucket.max) {
+          return false;
         }
-        if (filters.result === 'fail') {
-          return kind === 'verify' && item.success === false;
-        }
-        return true;
-      }),
-    [scoped, filters.stage, filters.result],
-  );
+      }
+      return matchesRiskQuery(item, filters.query, appNames);
+    });
+  }, [
+    scoped,
+    histogram,
+    filters.stage,
+    filters.result,
+    filters.scoreBucket,
+    filters.query,
+    appNames,
+  ]);
 
   const summary = useMemo(() => {
     let issue = 0;
@@ -836,7 +1023,41 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
     filters.stage !== 'all' ||
     filters.result !== 'all' ||
     filters.app !== ALL ||
-    filters.type !== ALL;
+    filters.type !== ALL ||
+    filters.query.trim() !== '' ||
+    filters.scoreBucket !== null;
+
+  const selectedIndex = useMemo(
+    () => (selectedId ? filtered.findIndex((row) => row.id === selectedId) : -1),
+    [filtered, selectedId],
+  );
+  const selectedRow = selectedIndex >= 0 ? filtered[selectedIndex] : null;
+
+  useEffect(() => {
+    if (!selectedRow) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+      event.preventDefault();
+      const nextIdx =
+        event.key === 'ArrowUp'
+          ? Math.max(0, selectedIndex - 1)
+          : Math.min(filtered.length - 1, selectedIndex + 1);
+      const next = filtered[nextIdx];
+      if (next) {
+        setSelectedId(next.id);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedRow, selectedIndex, filtered]);
 
   const updateFilters = (patch: Partial<Filters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -846,18 +1067,6 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
   const clearFilters = () => {
     setFilters(DEFAULT_FILTERS);
     setPage(1);
-  };
-
-  const toggleExpanded = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
   };
 
   const settingsHref = hrefFor('settings');
@@ -893,7 +1102,7 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
             {loading ? '加载中…' : '刷新'}
           </button>
           {loadedAt && (
-            <span className="risk__meta" title={formatDateTime(loadedAt.toISOString())}>
+            <span className="risk__meta tabular" title={formatDateTime(loadedAt.toISOString())}>
               共 {items.length} 条 · 更新于 {formatClock(loadedAt)}
             </span>
           )}
@@ -916,11 +1125,20 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
       )}
 
       {loading && items.length === 0 ? (
-        <div className="page-status">
-          <Icon name="spinner" size={16} className="spin" /> 正在加载…
-        </div>
+        <section className="risk-skeleton" aria-busy="true" aria-label="正在加载风控记录">
+          <span className="skeleton risk-skeleton__filter" />
+          <div className="risk-board">
+            {SKELETON_ROWS.map((key) => (
+              <div key={key} className="risk-skeleton__row">
+                <span className="skeleton risk-skeleton__cell risk-skeleton__cell--sm" />
+                <span className="skeleton risk-skeleton__cell risk-skeleton__cell--md" />
+                <span className="skeleton risk-skeleton__cell risk-skeleton__cell--lg" />
+                <span className="skeleton risk-skeleton__cell risk-skeleton__cell--sm" />
+              </div>
+            ))}
+          </div>
+        </section>
       ) : items.length === 0 ? (
-        // 加载失败且没有旧数据时只显示上面的错误，不提示"还没有记录"
         !error && (
           <div className="risk-board">
             <div className="risk-empty">
@@ -937,7 +1155,7 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
         )
       ) : (
         <>
-          <section className="risk-filter" aria-label="筛选">
+          <section className="risk-filter" aria-label="筛选与分布">
             <div className="risk-filter__row">
               <div className="risk-filter__controls">
                 <Segmented
@@ -946,7 +1164,9 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
                   value={filters.stage}
                   options={STAGE_OPTIONS}
                   onChange={(stage) =>
-                    updateFilters(stage === 'issue' ? { stage, result: 'all' } : { stage })
+                    updateFilters(
+                      stage === 'issue' ? { stage, result: 'all', scoreBucket: null } : { stage },
+                    )
                   }
                 />
                 <Segmented
@@ -988,17 +1208,42 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
                   </select>
                   <Icon name="chevron-down" size={14} className="risk-select__icon" />
                 </span>
+                <label className="risk-search">
+                  <Icon name="search" size={15} className="risk-search__icon" />
+                  <input
+                    type="search"
+                    className="risk-search__input"
+                    placeholder="搜索 key / IP / UA / 原因码…"
+                    value={filters.query}
+                    onChange={(event) => updateFilters({ query: event.target.value })}
+                    aria-label="关键字搜索风控记录"
+                  />
+                </label>
               </div>
-              <span className="risk-filter__hit">
-                过滤后命中{' '}
-                <strong>
-                  {filtered.length} / {items.length}
-                </strong>{' '}
-                条
-              </span>
+              <div className="risk-filter__hit-wrap">
+                <span className="risk-filter__hit tabular">
+                  命中{' '}
+                  <strong>
+                    {filtered.length} / {items.length}
+                  </strong>{' '}
+                  条
+                </span>
+                {filtersActive && (
+                  <button
+                    type="button"
+                    className="btn btn--text risk-filter__reset"
+                    onClick={clearFilters}
+                  >
+                    重置筛选
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="risk-summary" title="按所选应用与题型统计，不受阶段与结果筛选影响">
+            <div
+              className="risk-summary"
+              title="按所选应用与题型统计，不受阶段、结果与关键词筛选影响"
+            >
               <span className="risk-summary__item">
                 <span className="risk-summary__dot risk-summary__dot--issue" />
                 <span className="risk-summary__label">出题评估</span>
@@ -1030,17 +1275,29 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
                 </span>
               </span>
             </div>
+
+            <ScoreHistogram
+              buckets={histogram}
+              selectedBucket={filters.scoreBucket}
+              onSelectBucket={(scoreBucket) =>
+                updateFilters(
+                  scoreBucket !== null && filters.stage === 'issue'
+                    ? { scoreBucket, stage: 'all' }
+                    : { scoreBucket },
+                )
+              }
+            />
           </section>
 
           <section className="risk__records">
             <div className="risk__section-head">
               <h2 className="risk__section-title">
                 记录明细
-                <span className="risk__section-sub">（最近 {items.length} 条）</span>
+                <span className="risk__section-sub tabular">（最近 {items.length} 条）</span>
               </h2>
               <span className="risk__hint">
-                <Icon name="info" size={12} />
-                点「查看全部字段」展开单条记录的完整字段
+                <Icon name="info" size={13} />
+                点击任意记录行可在右侧抽屉查看完整字段与轨迹特征
               </span>
             </div>
 
@@ -1080,13 +1337,12 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
                           <th>核心打分</th>
                           <th>原因</th>
                           <th>客户端摘要</th>
-                          <th className="risk-table__action">操作</th>
+                          <th className="risk-table__action">详情</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {pageRows.map(({ id, item, kind }, index) => {
-                          const isOpen = expanded.has(id);
-                          const detailId = `risk-detail-${(currentPage - 1) * PAGE_SIZE + index}`;
+                        {pageRows.map(({ id, item, kind }) => {
+                          const isSelected = selectedId === id;
                           const time = parseTime(item.time);
                           const app = appLabelOf(item.app, appNames);
                           const reasons = stringList(item.reasons);
@@ -1097,70 +1353,58 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
                                 ? 'fail'
                                 : 'neutral';
                           return (
-                            <Fragment key={id}>
-                              <tr className={isOpen ? 'risk-row risk-row--expanded' : 'risk-row'}>
-                                <td>
-                                  <StageChip item={item} />
-                                </td>
-                                <td className="risk-row__time" title={formatTime(item.time)}>
-                                  {time ? formatClock(time) : (item.time ?? EMPTY)}
-                                </td>
-                                <td>
-                                  <AppCell label={app} />
-                                </td>
-                                <td>
-                                  {item.type ? (
-                                    <span className="risk-type">{item.type}</span>
-                                  ) : (
-                                    <span className="muted">{EMPTY}</span>
-                                  )}
-                                </td>
-                                <td>
-                                  <ScoreCell item={item} kind={kind} />
-                                </td>
-                                <td className="risk-row__reasons">
-                                  <ReasonsCell reasons={reasons} tone={reasonTone} />
-                                </td>
-                                <td>
-                                  <div className="risk-client">
-                                    <span className="risk-client__ip">{item.ip || EMPTY}</span>
-                                    <span className="risk-client__ua" title={item.ua}>
-                                      {item.ua || EMPTY}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="risk-table__action">
-                                  <button
-                                    type="button"
-                                    className={
-                                      isOpen
-                                        ? 'btn btn--sm risk-toggle risk-toggle--active'
-                                        : 'btn btn--sm risk-toggle'
-                                    }
-                                    aria-expanded={isOpen}
-                                    aria-controls={isOpen ? detailId : undefined}
-                                    onClick={() => toggleExpanded(id)}
-                                  >
-                                    {isOpen ? '收起字段' : '查看全部字段'}
-                                    <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={12} />
-                                  </button>
-                                </td>
-                              </tr>
-                              {isOpen && (
-                                <tr className="risk-detail-row">
-                                  <td colSpan={8}>
-                                    <RecordDetail
-                                      id={detailId}
-                                      item={item}
-                                      kind={kind}
-                                      app={app}
-                                      reasonTone={reasonTone}
-                                      onClose={() => toggleExpanded(id)}
-                                    />
-                                  </td>
-                                </tr>
-                              )}
-                            </Fragment>
+                            <tr
+                              key={id}
+                              className={isSelected ? 'risk-row risk-row--selected' : 'risk-row'}
+                              onClick={() => setSelectedId(id)}
+                            >
+                              <td>
+                                <StageChip item={item} />
+                              </td>
+                              <td className="risk-row__time" title={formatTime(item.time)}>
+                                {time ? formatClock(time) : (item.time ?? EMPTY)}
+                              </td>
+                              <td>
+                                <AppCell label={app} />
+                              </td>
+                              <td>
+                                {item.type ? (
+                                  <span className="risk-type">{item.type}</span>
+                                ) : (
+                                  <span className="muted">{EMPTY}</span>
+                                )}
+                              </td>
+                              <td>
+                                <ScoreCell item={item} kind={kind} />
+                              </td>
+                              <td className="risk-row__reasons">
+                                <ReasonsCell reasons={reasons} tone={reasonTone} />
+                              </td>
+                              <td>
+                                <div className="risk-client">
+                                  <span className="risk-client__ip">{item.ip || EMPTY}</span>
+                                  <span className="risk-client__ua" title={item.ua}>
+                                    {item.ua || EMPTY}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="risk-table__action">
+                                <button
+                                  type="button"
+                                  className={
+                                    isSelected
+                                      ? 'btn btn--sm btn--primary risk-toggle'
+                                      : 'btn btn--sm risk-toggle'
+                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedId(id);
+                                  }}
+                                >
+                                  查看详情
+                                </button>
+                              </td>
+                            </tr>
                           );
                         })}
                       </tbody>
@@ -1179,14 +1423,88 @@ export function RiskPage({ token, onSessionExpired, hrefFor }: RiskPageProps) {
         </>
       )}
 
+      {selectedRow && (
+        <Modal
+          open
+          onClose={() => setSelectedId(null)}
+          variant="drawer"
+          drawerSize="lg"
+          icon="braces"
+          title={
+            <span className="risk-drawer__title">
+              <StageChip item={selectedRow.item} />
+              <span>记录详情</span>
+            </span>
+          }
+          subtitle={
+            <span className="mono tabular">
+              {selectedRow.item.key ?? '无题目 key'} ·{' '}
+              {selectedRow.item.time ? formatTime(selectedRow.item.time) : '未知时间'}
+            </span>
+          }
+          footer={
+            <>
+              <div className="risk-drawer__nav">
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  disabled={selectedIndex <= 0}
+                  onClick={() => {
+                    const prev = filtered[selectedIndex - 1];
+                    if (prev) {
+                      setSelectedId(prev.id);
+                    }
+                  }}
+                >
+                  <Icon name="chevron-up" size={14} />
+                  上一条
+                </button>
+                <span className="risk-drawer__pos tabular">
+                  {selectedIndex + 1} / {filtered.length}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  disabled={selectedIndex >= filtered.length - 1}
+                  onClick={() => {
+                    const next = filtered[selectedIndex + 1];
+                    if (next) {
+                      setSelectedId(next.id);
+                    }
+                  }}
+                >
+                  下一条
+                  <Icon name="chevron-down" size={14} />
+                </button>
+              </div>
+              <a className="btn btn--primary btn--sm" href={settingsHref}>
+                前往策略配置
+                <Icon name="arrow-right" size={14} />
+              </a>
+            </>
+          }
+        >
+          <RecordDetail
+            item={selectedRow.item}
+            kind={selectedRow.kind}
+            app={appLabelOf(selectedRow.item.app, appNames)}
+            reasonTone={
+              selectedRow.kind === 'issue'
+                ? 'issue'
+                : selectedRow.item.success === false
+                  ? 'fail'
+                  : 'neutral'
+            }
+          />
+        </Modal>
+      )}
+
       <aside className="risk-notice">
         <Icon name="info" size={18} className="risk-notice__icon" />
         <p className="risk-notice__text">
           <strong>说明：</strong>
-          记录由服务端写入
-          SQLite（data/captcha.db），按「风控观察保留条数」只保留最近的记录，服务重启后仍可查看；
-          「风控评分」关闭或保留条数为 0 时不写入。本页一次读取最近 50 / 100 / 200
-          条，筛选与分页都在已读取的记录内进行。可在
+          记录由服务端保存，按「风控观察保留条数」只保留最近的记录；「风控评分」关闭或保留条数为 0
+          时不写入。本页一次读取最近 50 / 100 / 200 条，筛选与分页都在已读取的记录内进行。可在
           <a className="risk-notice__link" href={settingsHref}>
             「策略配置」
             <Icon name="arrow-right" size={12} />
